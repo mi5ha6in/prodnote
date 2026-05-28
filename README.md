@@ -30,6 +30,18 @@ npm run build
 npm test
 ```
 
+## Деплой
+
+Автодеплой настроен через GitHub Actions: при push в `main` workflow собирает проект, прогоняет тесты и публикует `dist` в GitHub Pages.
+
+Ожидаемый адрес после включения Pages:
+
+```text
+https://mi5ha6in.github.io/prodnote/
+```
+
+В настройках репозитория GitHub нужно выбрать `Settings -> Pages -> Build and deployment -> Source: GitHub Actions`.
+
 ## Для будущих AI-агентов
 
 Репозиторные правила разработки находятся в [AGENTS.md](./AGENTS.md).

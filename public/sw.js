@@ -1,5 +1,8 @@
-const CACHE_NAME = "prodnote-v1";
-const APP_SHELL = ["/", "/index.html", "/manifest.webmanifest", "/icons/icon.svg"];
+const CACHE_NAME = "prodnote-v2";
+const INDEX_URL = new URL("index.html", self.registration.scope).pathname;
+const APP_SHELL = ["", "index.html", "manifest.webmanifest", "icons/icon.svg"].map(
+  (path) => new URL(path, self.registration.scope).pathname,
+);
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -39,7 +42,7 @@ self.addEventListener("fetch", (event) => {
 
           return response;
         })
-        .catch(() => caches.match("/index.html"));
+        .catch(() => caches.match(INDEX_URL));
     }),
   );
 });
