@@ -24,6 +24,7 @@ import type {
   TimeSession,
   Workspace,
 } from "./domain/types";
+import { clearActiveTimer, isActiveTimerStorageEvent, loadActiveTimer, saveActiveTimer } from "./storage/active-timer";
 import { loadWorkspace, replaceWorkspace, saveWorkspace } from "./storage/idb";
 
 type Listener = () => void;
@@ -34,12 +35,26 @@ export class ProdNoteStore {
   private listeners = new Set<Listener>();
   private initialized = false;
 
+  constructor() {
+    if (typeof window !== "undefined") {
+      window.addEventListener("storage", (event) => {
+        if (!isActiveTimerStorageEvent(event)) {
+          return;
+        }
+
+        this.activeTimer = loadActiveTimer(this.workspace);
+        this.emit();
+      });
+    }
+  }
+
   async init(): Promise<void> {
     if (this.initialized) {
       return;
     }
 
     this.workspace = await loadWorkspace();
+    this.activeTimer = loadActiveTimer(this.workspace);
     this.initialized = true;
     this.emit();
   }
@@ -232,6 +247,7 @@ export class ProdNoteStore {
   async importWorkspace(workspace: Workspace): Promise<void> {
     this.workspace = workspace;
     this.activeTimer = null;
+    clearActiveTimer();
     await replaceWorkspace(workspace);
     this.emit();
   }
@@ -245,6 +261,7 @@ export class ProdNoteStore {
       phase: "focus",
       phaseEndsAt: null,
     };
+    saveActiveTimer(this.activeTimer);
     this.emit();
   }
 
@@ -263,6 +280,7 @@ export class ProdNoteStore {
       phase: "focus",
       phaseEndsAt: addMinutesIso(cycle.startedAt, cycle.focusMinutes),
     };
+    saveActiveTimer(this.activeTimer);
     this.emit();
   }
 
@@ -276,6 +294,7 @@ export class ProdNoteStore {
     const durationMinutes = Math.max(1, Math.round((Date.parse(endedAt) - Date.parse(active.startedAt)) / 60000));
 
     this.activeTimer = null;
+    clearActiveTimer();
 
     if (active.phase !== "focus") {
       this.emit();
@@ -305,6 +324,7 @@ export class ProdNoteStore {
     const cycle = this.workspace.pomodoroCycles.find((item) => item.id === active.pomodoroCycleId);
     if (!cycle) {
       this.activeTimer = null;
+      clearActiveTimer();
       this.emit();
       return;
     }
@@ -343,6 +363,7 @@ export class ProdNoteStore {
         phase: nextBreak,
         phaseEndsAt: addMinutesIso(nextStartedAt, getPhaseDurationMinutes(nextCycle, nextBreak)),
       };
+      saveActiveTimer(this.activeTimer);
       this.emit();
       return;
     }
@@ -356,11 +377,13 @@ export class ProdNoteStore {
       phase: "focus",
       phaseEndsAt: addMinutesIso(nextStartedAt, cycle.focusMinutes),
     };
+    saveActiveTimer(this.activeTimer);
     this.emit();
   }
 
   cancelActiveTimer(): void {
     this.activeTimer = null;
+    clearActiveTimer();
     this.emit();
   }
 
