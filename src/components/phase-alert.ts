@@ -1,5 +1,5 @@
 import { escapeHtml } from "../domain/markdown";
-import { getPhaseAlertState, type PhaseAlertState } from "../domain/timer-alerts";
+import { getPhaseAlertState, shouldNotifyPhaseAlert, type PhaseAlertState } from "../domain/timer-alerts";
 import { showTimerNotification } from "../platform/notifications";
 import { appStore } from "../state";
 import { buttonAttrs } from "../ui/html";
@@ -8,7 +8,6 @@ import { renderShadow } from "./shadow";
 export class PhaseAlert extends HTMLElement {
   private unsubscribe: (() => void) | null = null;
   private intervalId: number | null = null;
-  private notifiedKey: string | null = null;
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
@@ -133,11 +132,10 @@ export class PhaseAlert extends HTMLElement {
   }
 
   private notifyOnce(alert: PhaseAlertState): void {
-    if (this.notifiedKey === alert.key) {
+    if (!shouldNotifyPhaseAlert(alert.key)) {
       return;
     }
 
-    this.notifiedKey = alert.key;
     playPhaseEndSound();
     void showTimerNotification({
       title: `ProdNote: ${alert.title}`,

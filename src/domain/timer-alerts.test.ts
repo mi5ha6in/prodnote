@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ActiveTimer } from "./types";
-import { getPhaseAlertState } from "./timer-alerts";
+import { getPhaseAlertState, resetPhaseAlertNotifications, shouldNotifyPhaseAlert } from "./timer-alerts";
 
 const active: ActiveTimer = {
   taskId: "task_1",
@@ -22,5 +22,14 @@ describe("timer alerts", () => {
 
   it("does not alert for open-ended timer sessions", () => {
     expect(getPhaseAlertState({ ...active, mode: "timer", phaseEndsAt: null })).toBeNull();
+  });
+
+  it("notifies only once for the same completed phase", () => {
+    resetPhaseAlertNotifications();
+
+    const alert = getPhaseAlertState(active, Date.parse("2026-05-29T10:25:00.000Z"));
+    expect(alert).not.toBeNull();
+    expect(shouldNotifyPhaseAlert(alert?.key ?? "")).toBe(true);
+    expect(shouldNotifyPhaseAlert(alert?.key ?? "")).toBe(false);
   });
 });

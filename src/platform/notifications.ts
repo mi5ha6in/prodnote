@@ -1,5 +1,15 @@
+export type TimerNotificationStatus = NotificationPermission | "unsupported";
+
+export function getTimerNotificationStatus(): TimerNotificationStatus {
+  if (typeof window === "undefined" || !("Notification" in window)) {
+    return "unsupported";
+  }
+
+  return Notification.permission;
+}
+
 export async function requestTimerNotificationPermission(): Promise<NotificationPermission> {
-  if (!("Notification" in window)) {
+  if (typeof window === "undefined" || !("Notification" in window)) {
     return "denied";
   }
 

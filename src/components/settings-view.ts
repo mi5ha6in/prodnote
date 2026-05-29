@@ -1,5 +1,6 @@
 import { SCHEMA_VERSION } from "../domain/types";
 import { escapeHtml } from "../domain/markdown";
+import { getTimerNotificationStatus, requestTimerNotificationPermission } from "../platform/notifications";
 import { appStore } from "../state";
 import { parseWorkspaceExport, stringifyExport, validateImportSnapshot } from "../storage/export";
 import { confirmDestructive } from "../ui/actions";
@@ -22,6 +23,7 @@ export class SettingsView extends HTMLElement {
   private render(): void {
     const workspace = appStore.getWorkspace();
     const settings = workspace.settings;
+    const notificationStatus = getTimerNotificationStatus();
     const root = renderShadow(
       this,
       `
@@ -95,6 +97,23 @@ export class SettingsView extends HTMLElement {
               </div>
             </article>
           </div>
+
+          <article class="card form-grid">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">Уведомления</p>
+                <h2>Системные уведомления таймера</h2>
+              </div>
+              ${badgeHtml(formatNotificationStatus(notificationStatus))}
+            </div>
+            <p class="muted">${getNotificationStatusHint(notificationStatus)}</p>
+            <div class="row-actions">
+              <button ${buttonAttrs({
+                data: { action: "request-notifications" },
+                disabled: notificationStatus !== "default",
+              })}>Разрешить уведомления</button>
+            </div>
+          </article>
 
           <div class="split-grid">
             <form class="card form-grid" data-form="project">
@@ -306,6 +325,10 @@ export class SettingsView extends HTMLElement {
       URL.revokeObjectURL(url);
     });
 
+    root.querySelector<HTMLButtonElement>('[data-action="request-notifications"]')?.addEventListener("click", () => {
+      void requestTimerNotificationPermission().then(() => this.render());
+    });
+
     root.querySelector<HTMLInputElement>("[data-import]")?.addEventListener("change", (event) => {
       const input = event.currentTarget;
       if (!(input instanceof HTMLInputElement)) {
@@ -341,3 +364,35 @@ export class SettingsView extends HTMLElement {
 }
 
 customElements.define("pn-settings-view", SettingsView);
+
+function formatNotificationStatus(status: ReturnType<typeof getTimerNotificationStatus>): string {
+  if (status === "granted") {
+    return "Разрешены";
+  }
+
+  if (status === "denied") {
+    return "Запрещены";
+  }
+
+  if (status === "unsupported") {
+    return "Недоступны";
+  }
+
+  return "Не запрошены";
+}
+
+function getNotificationStatusHint(status: ReturnType<typeof getTimerNotificationStatus>): string {
+  if (status === "granted") {
+    return "Когда фаза помодоро заканчивается, ProdNote покажет системное уведомление и оставит уведомление в приложении.";
+  }
+
+  if (status === "denied") {
+    return "Браузер уже запретил уведомления. Чтобы включить их, измените разрешение сайта в настройках браузера или системы.";
+  }
+
+  if (status === "unsupported") {
+    return "Этот браузер не поддерживает Web Notifications API, поэтому останутся только уведомления внутри приложения и звук.";
+  }
+
+  return "Нажмите кнопку ниже. Браузер должен показать системный запрос разрешения; без него внешние уведомления не появятся.";
+}

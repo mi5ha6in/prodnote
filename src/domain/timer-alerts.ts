@@ -7,6 +7,8 @@ export type PhaseAlertState = {
   actionLabel: string;
 };
 
+const notifiedPhaseAlertKeys = new Set<string>();
+
 export function getPhaseAlertState(active: ActiveTimer | null, nowMs = Date.now()): PhaseAlertState | null {
   if (!active?.phaseEndsAt || active.mode !== "pomodoro") {
     return null;
@@ -24,4 +26,17 @@ export function getPhaseAlertState(active: ActiveTimer | null, nowMs = Date.now(
     message: isFocus ? "Можно сохранить сессию и перейти к перерыву." : "Можно вернуться к следующему фокусному раунду.",
     actionLabel: isFocus ? "Продолжить к перерыву" : "Продолжить фокус",
   };
+}
+
+export function shouldNotifyPhaseAlert(key: string): boolean {
+  if (notifiedPhaseAlertKeys.has(key)) {
+    return false;
+  }
+
+  notifiedPhaseAlertKeys.add(key);
+  return true;
+}
+
+export function resetPhaseAlertNotifications(): void {
+  notifiedPhaseAlertKeys.clear();
 }
