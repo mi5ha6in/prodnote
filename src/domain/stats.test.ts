@@ -51,6 +51,8 @@ describe("statistics", () => {
       longBreakEvery: 4,
       startedAt: "2026-05-27T08:00:00.000Z",
       completedFocusCount: 1,
+      completedShortBreakCount: 1,
+      completedLongBreakCount: 0,
       status: "running",
     },
   ];
@@ -69,7 +71,12 @@ describe("statistics", () => {
   });
 
   it("calculates pomodoro totals and readable durations", () => {
-    expect(getPomodoroStats(sessions, pomodoroCycles)).toEqual({ total: 1, minutes: 25 });
+    expect(getPomodoroStats(sessions, pomodoroCycles)).toEqual({
+      total: 1,
+      focusMinutes: 25,
+      breakMinutes: 5,
+      totalMinutes: 30,
+    });
     expect(formatDuration(125)).toBe("2 ч 5 мин");
   });
 
@@ -87,7 +94,9 @@ describe("statistics", () => {
 
     expect(getPomodoroStats([...sessions, interruptedPomodoroSession], pomodoroCycles)).toEqual({
       total: 1,
-      minutes: 35,
+      focusMinutes: 35,
+      breakMinutes: 5,
+      totalMinutes: 40,
     });
   });
 });

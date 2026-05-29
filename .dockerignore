@@ -1,0 +1,6 @@
+node_modules
+dist
+.git
+.codex
+*.prodnote.json
+npm-debug.log

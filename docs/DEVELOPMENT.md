@@ -23,6 +23,18 @@ npm run dev
 http://127.0.0.1:5173/
 ```
 
+Запуск server sync API:
+
+```bash
+DATABASE_URL=postgres://prodnote:prodnote@127.0.0.1:5432/prodnote npm run dev:server
+```
+
+Self-host стек с Postgres:
+
+```bash
+docker compose up --build
+```
+
 ## Проверки
 
 Тесты:
@@ -59,14 +71,19 @@ src/
   components/
   domain/
   storage/
+  sync/
   ui/
   styles/
   main.ts
   state.ts
+server/
+  db/
+  index.ts
 public/
   icons/
   manifest.webmanifest
-  sw.js
+scripts/
+  sw.template.js
 docs/
 AGENTS.md
 README.md
@@ -136,7 +153,8 @@ Markdown renderer находится в `src/domain/markdown.ts`.
 Файлы:
 
 - `public/manifest.webmanifest`;
-- `public/sw.js`;
+- `scripts/sw.template.js`;
+- `vite.config.ts`;
 - `src/main.ts`.
 
 После изменения service worker нужно проверять production build, потому что регистрация идет только в `import.meta.env.PROD`.

@@ -8,7 +8,14 @@ import {
   createTask,
   nowIso,
 } from "./domain/defaults";
-import { addMinutesIso, completeFocusRound, createPomodoroCycle, getNextBreakPhase, getPhaseDurationMinutes } from "./domain/pomodoro";
+import {
+  addMinutesIso,
+  completeBreakPhase,
+  completeFocusRound,
+  createPomodoroCycle,
+  getNextBreakPhase,
+  getPhaseDurationMinutes,
+} from "./domain/pomodoro";
 import type {
   ActiveTimer,
   CalendarPlan,
@@ -26,6 +33,13 @@ import type {
 } from "./domain/types";
 import { clearActiveTimer, isActiveTimerStorageEvent, loadActiveTimer, saveActiveTimer } from "./storage/active-timer";
 import { loadWorkspace, replaceWorkspace, saveWorkspace } from "./storage/idb";
+import {
+  pullRemoteWorkspace,
+  queueWorkspacePush,
+  recordSyncDeletion,
+  refreshSyncSession,
+  syncNow as syncWorkspaceNow,
+} from "./sync/client";
 
 type Listener = () => void;
 
@@ -57,6 +71,7 @@ export class ProdNoteStore {
     this.activeTimer = loadActiveTimer(this.workspace);
     this.initialized = true;
     this.emit();
+    void this.pullRemoteWorkspace();
   }
 
   subscribe(listener: Listener): () => void {
@@ -98,6 +113,7 @@ export class ProdNoteStore {
         }
       }
     });
+    recordSyncDeletion("project", projectId);
   }
 
   async addTag(input: { name: string; color?: string }): Promise<Tag> {
@@ -250,6 +266,13 @@ export class ProdNoteStore {
     clearActiveTimer();
     await replaceWorkspace(workspace);
     this.emit();
+    queueWorkspacePush(this.workspace);
+  }
+
+  async syncNow(): Promise<void> {
+    this.workspace = await syncWorkspaceNow(this.workspace);
+    await saveWorkspace(this.workspace);
+    this.emit();
   }
 
   async startTimer(taskId: EntityId): Promise<void> {
@@ -368,6 +391,17 @@ export class ProdNoteStore {
       return;
     }
 
+    const nextCycle = completeBreakPhase(cycle, active.phase);
+    await this.commit((workspace) => {
+      const storedCycle = workspace.pomodoroCycles.find((item) => item.id === cycle.id);
+      if (!storedCycle) {
+        return;
+      }
+
+      storedCycle.completedShortBreakCount = nextCycle.completedShortBreakCount;
+      storedCycle.completedLongBreakCount = nextCycle.completedLongBreakCount;
+    });
+
     const nextStartedAt = nowIso();
     this.activeTimer = {
       taskId: active.taskId,
@@ -375,7 +409,7 @@ export class ProdNoteStore {
       mode: "pomodoro",
       pomodoroCycleId: active.pomodoroCycleId,
       phase: "focus",
-      phaseEndsAt: addMinutesIso(nextStartedAt, cycle.focusMinutes),
+      phaseEndsAt: addMinutesIso(nextStartedAt, nextCycle.focusMinutes),
     };
     saveActiveTimer(this.activeTimer);
     this.emit();
@@ -391,12 +425,25 @@ export class ProdNoteStore {
     mutator(this.workspace);
     await saveWorkspace(this.workspace);
     this.emit();
+    queueWorkspacePush(this.workspace);
   }
 
   private emit(): void {
     for (const listener of this.listeners) {
       listener();
     }
+  }
+
+  private async pullRemoteWorkspace(): Promise<void> {
+    await refreshSyncSession();
+    const result = await pullRemoteWorkspace(this.workspace);
+    if (!result.changed) {
+      return;
+    }
+
+    this.workspace = result.workspace;
+    await saveWorkspace(this.workspace);
+    this.emit();
   }
 }
 

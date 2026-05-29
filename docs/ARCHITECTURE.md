@@ -2,21 +2,24 @@
 
 ## Общая схема
 
-ProdNote - одностраничное приложение без сервера.
+ProdNote - offline-first одностраничное приложение. Оно может работать без сервера, а self-host сервер синхронизации подключается опционально.
 
 Основные слои:
 
 - `src/domain`: типы, фабрики, расчеты, Markdown и помодоро-логика.
 - `src/storage`: IndexedDB и импорт/экспорт.
+- `src/sync`: optional клиент синхронизации с Node.js/Postgres сервером.
 - `src/state.ts`: единый store и операции изменения данных.
 - `src/ui`: внутренний design system слой: tokens, базовые CSS-классы и маленькие HTML helpers.
 - `src/components`: Web Components экраны и компонентный рендеринг.
 - `public`: PWA manifest, service worker и иконка.
+- `server`: Hono API, passkey auth, Postgres persistence и migrations.
 
 Поток данных:
 
 ```text
 UI component -> ProdNoteStore -> domain/storage -> IndexedDB -> subscribers -> rerender
+                               -> optional sync client -> server -> Postgres
 ```
 
 Компоненты не должны напрямую писать в IndexedDB. Все постоянные изменения должны проходить через `ProdNoteStore`.
@@ -171,12 +174,30 @@ async updateSomething(): Promise<void> {
 - валидирует импорт;
 - парсит импортируемый файл.
 
+## Server Sync
+
+`src/sync/client.ts`:
+
+- хранит адрес сервера, device id, server revision и tombstones в `localStorage`;
+- делает passkey registration/login через WebAuthn browser API;
+- выполняет initial pull после локальной загрузки;
+- запускает debounced push после `ProdNoteStore.commit()`;
+- не синхронизирует активный таймер.
+
+`server/index.ts`:
+
+- поднимает Hono API;
+- отдаёт production frontend из `dist`;
+- запускает SQL migrations при старте.
+
+Postgres хранит нормализованные таблицы workspace-сущностей. Внешний API при этом принимает и отдаёт текущий `Workspace` contract, чтобы клиентский доменный слой не зависел от серверной схемы.
+
 ## PWA
 
 PWA состоит из:
 
 - `public/manifest.webmanifest`;
-- `public/sw.js`;
+- generated `dist/sw.js` из `scripts/sw.template.js`;
 - `public/icons/icon.svg`;
 - регистрации service worker в `src/main.ts`.
 

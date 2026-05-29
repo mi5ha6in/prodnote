@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export type EntityId = string;
 
@@ -86,6 +86,8 @@ export interface PomodoroCycle {
   longBreakEvery: number;
   startedAt: string;
   completedFocusCount: number;
+  completedShortBreakCount: number;
+  completedLongBreakCount: number;
   status: PomodoroStatus;
 }
 

@@ -48,7 +48,7 @@ export class StatsView extends HTMLElement {
             <article class="card">
               <p class="eyebrow">Помодоро</p>
               <span class="stat-number">${pomodoro.total}</span>
-              <p class="muted">${formatDuration(pomodoro.minutes)} в помодоро-сессиях.</p>
+              <p class="muted">Работа ${formatDuration(pomodoro.focusMinutes)}, отдых ${formatDuration(pomodoro.breakMinutes)}.</p>
             </article>
             <article class="card">
               <p class="eyebrow">Лучший час</p>

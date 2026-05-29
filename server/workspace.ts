@@ -1,0 +1,455 @@
+import type postgres from "postgres";
+import { createDefaultSettings } from "../src/domain/defaults";
+import { SCHEMA_VERSION, type Workspace } from "../src/domain/types";
+import { createUuid } from "./crypto";
+import { sqlClient } from "./db/client";
+import { toSqlTimestamp } from "./db/timestamps";
+
+export type DeletedEntityType =
+  | "project"
+  | "tag"
+  | "task"
+  | "note"
+  | "session"
+  | "pomodoroCycle"
+  | "plan";
+
+export interface DeletedEntity {
+  type: DeletedEntityType;
+  id: string;
+  deletedAt: string;
+}
+
+export interface SyncedWorkspace {
+  schemaVersion: number;
+  serverRevision: number;
+  workspace: Workspace;
+}
+
+type Row = Record<string, unknown>;
+
+export async function getSyncedWorkspace(userId: string): Promise<SyncedWorkspace> {
+  const workspaceRecord = await ensureWorkspace(userId, SCHEMA_VERSION);
+  const workspaceId = workspaceRecord.id;
+  const [
+    projects,
+    tags,
+    tasks,
+    taskTags,
+    taskHistory,
+    notes,
+    noteTaskLinks,
+    noteTags,
+    noteEdits,
+    sessions,
+    cycles,
+    plans,
+    settingsRows,
+  ] = await Promise.all([
+    sqlClient<Row[]>`select * from projects where workspace_id = ${workspaceId} and deleted_at is null order by created_at desc`,
+    sqlClient<Row[]>`select * from tags where workspace_id = ${workspaceId} and deleted_at is null order by name asc`,
+    sqlClient<Row[]>`select * from tasks where workspace_id = ${workspaceId} and deleted_at is null order by created_at desc`,
+    sqlClient<Row[]>`select * from task_tags where workspace_id = ${workspaceId}`,
+    sqlClient<Row[]>`select * from task_history_entries where workspace_id = ${workspaceId} order by at desc`,
+    sqlClient<Row[]>`select * from notes where workspace_id = ${workspaceId} and deleted_at is null order by created_at desc`,
+    sqlClient<Row[]>`select * from note_task_links where workspace_id = ${workspaceId}`,
+    sqlClient<Row[]>`select * from note_tags where workspace_id = ${workspaceId}`,
+    sqlClient<Row[]>`select * from note_edit_entries where workspace_id = ${workspaceId} order by edited_at desc`,
+    sqlClient<Row[]>`select * from time_sessions where workspace_id = ${workspaceId} and deleted_at is null order by ended_at desc`,
+    sqlClient<Row[]>`select * from pomodoro_cycles where workspace_id = ${workspaceId} and deleted_at is null order by started_at desc`,
+    sqlClient<Row[]>`select * from calendar_plans where workspace_id = ${workspaceId} and deleted_at is null order by starts_at asc`,
+    sqlClient<Row[]>`select * from settings where workspace_id = ${workspaceId}`,
+  ]);
+
+  const taskTagsByTask = groupValues(taskTags, "task_id", "tag_id");
+  const taskHistoryByTask = groupRows(taskHistory, "task_id");
+  const noteTasksByNote = groupValues(noteTaskLinks, "note_id", "task_id");
+  const noteTagsByNote = groupValues(noteTags, "note_id", "tag_id");
+  const noteEditsByNote = groupRows(noteEdits, "note_id");
+  const settings = settingsRows[0];
+
+  return {
+    schemaVersion: Number(workspaceRecord.schemaVersion),
+    serverRevision: Number(workspaceRecord.serverRevision),
+    workspace: {
+      schemaVersion: Number(workspaceRecord.schemaVersion),
+      exportedAt: null,
+      projects: projects.map((project) => ({
+        id: asString(project.entity_id),
+        name: asString(project.name),
+        color: asString(project.color),
+        description: asString(project.description),
+        archived: Boolean(project.archived),
+        createdAt: toIso(project.created_at),
+        updatedAt: toIso(project.updated_at),
+      })),
+      tags: tags.map((tag) => ({
+        id: asString(tag.entity_id),
+        name: asString(tag.name),
+        color: asString(tag.color),
+      })),
+      tasks: tasks.map((task) => ({
+        id: asString(task.entity_id),
+        title: asString(task.title),
+        description: asString(task.description),
+        projectId: asNullableString(task.project_id),
+        status: asString(task.status) as Workspace["tasks"][number]["status"],
+        priority: asString(task.priority) as Workspace["tasks"][number]["priority"],
+        tagIds: taskTagsByTask.get(asString(task.entity_id)) ?? [],
+        dueDate: asNullableString(task.due_date),
+        plannedAt: asNullableString(task.planned_at),
+        estimateMinutes: asNullableNumber(task.estimate_minutes),
+        history: (taskHistoryByTask.get(asString(task.entity_id)) ?? []).map((entry) => ({
+          id: asString(entry.entity_id),
+          at: toIso(entry.at),
+          kind: asString(entry.kind) as Workspace["tasks"][number]["history"][number]["kind"],
+          markdown: asString(entry.markdown),
+        })),
+        createdAt: toIso(task.created_at),
+        updatedAt: toIso(task.updated_at),
+        completedAt: task.completed_at ? toIso(task.completed_at) : null,
+      })),
+      notes: notes.map((note) => ({
+        id: asString(note.entity_id),
+        title: asString(note.title),
+        markdown: asString(note.markdown),
+        projectId: asNullableString(note.project_id),
+        linkedTaskIds: noteTasksByNote.get(asString(note.entity_id)) ?? [],
+        tagIds: noteTagsByNote.get(asString(note.entity_id)) ?? [],
+        editHistory: (noteEditsByNote.get(asString(note.entity_id)) ?? []).map((entry) => ({
+          id: asString(entry.entity_id),
+          editedAt: toIso(entry.edited_at),
+        })),
+        createdAt: toIso(note.created_at),
+        updatedAt: toIso(note.updated_at),
+      })),
+      sessions: sessions.map((session) => ({
+        id: asString(session.entity_id),
+        taskId: asString(session.task_id),
+        startedAt: toIso(session.started_at),
+        endedAt: toIso(session.ended_at),
+        durationMinutes: Number(session.duration_minutes),
+        mode: asString(session.mode) as Workspace["sessions"][number]["mode"],
+        note: asString(session.note),
+        pomodoroCycleId: asNullableString(session.pomodoro_cycle_id),
+      })),
+      pomodoroCycles: cycles.map((cycle) => ({
+        id: asString(cycle.entity_id),
+        taskId: asString(cycle.task_id),
+        focusMinutes: Number(cycle.focus_minutes),
+        shortBreakMinutes: Number(cycle.short_break_minutes),
+        longBreakMinutes: Number(cycle.long_break_minutes),
+        longBreakEvery: Number(cycle.long_break_every),
+        startedAt: toIso(cycle.started_at),
+        completedFocusCount: Number(cycle.completed_focus_count),
+        completedShortBreakCount: Number(cycle.completed_short_break_count ?? 0),
+        completedLongBreakCount: Number(cycle.completed_long_break_count ?? 0),
+        status: asString(cycle.status) as Workspace["pomodoroCycles"][number]["status"],
+      })),
+      plans: plans.map((plan) => ({
+        id: asString(plan.entity_id),
+        taskId: asString(plan.task_id),
+        title: asString(plan.title),
+        startsAt: toIso(plan.starts_at),
+        endsAt: toIso(plan.ends_at),
+        kind: asString(plan.kind) as Workspace["plans"][number]["kind"],
+        createdAt: toIso(plan.created_at),
+      })),
+      settings: settings
+        ? {
+            pomodoroFocusMinutes: Number(settings.pomodoro_focus_minutes),
+            pomodoroShortBreakMinutes: Number(settings.pomodoro_short_break_minutes),
+            pomodoroLongBreakMinutes: Number(settings.pomodoro_long_break_minutes),
+            pomodoroLongBreakEvery: Number(settings.pomodoro_long_break_every),
+            weekStartsOn: Number(settings.week_starts_on) === 7 ? 7 : 1,
+          }
+        : createDefaultSettings(),
+    },
+  };
+}
+
+export async function putSyncedWorkspace(
+  userId: string,
+  workspace: Workspace,
+  deletedEntities: DeletedEntity[] = [],
+): Promise<SyncedWorkspace> {
+  await sqlClient.begin(async (transaction) => {
+    const workspaceRecord = await ensureWorkspace(userId, workspace.schemaVersion);
+    const workspaceId = workspaceRecord.id;
+    const nextRevision = Number(workspaceRecord.serverRevision) + 1;
+    const now = toSqlTimestamp(new Date());
+
+    await transaction`
+      update workspaces
+      set schema_version = ${workspace.schemaVersion}, server_revision = ${nextRevision}, updated_at = ${now}
+      where id = ${workspaceId}
+    `;
+
+    for (const entity of deletedEntities) {
+      await markDeleted(transaction, workspaceId, entity, nextRevision);
+    }
+
+    for (const project of workspace.projects) {
+      await transaction`
+        insert into projects (
+          workspace_id, entity_id, name, color, description, archived, created_at, updated_at,
+          client_updated_at, server_revision, deleted_at
+        )
+        values (
+          ${workspaceId}, ${project.id}, ${project.name}, ${project.color}, ${project.description}, ${project.archived},
+          ${toSqlTimestamp(project.createdAt)}, ${toSqlTimestamp(project.updatedAt)}, ${toSqlTimestamp(project.updatedAt)}, ${nextRevision}, null
+        )
+        on conflict (workspace_id, entity_id) do update
+        set name = excluded.name, color = excluded.color, description = excluded.description, archived = excluded.archived,
+          created_at = excluded.created_at, updated_at = excluded.updated_at, client_updated_at = excluded.client_updated_at,
+          server_revision = excluded.server_revision, deleted_at = null
+        where projects.client_updated_at < excluded.client_updated_at or projects.deleted_at is not null
+      `;
+    }
+
+    for (const tag of workspace.tags) {
+      await transaction`
+        insert into tags (workspace_id, entity_id, name, color, client_updated_at, server_revision, deleted_at)
+        values (${workspaceId}, ${tag.id}, ${tag.name}, ${tag.color}, ${now}, ${nextRevision}, null)
+        on conflict (workspace_id, entity_id) do update
+        set name = excluded.name, color = excluded.color, client_updated_at = excluded.client_updated_at,
+          server_revision = excluded.server_revision, deleted_at = null
+      `;
+    }
+
+    for (const task of workspace.tasks) {
+      await transaction`
+        insert into tasks (
+          workspace_id, entity_id, title, description, project_id, status, priority, due_date, planned_at,
+          estimate_minutes, created_at, updated_at, completed_at, client_updated_at, server_revision, deleted_at
+        )
+        values (
+          ${workspaceId}, ${task.id}, ${task.title}, ${task.description}, ${task.projectId}, ${task.status}, ${task.priority},
+          ${task.dueDate}, ${task.plannedAt}, ${task.estimateMinutes}, ${toSqlTimestamp(task.createdAt)}, ${toSqlTimestamp(task.updatedAt)},
+          ${toSqlTimestamp(task.completedAt)}, ${toSqlTimestamp(task.updatedAt)}, ${nextRevision}, null
+        )
+        on conflict (workspace_id, entity_id) do update
+        set title = excluded.title, description = excluded.description, project_id = excluded.project_id, status = excluded.status,
+          priority = excluded.priority, due_date = excluded.due_date, planned_at = excluded.planned_at,
+          estimate_minutes = excluded.estimate_minutes, created_at = excluded.created_at, updated_at = excluded.updated_at,
+          completed_at = excluded.completed_at, client_updated_at = excluded.client_updated_at,
+          server_revision = excluded.server_revision, deleted_at = null
+        where tasks.client_updated_at < excluded.client_updated_at or tasks.deleted_at is not null
+      `;
+      await transaction`delete from task_tags where workspace_id = ${workspaceId} and task_id = ${task.id}`;
+      for (const tagId of task.tagIds) {
+        await transaction`insert into task_tags (workspace_id, task_id, tag_id) values (${workspaceId}, ${task.id}, ${tagId}) on conflict do nothing`;
+      }
+      await transaction`delete from task_history_entries where workspace_id = ${workspaceId} and task_id = ${task.id}`;
+      for (const entry of task.history) {
+        await transaction`
+          insert into task_history_entries (workspace_id, task_id, entity_id, at, kind, markdown)
+          values (${workspaceId}, ${task.id}, ${entry.id}, ${toSqlTimestamp(entry.at)}, ${entry.kind}, ${entry.markdown})
+          on conflict do nothing
+        `;
+      }
+    }
+
+    for (const note of workspace.notes) {
+      await transaction`
+        insert into notes (
+          workspace_id, entity_id, title, markdown, project_id, created_at, updated_at, client_updated_at, server_revision, deleted_at
+        )
+        values (
+          ${workspaceId}, ${note.id}, ${note.title}, ${note.markdown}, ${note.projectId}, ${toSqlTimestamp(note.createdAt)},
+          ${toSqlTimestamp(note.updatedAt)}, ${toSqlTimestamp(note.updatedAt)}, ${nextRevision}, null
+        )
+        on conflict (workspace_id, entity_id) do update
+        set title = excluded.title, markdown = excluded.markdown, project_id = excluded.project_id,
+          created_at = excluded.created_at, updated_at = excluded.updated_at, client_updated_at = excluded.client_updated_at,
+          server_revision = excluded.server_revision, deleted_at = null
+        where notes.client_updated_at < excluded.client_updated_at or notes.deleted_at is not null
+      `;
+      await transaction`delete from note_task_links where workspace_id = ${workspaceId} and note_id = ${note.id}`;
+      for (const taskId of note.linkedTaskIds) {
+        await transaction`insert into note_task_links (workspace_id, note_id, task_id) values (${workspaceId}, ${note.id}, ${taskId}) on conflict do nothing`;
+      }
+      await transaction`delete from note_tags where workspace_id = ${workspaceId} and note_id = ${note.id}`;
+      for (const tagId of note.tagIds) {
+        await transaction`insert into note_tags (workspace_id, note_id, tag_id) values (${workspaceId}, ${note.id}, ${tagId}) on conflict do nothing`;
+      }
+      await transaction`delete from note_edit_entries where workspace_id = ${workspaceId} and note_id = ${note.id}`;
+      for (const entry of note.editHistory) {
+        await transaction`
+          insert into note_edit_entries (workspace_id, note_id, entity_id, edited_at)
+          values (${workspaceId}, ${note.id}, ${entry.id}, ${toSqlTimestamp(entry.editedAt)})
+          on conflict do nothing
+        `;
+      }
+    }
+
+    for (const session of workspace.sessions) {
+      await transaction`
+        insert into time_sessions (
+          workspace_id, entity_id, task_id, started_at, ended_at, duration_minutes, mode, note,
+          pomodoro_cycle_id, client_updated_at, server_revision, deleted_at
+        )
+        values (
+          ${workspaceId}, ${session.id}, ${session.taskId}, ${toSqlTimestamp(session.startedAt)}, ${toSqlTimestamp(session.endedAt)},
+          ${session.durationMinutes}, ${session.mode}, ${session.note}, ${session.pomodoroCycleId},
+          ${toSqlTimestamp(session.endedAt)}, ${nextRevision}, null
+        )
+        on conflict (workspace_id, entity_id) do update
+        set task_id = excluded.task_id, started_at = excluded.started_at, ended_at = excluded.ended_at,
+          duration_minutes = excluded.duration_minutes, mode = excluded.mode, note = excluded.note,
+          pomodoro_cycle_id = excluded.pomodoro_cycle_id, client_updated_at = excluded.client_updated_at,
+          server_revision = excluded.server_revision, deleted_at = null
+        where time_sessions.client_updated_at < excluded.client_updated_at or time_sessions.deleted_at is not null
+      `;
+    }
+
+    for (const cycle of workspace.pomodoroCycles) {
+      await transaction`
+        insert into pomodoro_cycles (
+          workspace_id, entity_id, task_id, focus_minutes, short_break_minutes, long_break_minutes,
+          long_break_every, started_at, completed_focus_count, completed_short_break_count, completed_long_break_count,
+          status, client_updated_at, server_revision, deleted_at
+        )
+        values (
+          ${workspaceId}, ${cycle.id}, ${cycle.taskId}, ${cycle.focusMinutes}, ${cycle.shortBreakMinutes},
+          ${cycle.longBreakMinutes}, ${cycle.longBreakEvery}, ${toSqlTimestamp(cycle.startedAt)}, ${cycle.completedFocusCount},
+          ${cycle.completedShortBreakCount}, ${cycle.completedLongBreakCount}, ${cycle.status}, ${toSqlTimestamp(cycle.startedAt)},
+          ${nextRevision}, null
+        )
+        on conflict (workspace_id, entity_id) do update
+        set task_id = excluded.task_id, focus_minutes = excluded.focus_minutes,
+          short_break_minutes = excluded.short_break_minutes, long_break_minutes = excluded.long_break_minutes,
+          long_break_every = excluded.long_break_every, completed_focus_count = excluded.completed_focus_count,
+          completed_short_break_count = excluded.completed_short_break_count,
+          completed_long_break_count = excluded.completed_long_break_count,
+          status = excluded.status, client_updated_at = excluded.client_updated_at,
+          server_revision = excluded.server_revision, deleted_at = null
+      `;
+    }
+
+    for (const plan of workspace.plans) {
+      await transaction`
+        insert into calendar_plans (
+          workspace_id, entity_id, task_id, title, starts_at, ends_at, kind, created_at,
+          client_updated_at, server_revision, deleted_at
+        )
+        values (
+          ${workspaceId}, ${plan.id}, ${plan.taskId}, ${plan.title}, ${toSqlTimestamp(plan.startsAt)}, ${toSqlTimestamp(plan.endsAt)},
+          ${plan.kind}, ${toSqlTimestamp(plan.createdAt)}, ${toSqlTimestamp(plan.createdAt)}, ${nextRevision}, null
+        )
+        on conflict (workspace_id, entity_id) do update
+        set task_id = excluded.task_id, title = excluded.title, starts_at = excluded.starts_at,
+          ends_at = excluded.ends_at, kind = excluded.kind, created_at = excluded.created_at,
+          client_updated_at = excluded.client_updated_at, server_revision = excluded.server_revision, deleted_at = null
+      `;
+    }
+
+    await transaction`
+      insert into settings (
+        workspace_id, pomodoro_focus_minutes, pomodoro_short_break_minutes, pomodoro_long_break_minutes,
+        pomodoro_long_break_every, week_starts_on, client_updated_at, server_revision
+      )
+      values (
+        ${workspaceId}, ${workspace.settings.pomodoroFocusMinutes}, ${workspace.settings.pomodoroShortBreakMinutes},
+        ${workspace.settings.pomodoroLongBreakMinutes}, ${workspace.settings.pomodoroLongBreakEvery},
+        ${workspace.settings.weekStartsOn}, ${now}, ${nextRevision}
+      )
+      on conflict (workspace_id) do update
+      set pomodoro_focus_minutes = excluded.pomodoro_focus_minutes,
+        pomodoro_short_break_minutes = excluded.pomodoro_short_break_minutes,
+        pomodoro_long_break_minutes = excluded.pomodoro_long_break_minutes,
+        pomodoro_long_break_every = excluded.pomodoro_long_break_every,
+        week_starts_on = excluded.week_starts_on,
+        client_updated_at = excluded.client_updated_at,
+        server_revision = excluded.server_revision
+    `;
+  });
+
+  return getSyncedWorkspace(userId);
+}
+
+async function ensureWorkspace(userId: string, schemaVersion: number): Promise<{ id: string; schemaVersion: number; serverRevision: number }> {
+  const existing = await sqlClient<Row[]>`
+    select id, schema_version, server_revision from workspaces where user_id = ${userId} limit 1
+  `;
+  if (existing[0]) {
+    return {
+      id: asString(existing[0].id),
+      schemaVersion: Number(existing[0].schema_version),
+      serverRevision: Number(existing[0].server_revision),
+    };
+  }
+
+  const workspaceId = createUuid();
+  const now = toSqlTimestamp(new Date());
+  await sqlClient`
+    insert into workspaces (id, user_id, schema_version, server_revision, created_at, updated_at)
+    values (${workspaceId}, ${userId}, ${schemaVersion}, 0, ${now}, ${now})
+  `;
+  return { id: workspaceId, schemaVersion, serverRevision: 0 };
+}
+
+async function markDeleted(
+  transaction: postgres.TransactionSql,
+  workspaceId: string,
+  entity: DeletedEntity,
+  revision: number,
+): Promise<void> {
+  const deletedAt = toSqlTimestamp(entity.deletedAt);
+  if (entity.type === "project") {
+    await transaction`update projects set deleted_at = ${deletedAt}, server_revision = ${revision} where workspace_id = ${workspaceId} and entity_id = ${entity.id}`;
+  } else if (entity.type === "tag") {
+    await transaction`update tags set deleted_at = ${deletedAt}, server_revision = ${revision} where workspace_id = ${workspaceId} and entity_id = ${entity.id}`;
+  } else if (entity.type === "task") {
+    await transaction`update tasks set deleted_at = ${deletedAt}, server_revision = ${revision} where workspace_id = ${workspaceId} and entity_id = ${entity.id}`;
+  } else if (entity.type === "note") {
+    await transaction`update notes set deleted_at = ${deletedAt}, server_revision = ${revision} where workspace_id = ${workspaceId} and entity_id = ${entity.id}`;
+  } else if (entity.type === "session") {
+    await transaction`update time_sessions set deleted_at = ${deletedAt}, server_revision = ${revision} where workspace_id = ${workspaceId} and entity_id = ${entity.id}`;
+  } else if (entity.type === "pomodoroCycle") {
+    await transaction`update pomodoro_cycles set deleted_at = ${deletedAt}, server_revision = ${revision} where workspace_id = ${workspaceId} and entity_id = ${entity.id}`;
+  } else {
+    await transaction`update calendar_plans set deleted_at = ${deletedAt}, server_revision = ${revision} where workspace_id = ${workspaceId} and entity_id = ${entity.id}`;
+  }
+}
+
+function groupValues(rows: Row[], groupField: string, valueField: string): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+  for (const row of rows) {
+    const group = asString(row[groupField]);
+    const values = map.get(group) ?? [];
+    values.push(asString(row[valueField]));
+    map.set(group, values);
+  }
+  return map;
+}
+
+function groupRows(rows: Row[], groupField: string): Map<string, Row[]> {
+  const map = new Map<string, Row[]>();
+  for (const row of rows) {
+    const group = asString(row[groupField]);
+    const values = map.get(group) ?? [];
+    values.push(row);
+    map.set(group, values);
+  }
+  return map;
+}
+
+function asString(value: unknown): string {
+  return typeof value === "string" ? value : String(value ?? "");
+}
+
+function asNullableString(value: unknown): string | null {
+  return value === null || typeof value === "undefined" ? null : asString(value);
+}
+
+function asNullableNumber(value: unknown): number | null {
+  return value === null || typeof value === "undefined" ? null : Number(value);
+}
+
+function toIso(value: unknown): string {
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  return new Date(asString(value)).toISOString();
+}

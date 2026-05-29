@@ -4,7 +4,7 @@
 
 Базовый продукт:
 
-- локальное PWA без сервера;
+- offline-first PWA;
 - Web Components с Shadow DOM;
 - IndexedDB persistence;
 - экспорт/импорт `.prodnote.json`;
@@ -18,6 +18,8 @@
 - календарь;
 - статистика;
 - настройки.
+- optional self-host server sync;
+- passkey/WebAuthn вход без личных данных.
 
 ## Ближайшие улучшения
 
@@ -88,9 +90,6 @@
 
 Пока не планируется без отдельного решения:
 
-- сервер;
-- аккаунты;
-- синхронизация между устройствами;
 - совместная работа;
 - end-to-end encryption;
 - мобильные native apps.

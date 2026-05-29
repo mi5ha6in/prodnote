@@ -1,5 +1,6 @@
 import { escapeHtml, renderMarkdown } from "../domain/markdown";
 import { formatDuration } from "../domain/stats";
+import type { ActiveTimer, Workspace } from "../domain/types";
 import { requestTimerNotificationPermission } from "../platform/notifications";
 import { appStore } from "../state";
 import { renderShadow } from "./shadow";
@@ -10,10 +11,12 @@ export class FocusView extends HTMLElement {
   private intervalId: number | null = null;
   private sessionNote = "";
   private historyText = "";
+  private selectedTaskId: string | null = null;
+  private focusHistoryAfterRender = false;
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
-    this.intervalId = window.setInterval(() => this.render(), 1000);
+    this.intervalId = window.setInterval(() => this.syncReadout(), 1000);
     this.render();
   }
 
@@ -27,20 +30,11 @@ export class FocusView extends HTMLElement {
   private render(): void {
     const workspace = appStore.getWorkspace();
     const active = appStore.getActiveTimer();
-    const activeTask = active ? workspace.tasks.find((task) => task.id === active.taskId) : null;
+    const contextTaskId = this.resolveContextTaskId(workspace, active);
+    const contextTask = contextTaskId ? workspace.tasks.find((task) => task.id === contextTaskId) ?? null : null;
     const focusableTasks = workspace.tasks.filter((task) => task.status !== "done");
     const canStart = focusableTasks.length > 0;
-    const elapsedSeconds = active ? Math.max(0, Math.floor((Date.now() - Date.parse(active.startedAt)) / 1000)) : 0;
-    const remainingSeconds =
-      active?.phaseEndsAt === null || !active?.phaseEndsAt
-        ? null
-        : Math.max(0, Math.floor((Date.parse(active.phaseEndsAt) - Date.now()) / 1000));
-    const readout =
-      remainingSeconds === null
-        ? formatDuration(Math.floor(elapsedSeconds / 60))
-        : `${Math.floor(remainingSeconds / 60).toString().padStart(2, "0")}:${(remainingSeconds % 60)
-            .toString()
-            .padStart(2, "0")}`;
+    const startTaskId = this.resolveStartTaskId(focusableTasks);
 
     const root = renderShadow(
       this,
@@ -49,11 +43,11 @@ export class FocusView extends HTMLElement {
           <div class="focus-orb" aria-hidden="true"></div>
           <div class="focus-panel">
             <p class="eyebrow">${active ? (active.phase === "focus" ? "Фокус" : "Перерыв") : "Готов к работе"}</p>
-            <h2>${activeTask ? escapeHtml(activeTask.title) : "Выберите задачу и запустите сессию"}</h2>
-            <div class="focus-readout">${active ? readout : "00:00"}</div>
+            <h2>${contextTask ? escapeHtml(contextTask.title) : "Выберите задачу и запустите сессию"}</h2>
+            <div class="focus-readout" data-focus-readout>${active ? getFocusReadout(active) : "00:00"}</div>
             ${
-              activeTask
-                ? `<p class="muted">${escapeHtml(getProjectName(workspace.projects, activeTask.projectId))}</p>`
+              contextTask
+                ? `<p class="muted">${escapeHtml(getProjectName(workspace.projects, contextTask.projectId))}</p>`
                 : `<p class="muted">Сессии записываются в историю выбранной задачи.</p>`
             }
           </div>
@@ -76,7 +70,7 @@ export class FocusView extends HTMLElement {
                     ${
                       active.mode === "pomodoro"
                         ? `<button type="button" class="secondary" data-action="complete-phase">Завершить фазу</button>`
-                        : `<button type="button" class="secondary" data-action="stop">Остановить таймер</button>`
+                        : `<button type="button" class="secondary" data-action="stop">Остановить и сохранить</button>`
                     }
                     <button type="button" class="ghost" data-action="cancel">Отменить без записи</button>
                   </div>
@@ -91,7 +85,7 @@ export class FocusView extends HTMLElement {
                   <label>
                     Задача
                     <select name="taskId" required ${canStart ? "" : "disabled"}>
-                      ${renderTaskOptions(focusableTasks)}
+                      ${renderTaskOptions(focusableTasks, startTaskId)}
                     </select>
                   </label>
                   <div class="row-actions">
@@ -111,7 +105,7 @@ export class FocusView extends HTMLElement {
             <label>
               Задача
               <select name="taskId" required ${workspace.tasks.length ? "" : "disabled"}>
-                ${renderTaskOptions(workspace.tasks, active?.taskId ?? null)}
+                ${renderTaskOptions(workspace.tasks, contextTaskId)}
               </select>
             </label>
             <label>
@@ -123,20 +117,20 @@ export class FocusView extends HTMLElement {
         </section>
 
         ${
-          activeTask
+          contextTask
             ? `
               <article class="card">
                 <div class="card-header">
                   <div>
                     <p class="eyebrow">Контекст</p>
-                    <h2>${escapeHtml(activeTask.title)}</h2>
+                    <h2>${escapeHtml(contextTask.title)}</h2>
                   </div>
                 </div>
-                ${activeTask.description ? `<div class="markdown-preview">${renderMarkdown(activeTask.description)}</div>` : `<p class="muted">У задачи пока нет описания.</p>`}
+                ${contextTask.description ? `<div class="markdown-preview">${renderMarkdown(contextTask.description)}</div>` : `<p class="muted">У задачи пока нет описания.</p>`}
                 <div class="item-list history-list">
                   ${
-                    activeTask.history.length
-                      ? activeTask.history
+                    contextTask.history.length
+                      ? contextTask.history
                           .slice(0, 4)
                           .map(
                             (entry) => `
@@ -233,6 +227,11 @@ export class FocusView extends HTMLElement {
       `,
     );
 
+    if (this.focusHistoryAfterRender) {
+      this.focusHistoryAfterRender = false;
+      root.querySelector<HTMLTextAreaElement>('textarea[name="history"]')?.focus();
+    }
+
     root.querySelector<HTMLTextAreaElement>("[data-session-note]")?.addEventListener("input", (event) => {
       const target = event.currentTarget;
       if (target instanceof HTMLTextAreaElement) {
@@ -249,6 +248,7 @@ export class FocusView extends HTMLElement {
       }
 
       const taskId = requireSelect(form, "taskId").value;
+      this.selectedTaskId = taskId;
       if (submitter.value === "pomodoro") {
         void requestTimerNotificationPermission();
         void appStore.startPomodoro(taskId);
@@ -259,18 +259,34 @@ export class FocusView extends HTMLElement {
     });
 
     root.querySelector<HTMLButtonElement>('[data-action="stop"]')?.addEventListener("click", () => {
+      const current = appStore.getActiveTimer();
+      this.selectedTaskId = current?.taskId ?? this.selectedTaskId;
+      this.focusHistoryAfterRender = true;
       void appStore.stopTimer(this.sessionNote);
       this.sessionNote = "";
     });
 
     root.querySelector<HTMLButtonElement>('[data-action="complete-phase"]')?.addEventListener("click", () => {
+      const current = appStore.getActiveTimer();
+      this.selectedTaskId = current?.taskId ?? this.selectedTaskId;
+      this.focusHistoryAfterRender = true;
       void appStore.completePomodoroPhase(this.sessionNote);
       this.sessionNote = "";
     });
 
     root.querySelector<HTMLButtonElement>('[data-action="cancel"]')?.addEventListener("click", () => {
+      const current = appStore.getActiveTimer();
+      this.selectedTaskId = current?.taskId ?? this.selectedTaskId;
       appStore.cancelActiveTimer();
       this.sessionNote = "";
+    });
+
+    root.querySelector<HTMLSelectElement>('[data-form="history"] select[name="taskId"]')?.addEventListener("change", (event) => {
+      const target = event.currentTarget;
+      if (target instanceof HTMLSelectElement) {
+        this.selectedTaskId = target.value || null;
+        this.render();
+      }
     });
 
     root.querySelector<HTMLTextAreaElement>('textarea[name="history"]')?.addEventListener("input", (event) => {
@@ -292,6 +308,57 @@ export class FocusView extends HTMLElement {
       form.reset();
     });
   }
+
+  private resolveContextTaskId(workspace: Workspace, active: ActiveTimer | null): string | null {
+    if (active?.taskId) {
+      this.selectedTaskId = active.taskId;
+      return active.taskId;
+    }
+
+    if (this.selectedTaskId && workspace.tasks.some((task) => task.id === this.selectedTaskId)) {
+      return this.selectedTaskId;
+    }
+
+    this.selectedTaskId = workspace.tasks[0]?.id ?? null;
+    return this.selectedTaskId;
+  }
+
+  private resolveStartTaskId(tasks: Array<{ id: string }>): string | null {
+    if (this.selectedTaskId && tasks.some((task) => task.id === this.selectedTaskId)) {
+      return this.selectedTaskId;
+    }
+
+    return tasks[0]?.id ?? null;
+  }
+
+  private syncReadout(): void {
+    const root = this.shadowRoot;
+    if (!root) {
+      return;
+    }
+
+    const readout = root.querySelector<HTMLElement>("[data-focus-readout]");
+    if (!readout) {
+      return;
+    }
+
+    const active = appStore.getActiveTimer();
+    readout.textContent = active ? getFocusReadout(active) : "00:00";
+  }
 }
 
 customElements.define("pn-focus-view", FocusView);
+
+function getFocusReadout(active: ActiveTimer): string {
+  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - Date.parse(active.startedAt)) / 1000));
+  const remainingSeconds =
+    active.phaseEndsAt === null || !active.phaseEndsAt
+      ? null
+      : Math.max(0, Math.floor((Date.parse(active.phaseEndsAt) - Date.now()) / 1000));
+
+  return remainingSeconds === null
+    ? formatDuration(Math.floor(elapsedSeconds / 60))
+    : `${Math.floor(remainingSeconds / 60).toString().padStart(2, "0")}:${(remainingSeconds % 60)
+        .toString()
+        .padStart(2, "0")}`;
+}

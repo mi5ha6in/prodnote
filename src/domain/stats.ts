@@ -20,7 +20,9 @@ export interface HourStat {
 
 export interface PomodoroStat {
   total: number;
-  minutes: number;
+  focusMinutes: number;
+  breakMinutes: number;
+  totalMinutes: number;
 }
 
 export function getSessionMinutes(session: Pick<TimeSession, "durationMinutes" | "startedAt" | "endedAt">): number {
@@ -129,10 +131,18 @@ export function getProductiveHours(sessions: TimeSession[]): HourStat[] {
 export function getPomodoroStats(sessions: TimeSession[], pomodoroCycles: PomodoroCycle[] = []): PomodoroStat {
   const pomodoroSessions = sessions.filter((session) => session.mode === "pomodoro");
   const completedFocusRounds = pomodoroCycles.reduce((sum, cycle) => sum + cycle.completedFocusCount, 0);
+  const focusMinutes = getTotalMinutes(pomodoroSessions);
+  const breakMinutes = pomodoroCycles.reduce(
+    (sum, cycle) =>
+      sum + cycle.completedShortBreakCount * cycle.shortBreakMinutes + cycle.completedLongBreakCount * cycle.longBreakMinutes,
+    0,
+  );
 
   return {
     total: completedFocusRounds,
-    minutes: getTotalMinutes(pomodoroSessions),
+    focusMinutes,
+    breakMinutes,
+    totalMinutes: focusMinutes + breakMinutes,
   };
 }
 

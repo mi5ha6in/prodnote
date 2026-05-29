@@ -11,6 +11,8 @@ export function createPomodoroCycle(taskId: EntityId, settings: Settings): Pomod
     longBreakEvery: settings.pomodoroLongBreakEvery,
     startedAt: nowIso(),
     completedFocusCount: 0,
+    completedShortBreakCount: 0,
+    completedLongBreakCount: 0,
     status: "running",
   };
 }
@@ -41,5 +43,19 @@ export function completeFocusRound(cycle: PomodoroCycle): PomodoroCycle {
   return {
     ...cycle,
     completedFocusCount: cycle.completedFocusCount + 1,
+  };
+}
+
+export function completeBreakPhase(cycle: PomodoroCycle, phase: Exclude<PomodoroPhase, "focus">): PomodoroCycle {
+  if (phase === "longBreak") {
+    return {
+      ...cycle,
+      completedLongBreakCount: cycle.completedLongBreakCount + 1,
+    };
+  }
+
+  return {
+    ...cycle,
+    completedShortBreakCount: cycle.completedShortBreakCount + 1,
   };
 }

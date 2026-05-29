@@ -13,6 +13,17 @@
   </head>
   <body>
     <app-root></app-root>
+    <script>
+      if (window.location.protocol === "http:" && window.location.hostname === "127.0.0.1" && window.location.port === "8787") {
+        window.location.replace(
+          "http://localhost:" +
+            window.location.port +
+            window.location.pathname +
+            window.location.search +
+            window.location.hash,
+        );
+      }
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

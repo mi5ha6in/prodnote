@@ -1,0 +1,34 @@
+services:
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ORIGIN: http://localhost:8787
+      DATABASE_URL: postgres://prodnote:prodnote@db:5432/prodnote
+      NODE_ENV: production
+      PORT: 8787
+      WEBAUTHN_RP_ID: localhost
+      WEBAUTHN_RP_NAME: ProdNote
+    ports:
+      - "8787:8787"
+
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: prodnote
+      POSTGRES_PASSWORD: prodnote
+      POSTGRES_USER: prodnote
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prodnote -d prodnote"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ports:
+      - "5432:5432"
+    volumes:
+      - prodnote-postgres-18:/var/lib/postgresql
+
+volumes:
+  prodnote-postgres-18:

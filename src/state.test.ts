@@ -29,11 +29,14 @@ describe("ProdNoteStore", () => {
     const task = await store.addTask({ title: "Помодоро" });
     await store.startPomodoro(task.id);
     await store.completePomodoroPhase("Фокус завершён");
+    await store.completePomodoroPhase();
 
     expect(store.getWorkspace().pomodoroCycles).toHaveLength(1);
     expect(store.getWorkspace().pomodoroCycles[0]?.completedFocusCount).toBe(1);
+    expect(store.getWorkspace().pomodoroCycles[0]?.completedShortBreakCount).toBe(1);
+    expect(store.getWorkspace().pomodoroCycles[0]?.completedLongBreakCount).toBe(0);
     expect(store.getWorkspace().sessions[0]?.mode).toBe("pomodoro");
-    expect(store.getActiveTimer()?.phase).toBe("shortBreak");
+    expect(store.getActiveTimer()?.phase).toBe("focus");
   });
 
   it("deletes projects without deleting linked tasks and notes", async () => {

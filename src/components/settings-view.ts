@@ -3,6 +3,15 @@ import { escapeHtml } from "../domain/markdown";
 import { getTimerNotificationStatus, requestTimerNotificationPermission } from "../platform/notifications";
 import { appStore } from "../state";
 import { parseWorkspaceExport, stringifyExport, validateImportSnapshot } from "../storage/export";
+import {
+  getSyncState,
+  loginPasskey,
+  logoutSync,
+  refreshSyncSession,
+  registerPasskey,
+  setSyncServerUrl,
+  subscribeSync,
+} from "../sync/client";
 import { confirmDestructive } from "../ui/actions";
 import { badgeHtml, buttonAttrs, fieldHtml } from "../ui/html";
 import { renderShadow } from "./shadow";
@@ -10,20 +19,26 @@ import { requireInput, requireSelect, requireTextArea } from "./view-utils";
 
 export class SettingsView extends HTMLElement {
   private unsubscribe: (() => void) | null = null;
+  private syncUnsubscribe: (() => void) | null = null;
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
+    this.syncUnsubscribe = subscribeSync(() => this.render());
+    void refreshSyncSession();
     this.render();
   }
 
   disconnectedCallback(): void {
     this.unsubscribe?.();
+    this.syncUnsubscribe?.();
   }
 
   private render(): void {
     const workspace = appStore.getWorkspace();
     const settings = workspace.settings;
     const notificationStatus = getTimerNotificationStatus();
+    const syncState = getSyncState();
+    const isSyncing = syncState.status === "syncing";
     const root = renderShadow(
       this,
       `
@@ -114,6 +129,33 @@ export class SettingsView extends HTMLElement {
               })}>Разрешить уведомления</button>
             </div>
           </article>
+
+          <form class="card form-grid" data-form="sync">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">Синхронизация</p>
+                <h2>Node.js + Postgres сервер</h2>
+              </div>
+              ${badgeHtml(formatSyncStatus(syncState))}
+            </div>
+            <p class="muted">${
+              syncState.authenticated
+                ? `Вход выполнен: ${escapeHtml(syncState.user?.handle ?? "passkey")}. Последняя синхронизация: ${formatNullableDate(syncState.lastSyncedAt)}.`
+                : "Локальная работа продолжит работать без сервера. Для синхронизации между устройствами войдите через passkey."
+            }</p>
+            ${syncState.error ? `<p class="muted">Ошибка: ${escapeHtml(syncState.error)}</p>` : ""}
+            ${fieldHtml({
+              label: "Адрес сервера",
+              control: `<input name="serverUrl" required value="${escapeHtml(syncState.serverUrl)}" placeholder="http://127.0.0.1:8787" />`,
+            })}
+            <div class="row-actions">
+              <button ${buttonAttrs({ type: "submit", tone: "ghost", disabled: isSyncing })}>Сохранить адрес</button>
+              <button ${buttonAttrs({ type: "button", data: { action: "register-passkey" }, disabled: isSyncing })}>Создать passkey</button>
+              <button ${buttonAttrs({ type: "button", data: { action: "login-passkey" }, disabled: isSyncing })}>Войти passkey</button>
+              <button ${buttonAttrs({ type: "button", data: { action: "sync-now" }, disabled: isSyncing || !syncState.authenticated })}>Синхронизировать сейчас</button>
+              <button ${buttonAttrs({ type: "button", tone: "ghost", data: { action: "logout-sync" }, disabled: isSyncing || !syncState.authenticated })}>Выйти</button>
+            </div>
+          </form>
 
           <div class="split-grid">
             <form class="card form-grid" data-form="project">
@@ -329,6 +371,37 @@ export class SettingsView extends HTMLElement {
       void requestTimerNotificationPermission().then(() => this.render());
     });
 
+    root.querySelector<HTMLFormElement>('[data-form="sync"]')?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!(form instanceof HTMLFormElement)) {
+        return;
+      }
+
+      setSyncServerUrl(requireInput(form, "serverUrl").value);
+      void refreshSyncSession();
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="register-passkey"]')?.addEventListener("click", () => {
+      void registerPasskey()
+        .then(() => appStore.syncNow())
+        .catch((error: unknown) => window.alert(`Не удалось создать passkey: ${String(error)}`));
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="login-passkey"]')?.addEventListener("click", () => {
+      void loginPasskey()
+        .then(() => appStore.syncNow())
+        .catch((error: unknown) => window.alert(`Не удалось войти: ${String(error)}`));
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="sync-now"]')?.addEventListener("click", () => {
+      void appStore.syncNow().catch((error: unknown) => window.alert(`Не удалось синхронизировать: ${String(error)}`));
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="logout-sync"]')?.addEventListener("click", () => {
+      void logoutSync().catch((error: unknown) => window.alert(`Не удалось выйти: ${String(error)}`));
+    });
+
     root.querySelector<HTMLInputElement>("[data-import]")?.addEventListener("change", (event) => {
       const input = event.currentTarget;
       if (!(input instanceof HTMLInputElement)) {
@@ -395,4 +468,24 @@ function getNotificationStatusHint(status: ReturnType<typeof getTimerNotificatio
   }
 
   return "Нажмите кнопку ниже. Браузер должен показать системный запрос разрешения; без него внешние уведомления не появятся.";
+}
+
+function formatSyncStatus(syncState: ReturnType<typeof getSyncState>): string {
+  if (syncState.status === "syncing") {
+    return "Синхронизация";
+  }
+
+  if (syncState.authenticated) {
+    return "Подключено";
+  }
+
+  if (syncState.status === "offline") {
+    return "Офлайн";
+  }
+
+  return "Локально";
+}
+
+function formatNullableDate(value: string | null): string {
+  return value ? new Date(value).toLocaleString("ru-RU") : "ещё не было";
 }

@@ -79,4 +79,33 @@ describe("workspace export", () => {
       },
     ]);
   });
+
+  it("fills missing pomodoro break counters for old exports", () => {
+    const workspace = createStarterWorkspace();
+    const text = JSON.stringify({
+      ...workspace,
+      schemaVersion: 3,
+      pomodoroCycles: [
+        {
+          id: "pomodoro_legacy",
+          taskId: "task_1",
+          focusMinutes: 25,
+          shortBreakMinutes: 5,
+          longBreakMinutes: 15,
+          longBreakEvery: 4,
+          startedAt: "2026-05-27T10:00:00.000Z",
+          completedFocusCount: 2,
+          status: "running",
+        },
+      ],
+    });
+
+    const parsed = parseWorkspaceExport(text);
+
+    expect(parsed.pomodoroCycles[0]).toMatchObject({
+      completedFocusCount: 2,
+      completedShortBreakCount: 0,
+      completedLongBreakCount: 0,
+    });
+  });
 });

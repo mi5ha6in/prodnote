@@ -1,5 +1,5 @@
 import { createDefaultSettings, createId } from "./defaults";
-import { SCHEMA_VERSION, type Note, type NoteEditEntry, type Workspace } from "./types";
+import { SCHEMA_VERSION, type Note, type NoteEditEntry, type PomodoroCycle, type Workspace } from "./types";
 
 type LegacyNoteEditEntry =
   | NoteEditEntry
@@ -14,9 +14,13 @@ type LegacyNote = Omit<Note, "editHistory"> & {
   editHistory?: LegacyNoteEditEntry[];
 };
 
-type LegacyWorkspace = Omit<Workspace, "notes" | "schemaVersion"> & {
+type LegacyPomodoroCycle = Omit<PomodoroCycle, "completedShortBreakCount" | "completedLongBreakCount"> &
+  Partial<Pick<PomodoroCycle, "completedShortBreakCount" | "completedLongBreakCount">>;
+
+type LegacyWorkspace = Omit<Workspace, "notes" | "pomodoroCycles" | "schemaVersion"> & {
   schemaVersion: number;
   notes: LegacyNote[];
+  pomodoroCycles?: LegacyPomodoroCycle[];
 };
 
 export function migrateWorkspace(workspace: LegacyWorkspace): Workspace {
@@ -33,7 +37,7 @@ export function migrateWorkspace(workspace: LegacyWorkspace): Workspace {
     schemaVersion: SCHEMA_VERSION,
     exportedAt: workspace.exportedAt ?? null,
     notes: workspace.notes.map(normalizeNote),
-    pomodoroCycles: Array.isArray(workspace.pomodoroCycles) ? workspace.pomodoroCycles : [],
+    pomodoroCycles: Array.isArray(workspace.pomodoroCycles) ? workspace.pomodoroCycles.map(normalizePomodoroCycle) : [],
     settings: workspace.settings ?? createDefaultSettings(),
   };
 }
@@ -60,5 +64,13 @@ function normalizeNoteEditEntry(entry: LegacyNoteEditEntry, fallbackEditedAt: st
   return {
     id: entry.id ?? createId("note_edit"),
     editedAt: legacyEntry.endedAt ?? legacyEntry.startedAt ?? fallbackEditedAt,
+  };
+}
+
+function normalizePomodoroCycle(cycle: LegacyPomodoroCycle): PomodoroCycle {
+  return {
+    ...cycle,
+    completedShortBreakCount: cycle.completedShortBreakCount ?? 0,
+    completedLongBreakCount: cycle.completedLongBreakCount ?? 0,
   };
 }

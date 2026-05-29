@@ -10,7 +10,7 @@ export class MiniTimer extends HTMLElement {
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
-    this.intervalId = window.setInterval(() => this.render(), 1000);
+    this.intervalId = window.setInterval(() => this.syncReadout(), 1000);
     this.render();
   }
 
@@ -41,25 +41,14 @@ export class MiniTimer extends HTMLElement {
     }
 
     const task = workspace.tasks.find((item) => item.id === active.taskId);
-    const elapsedMinutes = Math.max(0, Math.floor((Date.now() - Date.parse(active.startedAt)) / 60000));
-    const remainingSeconds = active.phaseEndsAt
-      ? Math.max(0, Math.floor((Date.parse(active.phaseEndsAt) - Date.now()) / 1000))
-      : null;
-    const remainingLabel =
-      remainingSeconds === null
-        ? formatDuration(elapsedMinutes)
-        : `${Math.floor(remainingSeconds / 60).toString().padStart(2, "0")}:${(remainingSeconds % 60)
-            .toString()
-            .padStart(2, "0")}`;
-
     const root = renderShadow(
       this,
       `
       <section class="mini-timer active">
         <p class="eyebrow">${SESSION_MODE_LABELS[active.mode]}</p>
         <strong>${escapeHtml(task?.title ?? "Задача удалена")}</strong>
-        <span class="timer-readout">${remainingLabel}</span>
-        <span class="phase-chip">${active.phase === "focus" ? "Фокус" : "Перерыв"}</span>
+        <span class="timer-readout" data-mini-readout>${getMiniTimerReadout(active)}</span>
+        <span class="phase-chip" data-mini-phase>${getMiniTimerPhaseLabel(active)}</span>
         <div class="row-actions">
           ${
             active.mode === "pomodoro"
@@ -80,9 +69,49 @@ export class MiniTimer extends HTMLElement {
       void appStore.completePomodoroPhase();
     });
   }
+
+  private syncReadout(): void {
+    const active = appStore.getActiveTimer();
+    if (!active) {
+      return;
+    }
+
+    const readout = this.shadowRoot?.querySelector<HTMLElement>("[data-mini-readout]");
+    if (readout) {
+      readout.textContent = getMiniTimerReadout(active);
+    }
+
+    const phase = this.shadowRoot?.querySelector<HTMLElement>("[data-mini-phase]");
+    if (phase) {
+      phase.textContent = getMiniTimerPhaseLabel(active);
+    }
+  }
 }
 
 customElements.define("pn-mini-timer", MiniTimer);
+
+function getMiniTimerReadout(active: ReturnType<typeof appStore.getActiveTimer>): string {
+  if (!active) {
+    return "00:00";
+  }
+
+  const elapsedMinutes = Math.max(0, Math.floor((Date.now() - Date.parse(active.startedAt)) / 60000));
+  const remainingSeconds = active.phaseEndsAt
+    ? Math.max(0, Math.floor((Date.parse(active.phaseEndsAt) - Date.now()) / 1000))
+    : null;
+
+  if (remainingSeconds === null) {
+    return formatDuration(elapsedMinutes);
+  }
+
+  return `${Math.floor(remainingSeconds / 60)
+    .toString()
+    .padStart(2, "0")}:${(remainingSeconds % 60).toString().padStart(2, "0")}`;
+}
+
+function getMiniTimerPhaseLabel(active: NonNullable<ReturnType<typeof appStore.getActiveTimer>>): string {
+  return active.phase === "focus" ? "Фокус" : "Перерыв";
+}
 
 const timerStyles = `
   :host {

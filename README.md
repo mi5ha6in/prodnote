@@ -1,6 +1,7 @@
 # ProdNote
 
-Локальный PWA-органайзер задач, заметок, тайм-трекинга и помодоро на vanilla Web Components с Shadow DOM.
+Offline-first PWA-органайзер задач, заметок, тайм-трекинга и помодоро на vanilla Web Components с Shadow DOM.
+Может работать полностью локально или синхронизироваться через self-host Node.js + PostgreSQL сервер.
 
 ## Документация
 
@@ -9,6 +10,7 @@
 - [Архитектура](./docs/ARCHITECTURE.md)
 - [Данные и хранение](./docs/DATA_AND_STORAGE.md)
 - [Разработка](./docs/DEVELOPMENT.md)
+- [Server Sync](./docs/SERVER_SYNC.md)
 - [Дорожная карта](./docs/ROADMAP.md)
 
 ## Запуск
@@ -28,6 +30,18 @@ npm run build
 
 ```bash
 npm test
+```
+
+Self-host сервер и Postgres через Docker:
+
+```bash
+docker compose up --build
+```
+
+Адрес:
+
+```text
+http://localhost:8787/
 ```
 
 ## Деплой
@@ -58,3 +72,4 @@ https://mi5ha6in.github.io/prodnote/
 - IndexedDB `prodnote-db` как основное локальное хранилище.
 - Экспорт/импорт одного `.prodnote.json` файла.
 - PWA manifest и service worker для offline-first поведения после первого открытия.
+- Optional server sync: Node.js, Hono, PostgreSQL, passkey/WebAuthn auth и Docker Compose.

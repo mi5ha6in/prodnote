@@ -8,8 +8,8 @@ Detailed project documentation lives in `docs/README.md`. Read it before making 
 
 Core product constraints:
 
-- No server and no accounts in the current product direction.
 - IndexedDB `prodnote-db` is the primary local source of truth.
+- Server sync is optional and must not break local-only usage.
 - `.prodnote.json` export/import is the backup and transfer mechanism.
 - UI language is Russian.
 - Native Web Components with Shadow DOM are required.
@@ -19,7 +19,8 @@ Core product constraints:
 - Vite + TypeScript.
 - Vanilla Custom Elements only; do not add React, Vue, Svelte, Lit, or another UI framework unless explicitly requested.
 - Vitest for unit tests.
-- PWA files live in `public/manifest.webmanifest` and `public/sw.js`.
+- PWA files live in `public/manifest.webmanifest`, `scripts/sw.template.js`, and generated `dist/sw.js`.
+- Optional sync server uses Node.js, Hono, PostgreSQL, Drizzle and SimpleWebAuthn.
 
 Useful commands:
 
@@ -49,11 +50,13 @@ Important files:
 - `src/domain/markdown.ts`: small safe Markdown renderer.
 - `src/storage/idb.ts`: IndexedDB persistence.
 - `src/storage/export.ts`: `.prodnote.json` import/export validation.
+- `src/sync/client.ts`: optional server sync client.
 - `src/state.ts`: app store and all write operations.
 - `src/ui/*`: internal design system helpers, shared CSS, and small UI HTML fragments.
 - `src/components/shadow.ts`: shared Shadow DOM rendering helper.
 - `src/components/app-root.ts`: routing shell.
 - `src/components/*-view.ts`: application screens.
+- `server/*`: Hono API, passkey auth, Postgres migrations and workspace sync.
 
 Keep business rules out of components where practical. Put reusable calculations in `src/domain/*` and persistence operations in `src/storage/*`.
 
@@ -106,7 +109,7 @@ Existing test files:
 
 ## Current Known Limits
 
-- There is no server sync.
+- Server sync is v1 and optional.
 - There is no multi-workspace support.
 - CRUD is partial: create/delete exists for some entities, but editing and deletion coverage should be expanded deliberately.
 - Browser automation can be flaky with nested Shadow DOM forms; use tests for state-level guarantees and browser checks for rendering/navigation.
