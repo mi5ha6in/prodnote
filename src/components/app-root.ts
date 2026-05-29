@@ -95,6 +95,11 @@ export class AppRoot extends HTMLElement {
           min-height: 100vh;
         }
 
+        .app-shell > pn-phase-alert {
+          position: fixed;
+          z-index: 100;
+        }
+
         .sidebar {
           border-right: 1px solid var(--line);
           display: flex;
