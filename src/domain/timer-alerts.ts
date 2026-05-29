@@ -8,6 +8,7 @@ export type PhaseAlertState = {
 };
 
 const notifiedPhaseAlertKeys = new Set<string>();
+const dismissedPhaseAlertKeys = new Set<string>();
 
 export function getPhaseAlertState(active: ActiveTimer | null, nowMs = Date.now()): PhaseAlertState | null {
   if (!active?.phaseEndsAt || active.mode !== "pomodoro") {
@@ -37,6 +38,15 @@ export function shouldNotifyPhaseAlert(key: string): boolean {
   return true;
 }
 
+export function dismissPhaseAlert(key: string): void {
+  dismissedPhaseAlertKeys.add(key);
+}
+
+export function isPhaseAlertDismissed(key: string): boolean {
+  return dismissedPhaseAlertKeys.has(key);
+}
+
 export function resetPhaseAlertNotifications(): void {
   notifiedPhaseAlertKeys.clear();
+  dismissedPhaseAlertKeys.clear();
 }

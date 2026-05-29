@@ -1,5 +1,11 @@
 import { escapeHtml } from "../domain/markdown";
-import { getPhaseAlertState, shouldNotifyPhaseAlert, type PhaseAlertState } from "../domain/timer-alerts";
+import {
+  dismissPhaseAlert,
+  getPhaseAlertState,
+  isPhaseAlertDismissed,
+  shouldNotifyPhaseAlert,
+  type PhaseAlertState,
+} from "../domain/timer-alerts";
 import { showTimerNotification } from "../platform/notifications";
 import { appStore } from "../state";
 import { buttonAttrs } from "../ui/html";
@@ -8,6 +14,8 @@ import { renderShadow } from "./shadow";
 export class PhaseAlert extends HTMLElement {
   private unsubscribe: (() => void) | null = null;
   private intervalId: number | null = null;
+  private renderedAlertKey: string | null = null;
+  private alertRendered = false;
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
@@ -25,12 +33,19 @@ export class PhaseAlert extends HTMLElement {
   private render(): void {
     const alert = getPhaseAlertState(appStore.getActiveTimer());
 
-    if (!alert) {
-      renderShadow(this, "");
+    if (!alert || isPhaseAlertDismissed(alert.key)) {
+      this.clearAlert();
       return;
     }
 
     this.notifyOnce(alert);
+
+    if (this.renderedAlertKey === alert.key) {
+      return;
+    }
+
+    this.renderedAlertKey = alert.key;
+    this.alertRendered = true;
 
     const root = renderShadow(
       this,
@@ -45,6 +60,7 @@ export class PhaseAlert extends HTMLElement {
           <div class="row-actions">
             <a class="button ghost small" href="#/focus">Открыть фокус</a>
             <button ${buttonAttrs({ size: "small", data: { action: "continue-phase" } })}>${escapeHtml(alert.actionLabel)}</button>
+            <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "dismiss-alert" } })}>Скрыть</button>
           </div>
         </aside>
       `,
@@ -129,6 +145,11 @@ export class PhaseAlert extends HTMLElement {
     root.querySelector<HTMLButtonElement>('[data-action="continue-phase"]')?.addEventListener("click", () => {
       void appStore.completePomodoroPhase();
     });
+
+    root.querySelector<HTMLButtonElement>('[data-action="dismiss-alert"]')?.addEventListener("click", () => {
+      dismissPhaseAlert(alert.key);
+      this.clearAlert();
+    });
   }
 
   private notifyOnce(alert: PhaseAlertState): void {
@@ -141,6 +162,16 @@ export class PhaseAlert extends HTMLElement {
       title: `ProdNote: ${alert.title}`,
       body: alert.message,
     });
+  }
+
+  private clearAlert(): void {
+    if (!this.alertRendered) {
+      return;
+    }
+
+    this.renderedAlertKey = null;
+    this.alertRendered = false;
+    renderShadow(this, "");
   }
 }
 

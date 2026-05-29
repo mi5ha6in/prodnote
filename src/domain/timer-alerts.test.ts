@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { ActiveTimer } from "./types";
-import { getPhaseAlertState, resetPhaseAlertNotifications, shouldNotifyPhaseAlert } from "./timer-alerts";
+import {
+  dismissPhaseAlert,
+  getPhaseAlertState,
+  isPhaseAlertDismissed,
+  resetPhaseAlertNotifications,
+  shouldNotifyPhaseAlert,
+} from "./timer-alerts";
 
 const active: ActiveTimer = {
   taskId: "task_1",
@@ -31,5 +37,17 @@ describe("timer alerts", () => {
     expect(alert).not.toBeNull();
     expect(shouldNotifyPhaseAlert(alert?.key ?? "")).toBe(true);
     expect(shouldNotifyPhaseAlert(alert?.key ?? "")).toBe(false);
+  });
+
+  it("tracks dismissed phase alerts", () => {
+    resetPhaseAlertNotifications();
+
+    const alert = getPhaseAlertState(active, Date.parse("2026-05-29T10:25:00.000Z"));
+    expect(alert).not.toBeNull();
+    expect(isPhaseAlertDismissed(alert?.key ?? "")).toBe(false);
+
+    dismissPhaseAlert(alert?.key ?? "");
+
+    expect(isPhaseAlertDismissed(alert?.key ?? "")).toBe(true);
   });
 });

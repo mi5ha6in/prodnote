@@ -21,7 +21,7 @@ export async function requestTimerNotificationPermission(): Promise<Notification
 }
 
 export async function showTimerNotification(input: { title: string; body: string }): Promise<void> {
-  if (!("Notification" in window) || Notification.permission !== "granted") {
+  if (typeof window === "undefined" || !("Notification" in window) || Notification.permission !== "granted") {
     return;
   }
 
@@ -44,12 +44,20 @@ export async function showTimerNotification(input: { title: string; body: string
 }
 
 async function getReadyServiceWorker(): Promise<ServiceWorkerRegistration | null> {
-  if (!("serviceWorker" in navigator)) {
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
     return null;
   }
 
   try {
-    return await navigator.serviceWorker.ready;
+    const currentRegistration = await navigator.serviceWorker.getRegistration();
+    if (currentRegistration?.active) {
+      return currentRegistration;
+    }
+
+    return await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 800)),
+    ]);
   } catch {
     return null;
   }
