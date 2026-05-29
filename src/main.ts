@@ -1,5 +1,6 @@
 import "./styles/global.css";
 import "./components/mini-timer";
+import "./components/phase-alert";
 import "./components/dashboard-view";
 import "./components/tasks-view";
 import "./components/notes-view";

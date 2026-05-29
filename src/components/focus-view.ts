@@ -1,5 +1,6 @@
 import { escapeHtml, renderMarkdown } from "../domain/markdown";
 import { formatDuration } from "../domain/stats";
+import { requestTimerNotificationPermission } from "../platform/notifications";
 import { appStore } from "../state";
 import { renderShadow } from "./shadow";
 import { getProjectName, renderTaskOptions, requireSelect, requireTextArea } from "./view-utils";
@@ -249,8 +250,10 @@ export class FocusView extends HTMLElement {
 
       const taskId = requireSelect(form, "taskId").value;
       if (submitter.value === "pomodoro") {
+        void requestTimerNotificationPermission();
         void appStore.startPomodoro(taskId);
       } else {
+        void requestTimerNotificationPermission();
         void appStore.startTimer(taskId);
       }
     });
