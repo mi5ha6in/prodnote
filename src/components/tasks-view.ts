@@ -2,6 +2,7 @@ import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from "../domain/defaults";
 import { escapeHtml, renderMarkdown } from "../domain/markdown";
 import { formatDuration } from "../domain/stats";
 import type { Task, TaskStatus } from "../domain/types";
+import { requestTimerNotificationPermission } from "../platform/notifications";
 import { appStore } from "../state";
 import { badgeHtml, buttonAttrs, emptyStateHtml, fieldHtml } from "../ui/html";
 import { renderShadow } from "./shadow";
@@ -20,6 +21,7 @@ const STATUS_ORDER: TaskStatus[] = ["backlog", "active", "blocked", "done"];
 export class TasksView extends HTMLElement {
   private unsubscribe: (() => void) | null = null;
   private mode: "kanban" | "list" = "kanban";
+  private openedTaskId: string | null = null;
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
@@ -42,6 +44,8 @@ export class TasksView extends HTMLElement {
       this,
       `
         <section class="view-grid">
+          ${this.renderTaskDetails(totalMinutesByTask)}
+
           <div class="three-grid">
             <article class="card">
               <p class="eyebrow">Всего задач</p>
@@ -155,7 +159,50 @@ export class TasksView extends HTMLElement {
         }
 
         .task-card {
+          cursor: pointer;
           overflow: hidden;
+        }
+
+        .task-card:focus-visible {
+          box-shadow: 0 0 0 4px rgba(42, 157, 143, 0.2);
+          outline: none;
+        }
+
+        .task-details {
+          border-radius: 0;
+          display: grid;
+          inset: 0;
+          max-height: 100vh;
+          overflow: auto;
+          padding: clamp(1rem, 3vw, 2rem);
+          position: fixed;
+          z-index: 60;
+        }
+
+        .task-details-grid {
+          display: grid;
+          gap: 1rem;
+          grid-template-columns: minmax(0, 1.1fr) minmax(20rem, 0.9fr);
+          min-width: 0;
+        }
+
+        .task-details-main,
+        .task-details-side {
+          display: grid;
+          gap: 1rem;
+          min-width: 0;
+        }
+
+        .task-details .markdown-preview {
+          background: rgba(255, 255, 255, 0.58);
+          border: 1px solid var(--line);
+          border-radius: 1rem;
+          padding: 1rem;
+        }
+
+        .task-quick-actions {
+          display: grid;
+          gap: 0.65rem;
         }
 
         .task-card .card-header {
@@ -238,6 +285,10 @@ export class TasksView extends HTMLElement {
           .kanban {
             grid-template-columns: repeat(4, 17rem);
           }
+
+          .task-details-grid {
+            grid-template-columns: 1fr;
+          }
         }
       `,
     );
@@ -271,6 +322,65 @@ export class TasksView extends HTMLElement {
       });
     });
 
+    root.querySelectorAll<HTMLElement>("[data-open-task]").forEach((card) => {
+      card.addEventListener("click", (event) => {
+        const target = event.target;
+        if (target instanceof Element && target.closest("button, a, input, select, textarea, label, form")) {
+          return;
+        }
+
+        const taskId = card.dataset.openTask;
+        if (!taskId) {
+          return;
+        }
+
+        this.openedTaskId = taskId;
+        this.render();
+      });
+
+      card.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") {
+          return;
+        }
+
+        event.preventDefault();
+        const taskId = card.dataset.openTask;
+        if (!taskId) {
+          return;
+        }
+
+        this.openedTaskId = taskId;
+        this.render();
+      });
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="close-task-details"]')?.addEventListener("click", () => {
+      this.openedTaskId = null;
+      this.render();
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="start-task-timer"]')?.addEventListener("click", () => {
+      const taskId = this.openedTaskId;
+      if (!taskId || appStore.getActiveTimer()) {
+        return;
+      }
+
+      void requestTimerNotificationPermission();
+      void appStore.startTimer(taskId);
+      window.location.hash = "#/focus";
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="start-task-pomodoro"]')?.addEventListener("click", () => {
+      const taskId = this.openedTaskId;
+      if (!taskId || appStore.getActiveTimer()) {
+        return;
+      }
+
+      void requestTimerNotificationPermission();
+      void appStore.startPomodoro(taskId);
+      window.location.hash = "#/focus";
+    });
+
     root.querySelectorAll<HTMLSelectElement>("[data-status]").forEach((select) => {
       select.addEventListener("change", () => {
         const taskId = select.dataset.taskId;
@@ -294,8 +404,162 @@ export class TasksView extends HTMLElement {
           requireSelect(form, "kind").value as "note" | "progress" | "decision",
         );
         form.reset();
+        this.render();
       });
     });
+
+    root.addEventListener("keydown", (event) => {
+      if (event instanceof KeyboardEvent && event.key === "Escape" && this.openedTaskId) {
+        this.openedTaskId = null;
+        this.render();
+      }
+    });
+  }
+
+  private renderTaskDetails(totalMinutesByTask: Map<string, number>): string {
+    if (!this.openedTaskId) {
+      return "";
+    }
+
+    const workspace = appStore.getWorkspace();
+    const task = workspace.tasks.find((item) => item.id === this.openedTaskId);
+    const active = appStore.getActiveTimer();
+    const hasActiveTimer = Boolean(active);
+
+    if (!task) {
+      return "";
+    }
+
+    return `
+      <article class="card task-details" role="dialog" aria-modal="true" aria-label="Подробности задачи">
+        <div class="card-header">
+          <div>
+            <p class="eyebrow">Задача</p>
+            <h2>${escapeHtml(task.title)}</h2>
+          </div>
+          <div class="row-actions">
+            <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-task-details" } })}>Закрыть</button>
+          </div>
+        </div>
+
+        <div class="task-details-grid">
+          <section class="task-details-main">
+            <article class="card subtle">
+              <div class="card-header">
+                <div>
+                  <p class="eyebrow">Контекст</p>
+                  <h3>Описание</h3>
+                </div>
+              </div>
+              ${
+                task.description
+                  ? `<div class="markdown-preview">${renderMarkdown(task.description)}</div>`
+                  : emptyStateHtml("У задачи пока нет описания.")
+              }
+            </article>
+
+            <form class="card subtle form-grid" data-history-form data-task-id="${escapeHtml(task.id)}">
+              <div>
+                <p class="eyebrow">Журнал</p>
+                <h3>Новая запись</h3>
+              </div>
+              <div class="inline-grid">
+                ${fieldHtml({
+                  label: "Тип записи",
+                  control: `<select name="kind">
+                    <option value="progress">Прогресс</option>
+                    <option value="note">Заметка</option>
+                    <option value="decision">Решение</option>
+                  </select>`,
+                })}
+                ${fieldHtml({
+                  label: "Запись",
+                  control: `<textarea name="history" placeholder="Что сделал, понял или решил"></textarea>`,
+                })}
+              </div>
+              <button ${buttonAttrs({ type: "submit", tone: "ghost", size: "small" })}>Добавить запись</button>
+            </form>
+
+            <article class="card subtle">
+              <div class="card-header">
+                <div>
+                  <p class="eyebrow">История</p>
+                  <h3>Последние записи</h3>
+                </div>
+                ${badgeHtml(task.history.length)}
+              </div>
+              <div class="item-list">
+                ${
+                  task.history.length
+                    ? task.history
+                        .map(
+                          (entry) => `
+                            <div class="list-item">
+                              <div class="meta-row"><strong>${escapeHtml(entry.kind)}</strong><span>${formatDate(entry.at)}</span></div>
+                              <div class="markdown-preview">${renderMarkdown(entry.markdown)}</div>
+                            </div>
+                          `,
+                        )
+                        .join("")
+                    : emptyStateHtml("Записей пока нет.")
+                }
+              </div>
+            </article>
+          </section>
+
+          <aside class="task-details-side">
+            <article class="card subtle task-quick-actions">
+              <div>
+                <p class="eyebrow">Работа</p>
+                <h3>Быстрый старт</h3>
+              </div>
+              <p class="muted">${
+                hasActiveTimer
+                  ? "Уже есть активный таймер. Остановите или отмените его перед запуском новой сессии."
+                  : "Запустите работу над этой задачей без перехода через выбор задачи."
+              }</p>
+              <button ${buttonAttrs({ data: { action: "start-task-timer" }, disabled: hasActiveTimer })}>Запустить таймер</button>
+              <button ${buttonAttrs({ tone: "secondary", data: { action: "start-task-pomodoro" }, disabled: hasActiveTimer })}>Запустить помодоро</button>
+            </article>
+
+            <article class="card subtle form-grid">
+              <div>
+                <p class="eyebrow">Состояние</p>
+                <h3>Параметры</h3>
+              </div>
+              ${fieldHtml({
+                label: "Статус",
+                control: `<select data-status data-task-id="${escapeHtml(task.id)}">
+                  ${STATUS_ORDER.map(
+                    (status) =>
+                      `<option value="${status}" ${task.status === status ? "selected" : ""}>${TASK_STATUS_LABELS[status]}</option>`,
+                  ).join("")}
+                </select>`,
+              })}
+              <div class="item-list">
+                <div class="list-item">
+                  <p class="eyebrow">Проект</p>
+                  <strong>${escapeHtml(getProjectName(workspace.projects, task.projectId))}</strong>
+                </div>
+                <div class="list-item">
+                  <p class="eyebrow">Приоритет</p>
+                  <strong>${escapeHtml(TASK_PRIORITY_LABELS[task.priority])}</strong>
+                </div>
+                <div class="list-item">
+                  <p class="eyebrow">Дедлайн</p>
+                  <strong>${formatDate(task.dueDate)}</strong>
+                </div>
+                <div class="list-item">
+                  <p class="eyebrow">Время</p>
+                  <strong>${formatDuration(totalMinutesByTask.get(task.id) ?? 0)}</strong>
+                </div>
+              </div>
+              <div class="meta-row">${renderTagPills(workspace.tags, task.tagIds)}</div>
+            </article>
+          </aside>
+        </div>
+      </article>
+    `;
   }
 
   private renderKanban(tasks: Task[], totalMinutesByTask: Map<string, number>): string {
@@ -344,7 +608,7 @@ export class TasksView extends HTMLElement {
     const recentHistory = task.history.slice(0, 2);
 
     return `
-      <article class="list-item task-card">
+      <article class="list-item task-card" data-open-task="${escapeHtml(task.id)}" tabindex="0">
         <div class="card-header">
           <div>
             <h3>${escapeHtml(task.title)}</h3>
