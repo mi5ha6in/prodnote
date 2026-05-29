@@ -10,7 +10,7 @@ import {
   groupSessionsByTag,
   groupSessionsByTask,
 } from "./stats";
-import type { TimeSession } from "./types";
+import type { PomodoroCycle, TimeSession } from "./types";
 
 describe("statistics", () => {
   const project = createProject({ name: "Проект" });
@@ -41,6 +41,19 @@ describe("statistics", () => {
       pomodoroCycleId: null,
     },
   ];
+  const pomodoroCycles: PomodoroCycle[] = [
+    {
+      id: "pomodoro-1",
+      taskId: task.id,
+      focusMinutes: 25,
+      shortBreakMinutes: 5,
+      longBreakMinutes: 15,
+      longBreakEvery: 4,
+      startedAt: "2026-05-27T08:00:00.000Z",
+      completedFocusCount: 1,
+      status: "running",
+    },
+  ];
 
   it("groups time by day, task, project, tag and hour", () => {
     expect(getTotalMinutes(sessions)).toBe(85);
@@ -56,7 +69,25 @@ describe("statistics", () => {
   });
 
   it("calculates pomodoro totals and readable durations", () => {
-    expect(getPomodoroStats(sessions)).toEqual({ total: 1, minutes: 25 });
+    expect(getPomodoroStats(sessions, pomodoroCycles)).toEqual({ total: 1, minutes: 25 });
     expect(formatDuration(125)).toBe("2 ч 5 мин");
+  });
+
+  it("counts completed pomodoro focus rounds, not raw pomodoro sessions", () => {
+    const interruptedPomodoroSession: TimeSession = {
+      id: "session-3",
+      taskId: task.id,
+      startedAt: "2026-05-28T11:00:00.000Z",
+      endedAt: "2026-05-28T11:10:00.000Z",
+      durationMinutes: 10,
+      mode: "pomodoro",
+      note: "",
+      pomodoroCycleId: "pomodoro-2",
+    };
+
+    expect(getPomodoroStats([...sessions, interruptedPomodoroSession], pomodoroCycles)).toEqual({
+      total: 1,
+      minutes: 35,
+    });
   });
 });

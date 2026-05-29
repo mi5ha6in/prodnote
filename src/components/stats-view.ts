@@ -33,7 +33,7 @@ export class StatsView extends HTMLElement {
     const tagStats = groupSessionsByTag(workspace.sessions, workspace.tasks, workspace.tags);
     const productiveHours = getProductiveHours(workspace.sessions);
     const bestHour = [...productiveHours].sort((a, b) => b.minutes - a.minutes)[0];
-    const pomodoro = getPomodoroStats(workspace.sessions);
+    const pomodoro = getPomodoroStats(workspace.sessions, workspace.pomodoroCycles);
 
     renderShadow(
       this,
@@ -48,7 +48,7 @@ export class StatsView extends HTMLElement {
             <article class="card">
               <p class="eyebrow">Помодоро</p>
               <span class="stat-number">${pomodoro.total}</span>
-              <p class="muted">${formatDuration(pomodoro.minutes)} в фокусных циклах.</p>
+              <p class="muted">${formatDuration(pomodoro.minutes)} в помодоро-сессиях.</p>
             </article>
             <article class="card">
               <p class="eyebrow">Лучший час</p>

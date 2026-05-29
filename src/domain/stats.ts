@@ -1,4 +1,4 @@
-import type { Project, Tag, Task, TimeSession } from "./types";
+import type { PomodoroCycle, Project, Tag, Task, TimeSession } from "./types";
 
 export interface NamedStat {
   id: string;
@@ -126,11 +126,12 @@ export function getProductiveHours(sessions: TimeSession[]): HourStat[] {
   return [...Array.from({ length: 24 }, (_, hour) => map.get(hour) ?? { hour, minutes: 0 })];
 }
 
-export function getPomodoroStats(sessions: TimeSession[]): PomodoroStat {
+export function getPomodoroStats(sessions: TimeSession[], pomodoroCycles: PomodoroCycle[] = []): PomodoroStat {
   const pomodoroSessions = sessions.filter((session) => session.mode === "pomodoro");
+  const completedFocusRounds = pomodoroCycles.reduce((sum, cycle) => sum + cycle.completedFocusCount, 0);
 
   return {
-    total: pomodoroSessions.length,
+    total: completedFocusRounds,
     minutes: getTotalMinutes(pomodoroSessions),
   };
 }
