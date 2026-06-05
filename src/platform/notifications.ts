@@ -20,18 +20,22 @@ export async function requestTimerNotificationPermission(): Promise<Notification
   return Notification.permission;
 }
 
-export async function showTimerNotification(input: { title: string; body: string }): Promise<void> {
+export async function showTimerNotification(input: { title: string; body: string; url?: string }): Promise<void> {
   if (typeof window === "undefined" || !("Notification" in window) || Notification.permission !== "granted") {
     return;
   }
 
   const icon = `${import.meta.env.BASE_URL}icons/icon.svg`;
+  const targetUrl = input.url ?? getTimerNotificationTargetUrl();
   const options: NotificationOptions = {
     body: input.body,
     icon,
     badge: icon,
     tag: "prodnote-timer",
     requireInteraction: true,
+    data: {
+      url: targetUrl,
+    },
   };
 
   const registration = await getReadyServiceWorker();
@@ -40,7 +44,14 @@ export async function showTimerNotification(input: { title: string; body: string
     return;
   }
 
-  new Notification(input.title, options);
+  const notification = new Notification(input.title, options);
+  notification.onclick = () => {
+    window.focus();
+    if (window.location.href !== targetUrl) {
+      window.location.href = targetUrl;
+    }
+    notification.close();
+  };
 }
 
 async function getReadyServiceWorker(): Promise<ServiceWorkerRegistration | null> {
@@ -61,4 +72,10 @@ async function getReadyServiceWorker(): Promise<ServiceWorkerRegistration | null
   } catch {
     return null;
   }
+}
+
+function getTimerNotificationTargetUrl(): string {
+  const focusRoute = new URL(import.meta.env.BASE_URL, window.location.origin);
+  focusRoute.hash = "/focus";
+  return focusRoute.toString();
 }

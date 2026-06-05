@@ -38,6 +38,13 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(networkFirst(event.request));
 });
 
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  const targetUrl = new URL(event.notification.data?.url ?? `${INDEX_URL}#/focus`, self.registration.scope).href;
+  event.waitUntil(focusOrOpenClient(targetUrl));
+});
+
 async function networkFirst(request, fallbackUrl) {
   const cache = await caches.open(CACHE_NAME);
 
@@ -50,5 +57,27 @@ async function networkFirst(request, fallbackUrl) {
     return response;
   } catch {
     return (await cache.match(request)) ?? (fallbackUrl ? await cache.match(fallbackUrl) : undefined) ?? Response.error();
+  }
+}
+
+async function focusOrOpenClient(targetUrl) {
+  const clientsList = await self.clients.matchAll({
+    type: "window",
+    includeUncontrolled: true,
+  });
+
+  for (const client of clientsList) {
+    if ("navigate" in client) {
+      await client.navigate(targetUrl);
+    }
+
+    if ("focus" in client) {
+      await client.focus();
+      return;
+    }
+  }
+
+  if (self.clients.openWindow) {
+    await self.clients.openWindow(targetUrl);
   }
 }
