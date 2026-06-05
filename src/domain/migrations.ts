@@ -1,5 +1,6 @@
 import { createDefaultSettings, createId } from "./defaults";
-import { SCHEMA_VERSION, type Note, type NoteEditEntry, type PomodoroCycle, type Workspace } from "./types";
+import { addMinutesIso } from "./pomodoro";
+import { SCHEMA_VERSION, type Note, type NoteEditEntry, type PomodoroCycle, type TimeSession, type Workspace } from "./types";
 
 type LegacyNoteEditEntry =
   | NoteEditEntry
@@ -38,6 +39,10 @@ export function migrateWorkspace(workspace: LegacyWorkspace): Workspace {
     exportedAt: workspace.exportedAt ?? null,
     notes: workspace.notes.map(normalizeNote),
     pomodoroCycles: Array.isArray(workspace.pomodoroCycles) ? workspace.pomodoroCycles.map(normalizePomodoroCycle) : [],
+    sessions: normalizeSessions(
+      workspace.sessions,
+      Array.isArray(workspace.pomodoroCycles) ? workspace.pomodoroCycles.map(normalizePomodoroCycle) : [],
+    ),
     settings: workspace.settings ?? createDefaultSettings(),
   };
 }
@@ -73,4 +78,34 @@ function normalizePomodoroCycle(cycle: LegacyPomodoroCycle): PomodoroCycle {
     completedShortBreakCount: cycle.completedShortBreakCount ?? 0,
     completedLongBreakCount: cycle.completedLongBreakCount ?? 0,
   };
+}
+
+function normalizeSessions(sessions: TimeSession[], cycles: PomodoroCycle[]): TimeSession[] {
+  const cyclesById = new Map(cycles.map((cycle) => [cycle.id, cycle]));
+
+  return sessions.map((session) => {
+    if (session.mode !== "pomodoro" || !session.pomodoroCycleId) {
+      return session;
+    }
+
+    const cycle = cyclesById.get(session.pomodoroCycleId);
+    if (!cycle) {
+      return session;
+    }
+
+    const maxMinutes = Math.max(1, cycle.focusMinutes);
+    const currentMinutes = Number.isFinite(session.durationMinutes)
+      ? session.durationMinutes
+      : Math.max(0, Math.round((Date.parse(session.endedAt) - Date.parse(session.startedAt)) / 60000));
+
+    if (currentMinutes <= maxMinutes) {
+      return session;
+    }
+
+    return {
+      ...session,
+      durationMinutes: maxMinutes,
+      endedAt: addMinutesIso(session.startedAt, maxMinutes),
+    };
+  });
 }

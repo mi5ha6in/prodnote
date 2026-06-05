@@ -1,5 +1,6 @@
 import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
 import { createStarterWorkspace } from "../domain/defaults";
+import { migrateWorkspace } from "../domain/migrations";
 import type { Workspace } from "../domain/types";
 import { replaceWorkspace } from "../storage/idb";
 
@@ -253,7 +254,7 @@ async function formatApiError(response: Response): Promise<string> {
 }
 
 export function mergeWorkspaces(local: Workspace, remote: Workspace, remoteRevision: number, lastRevision: number): Workspace {
-  return {
+  return migrateWorkspace({
     ...createStarterWorkspace(),
     ...local,
     schemaVersion: Math.max(local.schemaVersion, remote.schemaVersion),
@@ -266,7 +267,7 @@ export function mergeWorkspaces(local: Workspace, remote: Workspace, remoteRevis
     pomodoroCycles: mergeById(local.pomodoroCycles, remote.pomodoroCycles, (item) => item.startedAt),
     plans: mergeById(local.plans, remote.plans, (item) => item.createdAt),
     settings: remoteRevision > lastRevision ? remote.settings : local.settings,
-  };
+  });
 }
 
 function mergeById<T extends { id: string }>(local: T[], remote: T[], getTimestamp: (item: T) => string): T[] {

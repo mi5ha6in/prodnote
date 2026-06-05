@@ -1,3 +1,4 @@
+import { getActiveTimerElapsedMinutes, getActiveTimerRemainingSeconds, isActiveTimerPaused } from "../domain/active-timer";
 import { escapeHtml, renderMarkdown } from "../domain/markdown";
 import { formatDuration } from "../domain/stats";
 import type { ActiveTimer, Workspace } from "../domain/types";
@@ -42,7 +43,7 @@ export class FocusView extends HTMLElement {
         <section class="focus-stage ${active ? "running" : ""}">
           <div class="focus-orb" aria-hidden="true"></div>
           <div class="focus-panel">
-            <p class="eyebrow">${active ? (active.phase === "focus" ? "Фокус" : "Перерыв") : "Готов к работе"}</p>
+            <p class="eyebrow">${active ? getFocusEyebrow(active) : "Готов к работе"}</p>
             <h2>${contextTask ? escapeHtml(contextTask.title) : "Выберите задачу и запустите сессию"}</h2>
             <div class="focus-readout" data-focus-readout>${active ? getFocusReadout(active) : "00:00"}</div>
             ${
@@ -67,9 +68,10 @@ export class FocusView extends HTMLElement {
                     <textarea name="sessionNote" data-session-note placeholder="Что сделано за эту сессию">${escapeHtml(this.sessionNote)}</textarea>
                   </label>
                   <div class="row-actions">
+                    <button type="button" class="ghost" data-action="toggle-pause">${active.pausedAt ? "Продолжить" : "Пауза"}</button>
                     ${
                       active.mode === "pomodoro"
-                        ? `<button type="button" class="secondary" data-action="complete-phase">Завершить фазу</button>`
+                        ? `<button type="button" class="secondary" data-action="complete-phase" ${active.pausedAt ? "disabled" : ""}>Завершить фазу</button>`
                         : `<button type="button" class="secondary" data-action="stop">Остановить и сохранить</button>`
                     }
                     <button type="button" class="ghost" data-action="cancel">Отменить без записи</button>
@@ -266,6 +268,15 @@ export class FocusView extends HTMLElement {
       this.sessionNote = "";
     });
 
+    root.querySelector<HTMLButtonElement>('[data-action="toggle-pause"]')?.addEventListener("click", () => {
+      if (appStore.getActiveTimer()?.pausedAt) {
+        appStore.resumeActiveTimer();
+        return;
+      }
+
+      appStore.pauseActiveTimer();
+    });
+
     root.querySelector<HTMLButtonElement>('[data-action="complete-phase"]')?.addEventListener("click", () => {
       const current = appStore.getActiveTimer();
       this.selectedTaskId = current?.taskId ?? this.selectedTaskId;
@@ -350,15 +361,19 @@ export class FocusView extends HTMLElement {
 customElements.define("pn-focus-view", FocusView);
 
 function getFocusReadout(active: ActiveTimer): string {
-  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - Date.parse(active.startedAt)) / 1000));
-  const remainingSeconds =
-    active.phaseEndsAt === null || !active.phaseEndsAt
-      ? null
-      : Math.max(0, Math.floor((Date.parse(active.phaseEndsAt) - Date.now()) / 1000));
+  const remainingSeconds = getActiveTimerRemainingSeconds(active);
 
   return remainingSeconds === null
-    ? formatDuration(Math.floor(elapsedSeconds / 60))
+    ? formatDuration(getActiveTimerElapsedMinutes(active))
     : `${Math.floor(remainingSeconds / 60).toString().padStart(2, "0")}:${(remainingSeconds % 60)
         .toString()
         .padStart(2, "0")}`;
+}
+
+function getFocusEyebrow(active: ActiveTimer): string {
+  if (isActiveTimerPaused(active)) {
+    return "На паузе";
+  }
+
+  return active.phase === "focus" ? "Фокус" : "Перерыв";
 }

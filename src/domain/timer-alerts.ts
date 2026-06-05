@@ -11,7 +11,7 @@ const notifiedPhaseAlertKeys = new Set<string>();
 const dismissedPhaseAlertKeys = new Set<string>();
 
 export function getPhaseAlertState(active: ActiveTimer | null, nowMs = Date.now()): PhaseAlertState | null {
-  if (!active?.phaseEndsAt || active.mode !== "pomodoro") {
+  if (!active?.phaseEndsAt || active.mode !== "pomodoro" || active.pausedAt) {
     return null;
   }
 

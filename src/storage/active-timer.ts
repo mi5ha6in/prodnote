@@ -2,16 +2,19 @@ import type { ActiveTimer, Workspace } from "../domain/types";
 
 const ACTIVE_TIMER_KEY = "prodnote-active-timer";
 
+type StoredActiveTimer = Omit<ActiveTimer, "pausedAt" | "pausedTotalMs"> &
+  Partial<Pick<ActiveTimer, "pausedAt" | "pausedTotalMs">>;
+
 function isStorageAvailable(): boolean {
   return typeof localStorage !== "undefined";
 }
 
-function isActiveTimer(value: unknown): value is ActiveTimer {
+function isStoredActiveTimer(value: unknown): value is StoredActiveTimer {
   if (!value || typeof value !== "object") {
     return false;
   }
 
-  const timer = value as Partial<ActiveTimer>;
+  const timer = value as Partial<StoredActiveTimer>;
   const validPhase = timer.phase === "focus" || timer.phase === "shortBreak" || timer.phase === "longBreak";
   const validMode = timer.mode === "timer" || timer.mode === "pomodoro";
 
@@ -21,8 +24,18 @@ function isActiveTimer(value: unknown): value is ActiveTimer {
     validMode &&
     (typeof timer.pomodoroCycleId === "string" || timer.pomodoroCycleId === null) &&
     validPhase &&
-    (typeof timer.phaseEndsAt === "string" || timer.phaseEndsAt === null)
+    (typeof timer.phaseEndsAt === "string" || timer.phaseEndsAt === null) &&
+    (typeof timer.pausedAt === "string" || timer.pausedAt === null || typeof timer.pausedAt === "undefined") &&
+    (typeof timer.pausedTotalMs === "number" || typeof timer.pausedTotalMs === "undefined")
   );
+}
+
+function normalizeStoredActiveTimer(timer: StoredActiveTimer): ActiveTimer {
+  return {
+    ...timer,
+    pausedAt: timer.pausedAt ?? null,
+    pausedTotalMs: timer.pausedTotalMs ?? 0,
+  };
 }
 
 export function loadActiveTimer(workspace: Workspace): ActiveTimer | null {
@@ -37,18 +50,20 @@ export function loadActiveTimer(workspace: Workspace): ActiveTimer | null {
     }
 
     const parsed: unknown = JSON.parse(raw);
-    if (!isActiveTimer(parsed)) {
+    if (!isStoredActiveTimer(parsed)) {
       localStorage.removeItem(ACTIVE_TIMER_KEY);
       return null;
     }
 
-    const taskExists = workspace.tasks.some((task) => task.id === parsed.taskId);
+    const normalized = normalizeStoredActiveTimer(parsed);
+
+    const taskExists = workspace.tasks.some((task) => task.id === normalized.taskId);
     if (!taskExists) {
       localStorage.removeItem(ACTIVE_TIMER_KEY);
       return null;
     }
 
-    return parsed;
+    return normalized;
   } catch {
     localStorage.removeItem(ACTIVE_TIMER_KEY);
     return null;

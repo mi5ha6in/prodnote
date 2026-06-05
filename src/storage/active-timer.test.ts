@@ -31,6 +31,8 @@ describe("active timer storage", () => {
     pomodoroCycleId: null,
     phase: "focus",
     phaseEndsAt: null,
+    pausedAt: null,
+    pausedTotalMs: 0,
   };
 
   beforeEach(() => {
@@ -43,6 +45,22 @@ describe("active timer storage", () => {
 
   it("saves and restores an active timer", () => {
     saveActiveTimer(activeTimer);
+
+    expect(loadActiveTimer(workspace)).toEqual(activeTimer);
+  });
+
+  it("restores old active timer payloads without pause fields", () => {
+    localStorage.setItem(
+      "prodnote-active-timer",
+      JSON.stringify({
+        taskId: task.id,
+        startedAt: "2026-05-29T10:00:00.000Z",
+        mode: "timer",
+        pomodoroCycleId: null,
+        phase: "focus",
+        phaseEndsAt: null,
+      }),
+    );
 
     expect(loadActiveTimer(workspace)).toEqual(activeTimer);
   });

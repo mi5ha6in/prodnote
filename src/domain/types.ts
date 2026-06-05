@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export type EntityId = string;
 
@@ -131,4 +131,6 @@ export interface ActiveTimer {
   pomodoroCycleId: EntityId | null;
   phase: PomodoroPhase;
   phaseEndsAt: string | null;
+  pausedAt: string | null;
+  pausedTotalMs: number;
 }

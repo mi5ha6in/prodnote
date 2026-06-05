@@ -1,3 +1,4 @@
+import { getActiveTimerElapsedMinutes, getActiveTimerRemainingSeconds, isActiveTimerPaused } from "../domain/active-timer";
 import { SESSION_MODE_LABELS } from "../domain/defaults";
 import { formatDuration } from "../domain/stats";
 import { appStore } from "../state";
@@ -50,9 +51,10 @@ export class MiniTimer extends HTMLElement {
         <span class="timer-readout" data-mini-readout>${getMiniTimerReadout(active)}</span>
         <span class="phase-chip" data-mini-phase>${getMiniTimerPhaseLabel(active)}</span>
         <div class="row-actions">
+          <button type="button" class="ghost small" data-action="toggle-pause">${active.pausedAt ? "Продолжить" : "Пауза"}</button>
           ${
             active.mode === "pomodoro"
-              ? `<button type="button" class="ghost small" data-action="complete">Следующая фаза</button>`
+              ? `<button type="button" class="ghost small" data-action="complete" ${active.pausedAt ? "disabled" : ""}>Следующая фаза</button>`
               : ""
           }
           <button type="button" class="ghost small" data-action="stop">Стоп</button>
@@ -67,6 +69,14 @@ export class MiniTimer extends HTMLElement {
     });
     root.querySelector<HTMLButtonElement>('[data-action="complete"]')?.addEventListener("click", () => {
       void appStore.completePomodoroPhase();
+    });
+    root.querySelector<HTMLButtonElement>('[data-action="toggle-pause"]')?.addEventListener("click", () => {
+      if (appStore.getActiveTimer()?.pausedAt) {
+        appStore.resumeActiveTimer();
+        return;
+      }
+
+      appStore.pauseActiveTimer();
     });
   }
 
@@ -95,10 +105,8 @@ function getMiniTimerReadout(active: ReturnType<typeof appStore.getActiveTimer>)
     return "00:00";
   }
 
-  const elapsedMinutes = Math.max(0, Math.floor((Date.now() - Date.parse(active.startedAt)) / 60000));
-  const remainingSeconds = active.phaseEndsAt
-    ? Math.max(0, Math.floor((Date.parse(active.phaseEndsAt) - Date.now()) / 1000))
-    : null;
+  const elapsedMinutes = getActiveTimerElapsedMinutes(active);
+  const remainingSeconds = getActiveTimerRemainingSeconds(active);
 
   if (remainingSeconds === null) {
     return formatDuration(elapsedMinutes);
@@ -110,6 +118,10 @@ function getMiniTimerReadout(active: ReturnType<typeof appStore.getActiveTimer>)
 }
 
 function getMiniTimerPhaseLabel(active: NonNullable<ReturnType<typeof appStore.getActiveTimer>>): string {
+  if (isActiveTimerPaused(active)) {
+    return "На паузе";
+  }
+
   return active.phase === "focus" ? "Фокус" : "Перерыв";
 }
 

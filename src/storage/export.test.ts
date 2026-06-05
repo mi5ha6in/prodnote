@@ -108,4 +108,46 @@ describe("workspace export", () => {
       completedLongBreakCount: 0,
     });
   });
+
+  it("caps stale pomodoro focus sessions during import", () => {
+    const workspace = createStarterWorkspace();
+    const text = JSON.stringify({
+      ...workspace,
+      schemaVersion: 4,
+      pomodoroCycles: [
+        {
+          id: "pomodoro_legacy",
+          taskId: "task_1",
+          focusMinutes: 25,
+          shortBreakMinutes: 5,
+          longBreakMinutes: 15,
+          longBreakEvery: 4,
+          startedAt: "2026-06-04T16:53:49.119Z",
+          completedFocusCount: 1,
+          completedShortBreakCount: 0,
+          completedLongBreakCount: 0,
+          status: "running",
+        },
+      ],
+      sessions: [
+        {
+          id: "session_legacy",
+          taskId: "task_1",
+          startedAt: "2026-06-04T16:53:49.119Z",
+          endedAt: "2026-06-05T06:08:33.740Z",
+          durationMinutes: 795,
+          mode: "pomodoro",
+          note: "",
+          pomodoroCycleId: "pomodoro_legacy",
+        },
+      ],
+    });
+
+    const parsed = parseWorkspaceExport(text);
+
+    expect(parsed.sessions[0]).toMatchObject({
+      durationMinutes: 25,
+      endedAt: "2026-06-04T17:18:49.119Z",
+    });
+  });
 });

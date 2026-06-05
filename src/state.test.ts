@@ -1,7 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProdNoteStore } from "./state";
 
 describe("ProdNoteStore", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("creates tasks, records manual sessions and timer sessions", async () => {
     const store = new ProdNoteStore();
     await store.init();
@@ -37,6 +41,53 @@ describe("ProdNoteStore", () => {
     expect(store.getWorkspace().pomodoroCycles[0]?.completedLongBreakCount).toBe(0);
     expect(store.getWorkspace().sessions[0]?.mode).toBe("pomodoro");
     expect(store.getActiveTimer()?.phase).toBe("focus");
+  });
+
+  it("caps overdue pomodoro focus sessions to the planned duration", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-05T10:00:00.000Z"));
+
+    const store = new ProdNoteStore();
+    await store.init();
+
+    const task = await store.addTask({ title: "Длинная помодоро-сессия" });
+    await store.startPomodoro(task.id);
+    vi.setSystemTime(new Date("2026-06-05T13:00:00.000Z"));
+    await store.completePomodoroPhase();
+
+    expect(store.getWorkspace().sessions[0]).toMatchObject({
+      mode: "pomodoro",
+      durationMinutes: 25,
+      endedAt: "2026-06-05T10:25:00.000Z",
+    });
+  });
+
+  it("does not count paused time in timer sessions", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-05T10:00:00.000Z"));
+
+    const store = new ProdNoteStore();
+    await store.init();
+
+    const task = await store.addTask({ title: "Таймер с паузой" });
+    await store.startTimer(task.id);
+    vi.setSystemTime(new Date("2026-06-05T10:10:00.000Z"));
+    store.pauseActiveTimer();
+    expect(store.getActiveTimer()?.pausedAt).toBe("2026-06-05T10:10:00.000Z");
+
+    vi.setSystemTime(new Date("2026-06-05T11:10:00.000Z"));
+    store.resumeActiveTimer();
+    expect(store.getActiveTimer()?.pausedAt).toBeNull();
+
+    vi.setSystemTime(new Date("2026-06-05T11:35:00.000Z"));
+    await store.stopTimer("После паузы");
+
+    expect(store.getWorkspace().sessions[0]).toMatchObject({
+      mode: "timer",
+      durationMinutes: 35,
+      startedAt: "2026-06-05T10:00:00.000Z",
+      endedAt: "2026-06-05T11:35:00.000Z",
+    });
   });
 
   it("deletes projects without deleting linked tasks and notes", async () => {

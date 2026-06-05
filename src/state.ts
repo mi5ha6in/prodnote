@@ -9,6 +9,12 @@ import {
   nowIso,
 } from "./domain/defaults";
 import {
+  getActiveTimerDurationMinutes,
+  getActiveTimerEndedAtIso,
+  getPomodoroFocusDurationMinutes,
+  getPomodoroFocusEndedAtIso,
+} from "./domain/active-timer";
+import {
   addMinutesIso,
   completeBreakPhase,
   completeFocusRound,
@@ -283,6 +289,8 @@ export class ProdNoteStore {
       pomodoroCycleId: null,
       phase: "focus",
       phaseEndsAt: null,
+      pausedAt: null,
+      pausedTotalMs: 0,
     };
     saveActiveTimer(this.activeTimer);
     this.emit();
@@ -302,6 +310,40 @@ export class ProdNoteStore {
       pomodoroCycleId: cycle.id,
       phase: "focus",
       phaseEndsAt: addMinutesIso(cycle.startedAt, cycle.focusMinutes),
+      pausedAt: null,
+      pausedTotalMs: 0,
+    };
+    saveActiveTimer(this.activeTimer);
+    this.emit();
+  }
+
+  pauseActiveTimer(): void {
+    const active = this.activeTimer;
+    if (!active || active.pausedAt) {
+      return;
+    }
+
+    this.activeTimer = {
+      ...active,
+      pausedAt: nowIso(),
+    };
+    saveActiveTimer(this.activeTimer);
+    this.emit();
+  }
+
+  resumeActiveTimer(): void {
+    const active = this.activeTimer;
+    if (!active?.pausedAt) {
+      return;
+    }
+
+    const resumedAt = nowIso();
+    const pauseMs = Math.max(0, Date.parse(resumedAt) - Date.parse(active.pausedAt));
+    this.activeTimer = {
+      ...active,
+      pausedAt: null,
+      pausedTotalMs: active.pausedTotalMs + pauseMs,
+      phaseEndsAt: active.phaseEndsAt ? new Date(Date.parse(active.phaseEndsAt) + pauseMs).toISOString() : null,
     };
     saveActiveTimer(this.activeTimer);
     this.emit();
@@ -313,8 +355,8 @@ export class ProdNoteStore {
       return;
     }
 
-    const endedAt = nowIso();
-    const durationMinutes = Math.max(1, Math.round((Date.parse(endedAt) - Date.parse(active.startedAt)) / 60000));
+    const endedAt = getActiveTimerEndedAtIso(active);
+    const durationMinutes = getActiveTimerDurationMinutes(active);
 
     this.activeTimer = null;
     clearActiveTimer();
@@ -353,8 +395,8 @@ export class ProdNoteStore {
     }
 
     if (active.phase === "focus") {
-      const endedAt = nowIso();
-      const durationMinutes = Math.max(1, Math.round((Date.parse(endedAt) - Date.parse(active.startedAt)) / 60000));
+      const endedAt = getPomodoroFocusEndedAtIso(active);
+      const durationMinutes = getPomodoroFocusDurationMinutes(active);
       const nextCycle = completeFocusRound(cycle);
       const nextBreak = getNextBreakPhase(nextCycle);
       const nextStartedAt = nowIso();
@@ -385,6 +427,8 @@ export class ProdNoteStore {
         pomodoroCycleId: cycle.id,
         phase: nextBreak,
         phaseEndsAt: addMinutesIso(nextStartedAt, getPhaseDurationMinutes(nextCycle, nextBreak)),
+        pausedAt: null,
+        pausedTotalMs: 0,
       };
       saveActiveTimer(this.activeTimer);
       this.emit();
@@ -410,6 +454,8 @@ export class ProdNoteStore {
       pomodoroCycleId: active.pomodoroCycleId,
       phase: "focus",
       phaseEndsAt: addMinutesIso(nextStartedAt, nextCycle.focusMinutes),
+      pausedAt: null,
+      pausedTotalMs: 0,
     };
     saveActiveTimer(this.activeTimer);
     this.emit();

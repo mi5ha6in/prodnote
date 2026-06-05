@@ -15,6 +15,8 @@ const active: ActiveTimer = {
   pomodoroCycleId: "pomodoro_1",
   phase: "focus",
   phaseEndsAt: "2026-05-29T10:25:00.000Z",
+  pausedAt: null,
+  pausedTotalMs: 0,
 };
 
 describe("timer alerts", () => {
@@ -28,6 +30,10 @@ describe("timer alerts", () => {
 
   it("does not alert for open-ended timer sessions", () => {
     expect(getPhaseAlertState({ ...active, mode: "timer", phaseEndsAt: null })).toBeNull();
+  });
+
+  it("does not alert while pomodoro is paused", () => {
+    expect(getPhaseAlertState({ ...active, pausedAt: "2026-05-29T10:24:00.000Z" }, Date.parse("2026-05-29T10:30:00.000Z"))).toBeNull();
   });
 
   it("notifies only once for the same completed phase", () => {
