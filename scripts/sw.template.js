@@ -61,20 +61,40 @@ async function networkFirst(request, fallbackUrl) {
 }
 
 async function focusOrOpenClient(targetUrl) {
+  const target = new URL(targetUrl);
   const clientsList = await self.clients.matchAll({
     type: "window",
     includeUncontrolled: true,
   });
 
   for (const client of clientsList) {
-    if ("navigate" in client) {
-      await client.navigate(targetUrl);
+    const clientUrl = new URL(client.url);
+    const isSameApp = clientUrl.origin === target.origin;
+    if (!isSameApp) {
+      continue;
     }
 
     if ("focus" in client) {
       await client.focus();
-      return;
     }
+
+    if ("postMessage" in client) {
+      client.postMessage({
+        type: "prodnote-open-url",
+        url: targetUrl,
+        hash: target.hash || "#/focus",
+      });
+    }
+
+    if (clientUrl.pathname !== target.pathname && "navigate" in client) {
+      try {
+        await client.navigate(targetUrl);
+      } catch {
+        // Fall through to openWindow below if needed.
+      }
+    }
+
+    return;
   }
 
   if (self.clients.openWindow) {
