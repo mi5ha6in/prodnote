@@ -90,6 +90,59 @@ describe("parseIcs", () => {
 
     expect(parseIcs(ics)).toHaveLength(0);
   });
+
+  it("converts TZID wall time to UTC", () => {
+    // Europe/Moscow is a fixed UTC+3 zone (no DST), so 09:00 local => 06:00Z.
+    const ics = [
+      "BEGIN:VEVENT",
+      "UID:tz-1",
+      "SUMMARY:Standup",
+      "DTSTART;TZID=Europe/Moscow:20260115T090000",
+      "DTEND;TZID=Europe/Moscow:20260115T093000",
+      "END:VEVENT",
+    ].join("\r\n");
+
+    const [event] = parseIcs(ics);
+    expect(event.startsAt).toBe("2026-01-15T06:00:00.000Z");
+    expect(event.endsAt).toBe("2026-01-15T06:30:00.000Z");
+  });
+
+  it("expands a weekly RRULE with COUNT", () => {
+    const now = Date.parse("2026-07-01T00:00:00.000Z");
+    const ics = [
+      "BEGIN:VEVENT",
+      "UID:weekly-1",
+      "SUMMARY:Weekly sync",
+      "DTSTART:20260702T140000Z",
+      "DTEND:20260702T150000Z",
+      "RRULE:FREQ=WEEKLY;COUNT=3",
+      "END:VEVENT",
+    ].join("\r\n");
+
+    const events = parseIcs(ics, now);
+    expect(events).toHaveLength(3);
+    expect(events[0].startsAt).toBe("2026-07-02T14:00:00.000Z");
+    expect(events[1].startsAt).toBe("2026-07-09T14:00:00.000Z");
+    expect(events[2].startsAt).toBe("2026-07-16T14:00:00.000Z");
+    // Each occurrence gets a distinct dedup UID.
+    expect(new Set(events.map((event) => event.externalUid)).size).toBe(3);
+  });
+
+  it("expands weekly BYDAY occurrences", () => {
+    const now = Date.parse("2026-07-01T00:00:00.000Z");
+    const ics = [
+      "BEGIN:VEVENT",
+      "UID:byday-1",
+      "SUMMARY:MWF",
+      "DTSTART:20260706T080000Z", // Monday 6 Jul 2026
+      "DTEND:20260706T083000Z",
+      "RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR;COUNT=3",
+      "END:VEVENT",
+    ].join("\r\n");
+
+    const days = parseIcs(ics, now).map((event) => new Date(event.startsAt).getUTCDate());
+    expect(days).toEqual([6, 8, 10]); // Mon, Wed, Fri
+  });
 });
 
 describe("buildIcs", () => {
