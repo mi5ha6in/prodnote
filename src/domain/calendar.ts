@@ -1,6 +1,6 @@
-import type { CalendarEvent, EntityId } from "./types";
+import type { CalendarEvent, EntityId, Task } from "./types";
 
-export type CalendarItemSource = "event" | "plan";
+export type CalendarItemSource = "event" | "plan" | "deadline";
 
 export interface CalendarItem {
   id: EntityId;
@@ -56,6 +56,26 @@ export function eventToItem(event: CalendarEvent): CalendarItem {
 
 export function toCalendarItems(events: CalendarEvent[]): CalendarItem[] {
   return events.map(eventToItem).sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
+}
+
+/** Derive read-only all-day calendar items from the due dates of open tasks. */
+export function taskDeadlineItems(tasks: Task[]): CalendarItem[] {
+  return tasks
+    .filter((task) => task.dueDate && task.status !== "done")
+    .map((task) => {
+      const [year, month, day] = (task.dueDate as string).split("-").map(Number);
+      const iso = new Date(year, month - 1, day).toISOString();
+      return {
+        id: `deadline_${task.id}`,
+        source: "deadline" as const,
+        title: `Дедлайн: ${task.title}`,
+        startsAt: iso,
+        endsAt: iso,
+        allDay: true,
+        kind: "deadline",
+        taskId: task.id,
+      };
+    });
 }
 
 export function dayKey(date: Date): string {

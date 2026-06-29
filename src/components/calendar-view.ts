@@ -7,6 +7,7 @@ import {
   layoutWeekSegments,
   minutesIntoDay,
   overflowForColumn,
+  taskDeadlineItems,
   toCalendarItems,
   weekdayLabels,
   type CalendarItem,
@@ -75,7 +76,9 @@ export class CalendarView extends HTMLElement {
   private render(): void {
     const workspace = appStore.getWorkspace();
     const now = new Date();
-    const items = toCalendarItems(workspace.events);
+    const items = [...toCalendarItems(workspace.events), ...taskDeadlineItems(workspace.tasks)].sort(
+      (a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt),
+    );
     const sortedSessions = [...workspace.sessions].sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
 
     const root = renderShadow(
@@ -191,19 +194,22 @@ export class CalendarView extends HTMLElement {
         : formatDateTime(item.startsAt);
     const taskName = item.taskId ? getTaskName(workspace.tasks, item.taskId) : "";
     const kindLabel = EVENT_KIND_LABELS[item.kind as CalendarEventKind] ?? item.kind;
+    const editable = item.source === "event";
 
     return `
-      <div class="list-item calendar-item is-editable" data-edit-event="${escapeHtml(item.id)}" tabindex="0">
+      <div class="list-item calendar-item ${editable ? "is-editable" : ""}" ${
+        editable ? `data-edit-event="${escapeHtml(item.id)}" tabindex="0"` : ""
+      }>
         <div class="calendar-item-row">
           <div class="calendar-item-main">
             <strong>${escapeHtml(item.title)}</strong>
             <div class="meta-row">
               <span class="status-pill">${escapeHtml(kindLabel)}</span>
               <span>${escapeHtml(when)}</span>
-              ${taskName ? `<span>${escapeHtml(taskName)}</span>` : ""}
+              ${taskName && item.source !== "deadline" ? `<span>${escapeHtml(taskName)}</span>` : ""}
             </div>
           </div>
-          <button ${buttonAttrs({ tone: "ghost", size: "small", data: { deleteEvent: item.id } })}>Удалить</button>
+          ${editable ? `<button ${buttonAttrs({ tone: "ghost", size: "small", data: { deleteEvent: item.id } })}>Удалить</button>` : ""}
         </div>
       </div>
     `;
