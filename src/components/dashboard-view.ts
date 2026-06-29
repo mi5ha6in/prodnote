@@ -1,6 +1,8 @@
-import { TASK_STATUS_LABELS } from "../domain/defaults";
+import { dayKey, isMultiDay, itemsForDay, toCalendarItems, type CalendarItem } from "../domain/calendar";
+import { EVENT_KIND_LABELS, TASK_STATUS_LABELS } from "../domain/defaults";
 import { escapeHtml } from "../domain/markdown";
 import { formatDuration, getTotalMinutes, groupSessionsByDay, groupSessionsByProject } from "../domain/stats";
+import type { CalendarEventKind, Workspace } from "../domain/types";
 import { appStore } from "../state";
 import { metricBarHtml } from "../ui/html";
 import { renderShadow } from "./shadow";
@@ -18,6 +20,26 @@ export class DashboardView extends HTMLElement {
     this.unsubscribe?.();
   }
 
+  private renderTodayItem(item: CalendarItem, workspace: Workspace): string {
+    const when = item.allDay
+      ? "Весь день"
+      : new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" }).format(new Date(item.startsAt));
+    const kindLabel = EVENT_KIND_LABELS[item.kind as CalendarEventKind] ?? item.kind;
+    const taskName = item.taskId ? getTaskName(workspace.tasks, item.taskId) : "";
+
+    return `
+      <div class="list-item">
+        <strong>${escapeHtml(item.title)}</strong>
+        <div class="meta-row">
+          <span class="status-pill">${escapeHtml(kindLabel)}</span>
+          <span>${escapeHtml(when)}</span>
+          ${isMultiDay(item) ? `<span class="muted">до ${formatDate(item.endsAt)}</span>` : ""}
+          ${taskName ? `<span>${escapeHtml(taskName)}</span>` : ""}
+        </div>
+      </div>
+    `;
+  }
+
   private render(): void {
     const workspace = appStore.getWorkspace();
     const today = new Date().toISOString().slice(0, 10);
@@ -29,6 +51,9 @@ export class DashboardView extends HTMLElement {
     const projectStats = groupSessionsByProject(workspace.sessions, workspace.tasks, workspace.projects).slice(0, 4);
     const recentSessions = workspace.sessions.slice(0, 5);
     const recentNotes = workspace.notes.slice(0, 4);
+    const todayItems = itemsForDay(toCalendarItems(workspace.events, workspace.plans), dayKey(new Date())).sort(
+      (a, b) => Number(b.allDay) - Number(a.allDay) || Date.parse(a.startsAt) - Date.parse(b.startsAt),
+    );
 
     renderShadow(
       this,
@@ -43,6 +68,23 @@ export class DashboardView extends HTMLElement {
               hint: `${workspace.sessions.length} сессий`,
             },
           ])}
+
+          <article class="card">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">Сегодня</p>
+                <h2>События дня</h2>
+              </div>
+              <a class="button ghost small" href="#/calendar">Календарь</a>
+            </div>
+            <div class="item-list">
+              ${
+                todayItems.length
+                  ? todayItems.map((item) => this.renderTodayItem(item, workspace)).join("")
+                  : `<div class="empty">На сегодня событий нет. Добавьте их в календаре.</div>`
+              }
+            </div>
+          </article>
 
           <div class="split-grid">
             <article class="card">
