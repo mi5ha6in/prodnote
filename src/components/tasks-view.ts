@@ -875,7 +875,7 @@ export class TasksView extends HTMLElement {
       <section class="kanban" aria-label="Канбан задач">
         ${STATUS_ORDER.map(
           (status) => `
-            <div class="kanban-column" data-drop-status="${status}">
+            <div class="kanban-column" data-drop-status="${status}" role="group" aria-label="${TASK_STATUS_LABELS[status]}">
               <div class="card-header">
                 <h3>${TASK_STATUS_LABELS[status]}</h3>
                 ${badgeHtml(tasks.filter((task) => task.status === status).length)}

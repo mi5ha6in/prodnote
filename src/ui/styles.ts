@@ -109,7 +109,8 @@ export const sharedStyles = `
 
   button:focus-visible,
   .button:focus-visible,
-  a:focus-visible {
+  a:focus-visible,
+  [tabindex]:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
