@@ -5,7 +5,7 @@ import type { Task, TaskStatus } from "../domain/types";
 import { requestTimerNotificationPermission } from "../platform/notifications";
 import { appStore } from "../state";
 import { badgeHtml, buttonAttrs, emptyStateHtml, fieldHtml, metricBarHtml, modalHtml, viewHeaderHtml } from "../ui/html";
-import { wireModal } from "./modal";
+import { setBodyScrollLock, wireModal } from "./modal";
 import { renderShadow } from "./shadow";
 import {
   formatDate,
@@ -33,6 +33,7 @@ export class TasksView extends HTMLElement {
 
   disconnectedCallback(): void {
     this.unsubscribe?.();
+    setBodyScrollLock(false);
   }
 
   private render(): void {
@@ -225,6 +226,8 @@ export class TasksView extends HTMLElement {
         }
       `,
     );
+
+    setBodyScrollLock(this.creating || this.openedTaskId !== null);
 
     root.querySelector<HTMLFormElement>('[data-form="task"]')?.addEventListener("submit", (event) => {
       event.preventDefault();

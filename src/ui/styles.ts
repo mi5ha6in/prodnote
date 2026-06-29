@@ -472,7 +472,8 @@ export const sharedStyles = `
     margin: auto;
     max-height: calc(100dvh - 2rem);
     max-width: 60rem;
-    overflow: visible;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 0;
     width: min(60rem, 100%);
   }
@@ -493,14 +494,14 @@ export const sharedStyles = `
     box-shadow: var(--shadow-md);
     display: grid;
     gap: var(--space-4);
-    max-height: calc(100dvh - 2rem);
-    overflow: auto;
     padding: var(--space-5);
     width: 100%;
   }
 
-  .modal-card.wide {
+  .modal.wide,
+  .modal:has(.modal-card.wide) {
     max-width: 72rem;
+    width: min(72rem, 100%);
   }
 
   .bar {
