@@ -7,8 +7,10 @@ import {
   itemsForDay,
   layoutWeekSegments,
   minutesIntoDay,
+  taskDeadlineItems,
   type CalendarItem,
 } from "./calendar";
+import { createTask } from "./defaults";
 
 function item(id: string, startsAt: string): CalendarItem {
   return { id, source: "event", title: id, startsAt, endsAt: startsAt, allDay: false, kind: "event", taskId: null };
@@ -110,6 +112,19 @@ describe("layoutWeekSegments", () => {
     const lanes = layoutWeekSegments(week, [spanItem("a", 15, 16), spanItem("b", 18, 19)]);
     expect(lanes).toHaveLength(1);
     expect(lanes[0]).toHaveLength(2);
+  });
+});
+
+describe("taskDeadlineItems", () => {
+  it("creates all-day deadline items from open tasks with a due date", () => {
+    const withDue = { ...createTask({ title: "Ship", dueDate: "2026-07-10" }), id: "t1" };
+    const done = { ...createTask({ title: "Old", dueDate: "2026-07-10" }), id: "t2", status: "done" as const };
+    const noDue = { ...createTask({ title: "No date" }), id: "t3" };
+
+    const items = taskDeadlineItems([withDue, done, noDue]);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ source: "deadline", taskId: "t1", allDay: true, kind: "deadline" });
+    expect(new Date(items[0].startsAt).getDate()).toBe(10);
   });
 });
 

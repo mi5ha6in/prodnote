@@ -1,4 +1,4 @@
-import { dayKey, isMultiDay, itemsForDay, toCalendarItems, type CalendarItem } from "../domain/calendar";
+import { dayKey, isMultiDay, itemsForDay, taskDeadlineItems, toCalendarItems, type CalendarItem } from "../domain/calendar";
 import { EVENT_KIND_LABELS, TASK_STATUS_LABELS } from "../domain/defaults";
 import { escapeHtml } from "../domain/markdown";
 import { formatDuration, getTotalMinutes, groupSessionsByDay, groupSessionsByProject } from "../domain/stats";
@@ -51,7 +51,10 @@ export class DashboardView extends HTMLElement {
     const projectStats = groupSessionsByProject(workspace.sessions, workspace.tasks, workspace.projects).slice(0, 4);
     const recentSessions = workspace.sessions.slice(0, 5);
     const recentNotes = workspace.notes.slice(0, 4);
-    const todayItems = itemsForDay(toCalendarItems(workspace.events), dayKey(new Date())).sort(
+    const todayItems = itemsForDay(
+      [...toCalendarItems(workspace.events), ...taskDeadlineItems(workspace.tasks)],
+      dayKey(new Date()),
+    ).sort(
       (a, b) => Number(b.allDay) - Number(a.allDay) || Date.parse(a.startsAt) - Date.parse(b.startsAt),
     );
 
