@@ -1,5 +1,6 @@
 import { escapeHtml, renderMarkdown } from "../domain/markdown";
 import { applyMarkdownSnippetToText, MARKDOWN_SNIPPETS, type MarkdownSnippet } from "../domain/markdown-snippets";
+import { searchNotes } from "../domain/search";
 import type { Note, Workspace } from "../domain/types";
 import { appStore } from "../state";
 import { badgeHtml, buttonAttrs, emptyStateHtml, fieldHtml, metricBarHtml, modalHtml, viewHeaderHtml } from "../ui/html";
@@ -25,6 +26,7 @@ export class NotesView extends HTMLElement {
   private creating = false;
   private openedNoteId: string | null = null;
   private openedNoteMode: "preview" | "edit" = "preview";
+  private searchQuery = "";
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
@@ -65,7 +67,10 @@ export class NotesView extends HTMLElement {
                 <p class="eyebrow">Библиотека</p>
                 <h2>Все конспекты</h2>
               </div>
-              ${badgeHtml(workspace.notes.length)}
+              <div class="row-actions">
+                <input data-note-search type="search" placeholder="Поиск…" value="${escapeHtml(this.searchQuery)}" aria-label="Поиск заметок" />
+                ${badgeHtml(workspace.notes.length)}
+              </div>
             </div>
             <div class="notes-grid">
               ${
@@ -76,7 +81,7 @@ export class NotesView extends HTMLElement {
                           .map((taskId) => getTaskName(workspace.tasks, taskId))
                           .join(", ");
                         return `
-                          <article class="note-card">
+                          <article class="note-card" data-note-id="${escapeHtml(note.id)}">
                             <div class="meta-row">
                               <span>${escapeHtml(getProjectName(workspace.projects, note.projectId))}</span>
                               <span>${formatDate(note.updatedAt)}</span>
@@ -261,6 +266,20 @@ export class NotesView extends HTMLElement {
 
     setBodyScrollLock(this.modalOpen);
     this.bindModalActions(root);
+
+    const searchInput = root.querySelector<HTMLInputElement>("[data-note-search]");
+    searchInput?.addEventListener("input", () => {
+      this.searchQuery = searchInput.value;
+      this.applyNoteFilter(root);
+    });
+    this.applyNoteFilter(root);
+  }
+
+  private applyNoteFilter(root: ShadowRoot): void {
+    const matches = new Set(searchNotes(appStore.getWorkspace().notes, this.searchQuery).map((note) => note.id));
+    root.querySelectorAll<HTMLElement>("[data-note-id]").forEach((card) => {
+      card.style.display = matches.has(card.dataset.noteId ?? "") ? "" : "none";
+    });
   }
 
   private renderModal(workspace: Workspace): string {
