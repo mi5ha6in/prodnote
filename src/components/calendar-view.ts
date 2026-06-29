@@ -235,7 +235,7 @@ export class CalendarView extends HTMLElement {
         <div class="month-head">
           ${labels.map((label) => `<div class="month-weekday">${escapeHtml(label)}</div>`).join("")}
         </div>
-        <div class="month-weeks">
+        <div class="month-weeks" role="grid" aria-label="Сетка месяца">
           ${weeks.map((week) => this.renderWeekRow(week, items)).join("")}
         </div>
       </article>
@@ -248,7 +248,7 @@ export class CalendarView extends HTMLElement {
 
     return `
       <div class="month-week" style="--lanes: ${visible.length}">
-        <div class="week-days">
+        <div class="week-days" role="row">
           ${week
             .map((cell, col) => {
               const overflow = overflowForColumn(lanes, col, MONTH_LANE_CAP);
@@ -256,6 +256,8 @@ export class CalendarView extends HTMLElement {
                 <div
                   class="month-cell ${cell.inMonth ? "" : "is-outside"} ${cell.isToday ? "is-today" : ""}"
                   data-new-event-date="${cell.dateKey}"
+                  role="gridcell"
+                  aria-label="${cell.dateKey}"
                   tabindex="0"
                 >
                   <span class="month-day">${cell.day}</span>
@@ -670,6 +672,31 @@ export class CalendarView extends HTMLElement {
         const date = cell.dataset.newEventDate;
         if (date) {
           this.moveEventToDay(date);
+        }
+      });
+      cell.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          const date = cell.dataset.newEventDate;
+          if (date) {
+            this.openEventModal(null, `${date}T09:00:00`);
+          }
+        }
+      });
+    });
+
+    const monthCells = [...root.querySelectorAll<HTMLElement>(".month-cell")];
+    monthCells.forEach((cell, index) => {
+      cell.addEventListener("keydown", (event) => {
+        const offsets: Record<string, number> = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 7, ArrowUp: -7 };
+        const offset = offsets[event.key];
+        if (offset === undefined) {
+          return;
+        }
+        const target = monthCells[index + offset];
+        if (target) {
+          event.preventDefault();
+          target.focus();
         }
       });
     });
