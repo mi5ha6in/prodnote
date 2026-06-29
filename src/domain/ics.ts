@@ -1,3 +1,4 @@
+import { expandRecurrence, WEEKDAY_CODES, type RecurrenceRule } from "./recurrence";
 import type { CalendarEvent } from "./types";
 
 export interface ParsedIcsEvent {
@@ -119,7 +120,9 @@ function buildEventsFromProperties(properties: IcsProperty[], nowMs = Date.now()
   };
 
   const rrule = byName.get("RRULE")?.value;
-  const occurrences = rrule ? expandRecurrence(startsAt, endsAt, rrule, nowMs) : [{ startsAt, endsAt }];
+  const occurrences = rrule
+    ? expandRecurrence(startsAt, endsAt, parseRrule(rrule), nowMs)
+    : [{ startsAt, endsAt }];
 
   return occurrences.map((occurrence) => ({
     title: base.title,
@@ -132,19 +135,7 @@ function buildEventsFromProperties(properties: IcsProperty[], nowMs = Date.now()
   }));
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-const RRULE_MAX_OCCURRENCES = 200;
-const WEEKDAY_CODES: Record<string, number> = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
-
-interface Recurrence {
-  freq: string;
-  interval: number;
-  count: number | null;
-  untilMs: number | null;
-  byDay: number[];
-}
-
-function parseRrule(value: string): Recurrence {
+function parseRrule(value: string): RecurrenceRule {
   const parts = Object.fromEntries(
     value.split(";").map((piece) => {
       const [key, raw] = piece.split("=");
@@ -172,98 +163,6 @@ function toIsoFromIcsDate(value: string): string {
   }
   const [, y, mo, d, h = "23", mi = "59", s = "59"] = match;
   return new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s))).toISOString();
-}
-
-/** Expand an RRULE into concrete occurrences within a bounded window. */
-function expandRecurrence(
-  startIso: string,
-  endIso: string,
-  rruleValue: string,
-  nowMs: number,
-): Array<{ startsAt: string; endsAt: string }> {
-  const rule = parseRrule(rruleValue);
-  const start = new Date(startIso);
-  const duration = Date.parse(endIso) - Date.parse(startIso);
-  const windowEndMs = Math.min(rule.untilMs ?? Infinity, nowMs + 365 * DAY_MS);
-  const recentCutoffMs = nowMs - 31 * DAY_MS;
-  const startWeekday = start.getDay();
-  const startDay = start.getDate();
-  const startMonth = start.getMonth();
-
-  const results: Array<{ startsAt: string; endsAt: string }> = [];
-  const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-  const startMidnight = cursor.getTime();
-  let occurrenceIndex = 0;
-
-  for (let safety = 0; safety < 1000 && results.length < RRULE_MAX_OCCURRENCES; safety += 1) {
-    if (cursor.getTime() > windowEndMs) {
-      break;
-    }
-
-    if (matchesFrequency(rule, cursor, { startMidnight, startWeekday, startDay, startMonth })) {
-      occurrenceIndex += 1;
-      if (rule.count !== null && occurrenceIndex > rule.count) {
-        break;
-      }
-
-      const occStart = new Date(
-        cursor.getFullYear(),
-        cursor.getMonth(),
-        cursor.getDate(),
-        start.getHours(),
-        start.getMinutes(),
-        start.getSeconds(),
-      );
-      if (occStart.getTime() <= windowEndMs && occStart.getTime() + duration >= recentCutoffMs) {
-        results.push({
-          startsAt: occStart.toISOString(),
-          endsAt: new Date(occStart.getTime() + duration).toISOString(),
-        });
-      }
-    }
-
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  return results.length ? results : [{ startsAt: startIso, endsAt: endIso }];
-}
-
-function matchesFrequency(
-  rule: Recurrence,
-  date: Date,
-  base: { startMidnight: number; startWeekday: number; startDay: number; startMonth: number },
-): boolean {
-  const dayDiff = Math.round((date.getTime() - base.startMidnight) / DAY_MS);
-  if (dayDiff < 0) {
-    return false;
-  }
-
-  switch (rule.freq) {
-    case "DAILY":
-      return dayDiff % rule.interval === 0;
-    case "WEEKLY": {
-      const weekDiff = Math.floor(dayDiff / 7);
-      if (weekDiff % rule.interval !== 0) {
-        return false;
-      }
-      return rule.byDay.length ? rule.byDay.includes(date.getDay()) : date.getDay() === base.startWeekday;
-    }
-    case "MONTHLY":
-      return date.getDate() === base.startDay && monthDiff(base, date) % rule.interval === 0;
-    case "YEARLY":
-      return (
-        date.getDate() === base.startDay &&
-        date.getMonth() === base.startMonth &&
-        monthDiff(base, date) % (rule.interval * 12) === 0
-      );
-    default:
-      return false;
-  }
-}
-
-function monthDiff(base: { startMidnight: number }, date: Date): number {
-  const start = new Date(base.startMidnight);
-  return (date.getFullYear() - start.getFullYear()) * 12 + (date.getMonth() - start.getMonth());
 }
 
 function defaultEnd(startIso: string): string {

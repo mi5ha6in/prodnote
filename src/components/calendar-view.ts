@@ -15,6 +15,7 @@ import {
 } from "../domain/calendar";
 import { EVENT_KIND_LABELS, SESSION_MODE_LABELS } from "../domain/defaults";
 import { buildIcs, parseIcs } from "../domain/ics";
+import { expandRecurrence, type RecurrenceRule } from "../domain/recurrence";
 import { escapeHtml } from "../domain/markdown";
 import { formatDuration } from "../domain/stats";
 import type { CalendarEvent, CalendarEventKind, Workspace } from "../domain/types";
@@ -482,6 +483,24 @@ export class CalendarView extends HTMLElement {
             control: `<textarea name="description" placeholder="Детали события">${event ? escapeHtml(event.description) : ""}</textarea>`,
           })}
 
+          ${
+            event
+              ? ""
+              : `<div class="inline-grid">
+                  ${fieldHtml({
+                    label: "Повтор",
+                    control: `<select name="repeat">
+                      <option value="none">Без повтора</option>
+                      <option value="daily">Каждый день</option>
+                      <option value="weekly">Каждую неделю</option>
+                      <option value="monthly">Каждый месяц</option>
+                    </select>`,
+                  })}
+                  ${fieldHtml({ label: "Повторять до", control: `<input name="repeatUntil" type="date" />` })}
+                </div>
+                <p class="muted">Повтор создаёт отдельные события; правка одного не меняет остальные.</p>`
+          }
+
           <div class="row-actions" style="justify-content: space-between;">
             ${
               event
@@ -799,7 +818,32 @@ export class CalendarView extends HTMLElement {
           location,
         });
       } else {
-        void appStore.addEvent({ title, startsAt, endsAt, allDay, kind, taskId, description, location });
+        const repeat = form.querySelector<HTMLSelectElement>('[name="repeat"]')?.value ?? "none";
+        const untilValue = form.querySelector<HTMLInputElement>('[name="repeatUntil"]')?.value ?? "";
+        if (repeat !== "none") {
+          const rule: RecurrenceRule = {
+            freq: repeat.toUpperCase(),
+            interval: 1,
+            count: null,
+            untilMs: untilValue ? Date.parse(fromDateInputValue(untilValue)) + 86_400_000 : null,
+            byDay: [],
+          };
+          const occurrences = expandRecurrence(startsAt, endsAt, rule, Date.now());
+          void appStore.addEvents(
+            occurrences.map((occ) => ({
+              title,
+              startsAt: occ.startsAt,
+              endsAt: occ.endsAt,
+              allDay,
+              kind,
+              taskId,
+              description,
+              location,
+            })),
+          );
+        } else {
+          void appStore.addEvent({ title, startsAt, endsAt, allDay, kind, taskId, description, location });
+        }
       }
 
       this.closeModal();
