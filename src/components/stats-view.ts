@@ -131,9 +131,9 @@ export class StatsView extends HTMLElement {
 
         .heat-cell {
           aspect-ratio: 1;
-          background: color-mix(in srgb, var(--accent) calc(var(--heat) * 100%), rgba(20, 33, 61, 0.06));
+          background: color-mix(in srgb, var(--accent) calc(var(--heat) * 82%), var(--paper-strong));
           border: 1px solid var(--line);
-          border-radius: 0.55rem;
+          border-radius: 0.4rem;
           display: grid;
           place-items: center;
         }
@@ -163,8 +163,8 @@ export class StatsView extends HTMLElement {
 
         .hour-cell span {
           aspect-ratio: 1;
-          background: var(--gold);
-          border-radius: 0.4rem;
+          background: var(--accent);
+          border-radius: 0.3rem;
           display: block;
           width: 100%;
         }

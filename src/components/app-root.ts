@@ -3,14 +3,24 @@ import { renderShadow } from "./shadow";
 
 type Route = "dashboard" | "tasks" | "notes" | "calendar" | "focus" | "stats" | "settings";
 
-const ROUTES: Array<{ id: Route; label: string; icon: string; tag: string }> = [
-  { id: "dashboard", label: "Обзор", icon: "⌁", tag: "pn-dashboard-view" },
-  { id: "tasks", label: "Задачи", icon: "□", tag: "pn-tasks-view" },
-  { id: "notes", label: "Заметки", icon: "¶", tag: "pn-notes-view" },
-  { id: "calendar", label: "Календарь", icon: "◇", tag: "pn-calendar-view" },
-  { id: "focus", label: "Фокус", icon: "◉", tag: "pn-focus-view" },
-  { id: "stats", label: "Статистика", icon: "▧", tag: "pn-stats-view" },
-  { id: "settings", label: "Настройки", icon: "⚙", tag: "pn-settings-view" },
+const ICONS = {
+  dashboard: `<svg viewBox="0 0 24 24"><path d="M4 13h6V4H4v9Zm10 7h6V11h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z"/></svg>`,
+  tasks: `<svg viewBox="0 0 24 24"><path d="m5 12 2.2 2.2L11 10.4M5 6l2.2 2.2L11 4.4M5 18l2.2 2.2 3.8-3.8M14 6h5M14 12h5M14 18h5"/></svg>`,
+  notes: `<svg viewBox="0 0 24 24"><path d="M6 3.5h9l3 3V20.5H6v-17Zm8.5 0v4h4M9 11h6M9 15h6"/></svg>`,
+  calendar: `<svg viewBox="0 0 24 24"><path d="M5 5h14v15H5V5Zm0 5h14M8 3v4M16 3v4M8 14h3M13 14h3M8 17h3"/></svg>`,
+  focus: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>`,
+  stats: `<svg viewBox="0 0 24 24"><path d="M5 20V10h4v10H5Zm5 0V4h4v16h-4Zm5 0v-7h4v7h-4Z"/></svg>`,
+  settings: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>`,
+} satisfies Record<Route, string>;
+
+const ROUTES: Array<{ id: Route; label: string; description: string; tag: string }> = [
+  { id: "dashboard", label: "Обзор", description: "Главное на сегодня", tag: "pn-dashboard-view" },
+  { id: "tasks", label: "Задачи", description: "Планы и текущая работа", tag: "pn-tasks-view" },
+  { id: "notes", label: "Заметки", description: "Конспекты и база знаний", tag: "pn-notes-view" },
+  { id: "calendar", label: "Календарь", description: "План и история времени", tag: "pn-calendar-view" },
+  { id: "focus", label: "Фокус", description: "Таймер и помодоро", tag: "pn-focus-view" },
+  { id: "stats", label: "Статистика", description: "Ритм и распределение времени", tag: "pn-stats-view" },
+  { id: "settings", label: "Настройки", description: "Данные, синхронизация и проекты", tag: "pn-settings-view" },
 ];
 
 function getRoute(): Route {
@@ -46,18 +56,18 @@ export class AppRoot extends HTMLElement {
       <div class="app-shell">
         <aside class="sidebar">
           <a class="brand" href="#/dashboard" aria-label="ProdNote home">
-            <span class="brand-mark">P</span>
+            <img class="brand-mark" src="${import.meta.env.BASE_URL}icons/icon.svg" alt="" />
             <span>
               <strong>ProdNote</strong>
-              <small>локальный фокус</small>
+              <small>Рабочее пространство</small>
             </span>
           </a>
           <nav class="nav-list" aria-label="Главная навигация">
             ${ROUTES.map(
               (item) => `
                 <a class="nav-item ${item.id === route ? "active" : ""}" href="#/${item.id}">
-                  <span aria-hidden="true">${item.icon}</span>
-                  ${item.label}
+                  <span class="nav-icon" aria-hidden="true">${ICONS[item.id]}</span>
+                  <span class="nav-label">${item.label}</span>
                 </a>
               `,
             ).join("")}
@@ -68,10 +78,10 @@ export class AppRoot extends HTMLElement {
         <main class="content-shell">
           <header class="topbar">
             <div>
-              <p class="eyebrow">Рабочее пространство</p>
               <h1>${current.label}</h1>
+              <p>${current.description}</p>
             </div>
-            <a class="focus-link" href="#/focus">Открыть фокус</a>
+            <a class="focus-link" href="#/focus">${ICONS.focus}<span>Начать фокус</span></a>
           </header>
           <section class="view-host">
             <${current.tag}></${current.tag}>
@@ -87,11 +97,10 @@ export class AppRoot extends HTMLElement {
 
         .app-shell {
           background:
-            radial-gradient(circle at 8% 12%, rgba(225, 159, 68, 0.24), transparent 26rem),
-            radial-gradient(circle at 92% 8%, rgba(42, 157, 143, 0.2), transparent 24rem),
-            linear-gradient(135deg, #f7f0df 0%, #fffaf0 46%, #e8dcc7 100%);
+            radial-gradient(circle at 88% 0%, rgba(47, 125, 92, 0.08), transparent 28rem),
+            #f3f6f3;
           display: grid;
-          grid-template-columns: 18rem minmax(0, 1fr);
+          grid-template-columns: 15.5rem minmax(0, 1fr);
           min-height: 100vh;
         }
 
@@ -101,11 +110,12 @@ export class AppRoot extends HTMLElement {
         }
 
         .sidebar {
+          background: rgba(255, 255, 255, 0.92);
           border-right: 1px solid var(--line);
           display: flex;
           flex-direction: column;
-          gap: 1rem;
-          padding: 1rem;
+          gap: 1.4rem;
+          padding: 1rem 0.8rem;
           position: sticky;
           top: 0;
           height: 100vh;
@@ -113,24 +123,16 @@ export class AppRoot extends HTMLElement {
 
         .brand {
           align-items: center;
-          border-radius: 1.3rem;
           display: flex;
-          gap: 0.8rem;
-          padding: 0.6rem;
+          gap: 0.7rem;
+          padding: 0.35rem 0.45rem;
           text-decoration: none;
         }
 
         .brand-mark {
-          align-items: center;
-          background: var(--ink);
-          border-radius: 1rem;
-          color: white;
-          display: inline-flex;
-          font-size: 1.35rem;
-          font-weight: 900;
-          height: 3rem;
-          justify-content: center;
-          width: 3rem;
+          border-radius: 0.72rem;
+          height: 2.45rem;
+          width: 2.45rem;
         }
 
         .brand strong,
@@ -140,34 +142,53 @@ export class AppRoot extends HTMLElement {
 
         .brand small {
           color: var(--muted);
-          margin-top: 0.1rem;
+          font-size: 0.7rem;
         }
 
         .nav-list {
           display: grid;
-          gap: 0.35rem;
+          gap: 0.2rem;
         }
 
         .nav-item {
           align-items: center;
-          border-radius: 1rem;
+          border-radius: 0.68rem;
           color: var(--muted);
           display: flex;
-          font-weight: 850;
-          gap: 0.7rem;
-          padding: 0.78rem 0.85rem;
+          font-size: 0.85rem;
+          font-weight: 650;
+          gap: 0.65rem;
+          padding: 0.62rem 0.7rem;
           text-decoration: none;
+          transition:
+            background 140ms ease,
+            color 140ms ease;
         }
 
         .nav-item.active,
         .nav-item:hover {
-          background: rgba(255, 255, 255, 0.68);
+          background: var(--accent-soft);
           color: var(--ink);
         }
 
-        .nav-item span {
-          text-align: center;
-          width: 1.2rem;
+        .nav-icon {
+          display: grid;
+          place-items: center;
+        }
+
+        .nav-icon svg,
+        .focus-link svg {
+          fill: none;
+          height: 1.05rem;
+          stroke: currentColor;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+          stroke-width: 1.7;
+          width: 1.05rem;
+        }
+
+        .nav-item.active .nav-icon {
+          color: var(--accent-strong);
         }
 
         .content-shell {
@@ -178,32 +199,47 @@ export class AppRoot extends HTMLElement {
 
         .topbar {
           align-items: center;
-          border-bottom: 1px solid var(--line);
           display: flex;
           gap: 1rem;
           justify-content: space-between;
-          padding: 1.2rem clamp(1rem, 3vw, 2rem);
+          padding: 1.35rem clamp(1rem, 3vw, 2rem) 0.8rem;
         }
 
         .topbar h1 {
-          font-size: clamp(2rem, 5vw, 4.8rem);
-          letter-spacing: -0.075em;
-          line-height: 0.92;
+          font-size: clamp(1.65rem, 3vw, 2.2rem);
+          font-weight: 730;
+          letter-spacing: -0.055em;
+          line-height: 1.1;
+        }
+
+        .topbar p {
+          color: var(--muted);
+          font-size: 0.78rem;
+          margin-top: 0.18rem;
         }
 
         .focus-link {
-          background: var(--ink);
-          border-radius: 999px;
+          align-items: center;
+          background: var(--accent);
+          border-radius: 0.72rem;
           color: white;
-          font-weight: 900;
-          padding: 0.8rem 1rem;
+          display: flex;
+          font-size: 0.82rem;
+          font-weight: 700;
+          gap: 0.45rem;
+          padding: 0.68rem 0.85rem;
           text-decoration: none;
           white-space: nowrap;
         }
 
         .view-host {
           min-width: 0;
-          padding: clamp(1rem, 3vw, 2rem);
+          padding: 0.8rem clamp(1rem, 3vw, 2rem) 2rem;
+        }
+
+        .view-host > * {
+          margin: 0 auto;
+          max-width: 96rem;
         }
 
         @media (max-width: 920px) {
@@ -213,8 +249,8 @@ export class AppRoot extends HTMLElement {
           }
 
           .sidebar {
-            background: rgba(247, 240, 223, 0.9);
-            backdrop-filter: blur(18px);
+            background: rgba(255, 255, 255, 0.94);
+            backdrop-filter: blur(20px);
             border-right: 0;
             border-top: 1px solid var(--line);
             bottom: 0;
@@ -222,7 +258,7 @@ export class AppRoot extends HTMLElement {
             height: auto;
             left: 0;
             overflow-x: auto;
-            padding: 0.6rem;
+            padding: 0.45rem;
             position: fixed;
             right: 0;
             top: auto;
@@ -236,13 +272,50 @@ export class AppRoot extends HTMLElement {
 
           .nav-list {
             display: flex;
+            justify-content: space-around;
             min-width: max-content;
             width: 100%;
           }
 
           .nav-item {
+            display: grid;
+            font-size: 0.66rem;
+            gap: 0.15rem;
             justify-content: center;
-            min-width: 6rem;
+            justify-items: center;
+            min-width: 4.65rem;
+            padding: 0.45rem 0.5rem;
+          }
+
+          .nav-icon svg {
+            height: 1.15rem;
+            width: 1.15rem;
+          }
+
+          .topbar {
+            padding-top: 1rem;
+          }
+
+          .focus-link span {
+            display: none;
+          }
+        }
+
+        @media (max-width: 620px) {
+          .nav-list {
+            min-width: 100%;
+          }
+
+          .nav-item {
+            min-width: 2.75rem;
+          }
+
+          .nav-label {
+            display: none;
+          }
+
+          .topbar h1 {
+            font-size: 1.5rem;
           }
         }
       `,

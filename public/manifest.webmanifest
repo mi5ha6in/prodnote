@@ -4,14 +4,26 @@
   "description": "Локальный органайзер задач, заметок, времени и фокуса.",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#f7f0df",
-  "theme_color": "#14213d",
+  "background_color": "#f3f6f3",
+  "theme_color": "#183d2c",
   "lang": "ru",
   "icons": [
     {
       "src": "icons/icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ]

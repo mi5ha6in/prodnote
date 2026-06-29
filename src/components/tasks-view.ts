@@ -141,21 +141,21 @@ export class TasksView extends HTMLElement {
       `
         .kanban {
           display: grid;
-          gap: 1rem;
-          grid-template-columns: repeat(4, minmax(17rem, 1fr));
+          gap: 0.75rem;
+          grid-template-columns: repeat(4, minmax(15rem, 1fr));
           overflow-x: auto;
           padding-bottom: 0.25rem;
         }
 
         .kanban-column {
           align-content: start;
-          background: rgba(255, 255, 255, 0.42);
+          background: rgba(255, 255, 255, 0.52);
           border: 1px solid var(--line);
-          border-radius: 1.35rem;
+          border-radius: 0.9rem;
           display: grid;
-          gap: 0.75rem;
+          gap: 0.55rem;
           min-width: 0;
-          padding: 0.75rem;
+          padding: 0.6rem;
         }
 
         .task-card {
@@ -219,14 +219,15 @@ export class TasksView extends HTMLElement {
         }
 
         .task-history {
-          background: rgba(20, 33, 61, 0.04);
-          border-radius: 0.9rem;
+          background: var(--surface);
+          border-radius: 0.72rem;
           min-width: 0;
           padding: 0.7rem;
         }
 
         .kanban .task-card {
-          padding: 0.85rem;
+          box-shadow: none;
+          padding: 0.72rem;
         }
 
         .kanban .task-card label {
@@ -248,7 +249,7 @@ export class TasksView extends HTMLElement {
 
         fieldset {
           border: 1px solid var(--line);
-          border-radius: 1rem;
+          border-radius: 0.72rem;
           display: flex;
           flex-wrap: wrap;
           gap: 0.5rem;
@@ -265,7 +266,7 @@ export class TasksView extends HTMLElement {
 
         .check-row {
           align-items: center;
-          background: rgba(255, 255, 255, 0.68);
+          background: var(--surface);
           border-radius: 999px;
           display: flex;
           gap: 0.4rem;
@@ -283,7 +284,7 @@ export class TasksView extends HTMLElement {
 
         @media (max-width: 1100px) {
           .kanban {
-            grid-template-columns: repeat(4, 17rem);
+            grid-template-columns: repeat(4, 15rem);
           }
 
           .task-details-grid {

@@ -1,8 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
   <title id="title">ProdNote</title>
-  <rect width="512" height="512" rx="112" fill="#14213d"/>
-  <path d="M116 130c0-24 20-44 44-44h144l92 92v204c0 24-20 44-44 44H160c-24 0-44-20-44-44V130Z" fill="#f7f0df"/>
-  <path d="M304 86v70c0 24 20 44 44 44h48" fill="#e19f44"/>
-  <path d="M177 238h158M177 292h158M177 346h106" stroke="#14213d" stroke-width="28" stroke-linecap="round"/>
-  <circle cx="360" cy="346" r="35" fill="#2a9d8f"/>
+  <rect width="512" height="512" rx="128" fill="#183d2c"/>
+  <path d="M146 108h166l54 54v242H146V108Z" fill="#f8faf8"/>
+  <path d="M312 108v54h54" fill="none" stroke="#b9d8c5" stroke-linejoin="round" stroke-width="28"/>
+  <path d="M202 224h108M202 276h76" fill="none" stroke="#183d2c" stroke-linecap="round" stroke-width="24"/>
+  <circle cx="286" cy="350" r="70" fill="#2f7d5c"/>
+  <path d="m253 350 22 22 44-48" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="22"/>
 </svg>
