@@ -153,7 +153,12 @@ export class TasksView extends HTMLElement {
         }
 
         .kanban .task-card {
-          box-shadow: none;
+          background: var(--paper);
+          box-shadow: var(--shadow-sm);
+        }
+
+        .kanban .task-card:hover {
+          border-color: var(--line-strong);
         }
 
         .kanban .task-card label {
