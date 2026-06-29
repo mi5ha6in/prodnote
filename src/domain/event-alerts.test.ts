@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createCalendarEvent } from "./defaults";
-import { getDueEventReminders, resetEventReminderNotifications, shouldNotifyEventReminder } from "./event-alerts";
+import {
+  getDueAllDayReminders,
+  getDueEventReminders,
+  resetEventReminderNotifications,
+  shouldNotifyEventReminder,
+} from "./event-alerts";
 
 function timedEvent(id: string, startsAt: string, allDay = false) {
   return { ...createCalendarEvent({ title: id, startsAt, endsAt: startsAt, allDay }), id };
@@ -28,6 +33,25 @@ describe("getDueEventReminders", () => {
   it("is disabled when lead is zero", () => {
     const events = [timedEvent("soon", "2026-07-01T09:10:00.000Z")];
     expect(getDueEventReminders(events, now, 0)).toHaveLength(0);
+  });
+});
+
+describe("getDueAllDayReminders", () => {
+  const todayItem = { id: "a", title: "Holiday", kind: "event", startsAt: new Date(2026, 6, 1, 0, 0, 0).toISOString() };
+
+  it("fires today's items once the morning hour passed", () => {
+    const now = new Date(2026, 6, 1, 10, 0, 0).getTime();
+    expect(getDueAllDayReminders([todayItem], now, 9)).toHaveLength(1);
+  });
+
+  it("does not fire before the morning hour", () => {
+    const now = new Date(2026, 6, 1, 7, 0, 0).getTime();
+    expect(getDueAllDayReminders([todayItem], now, 9)).toHaveLength(0);
+  });
+
+  it("is disabled when hour is negative", () => {
+    const now = new Date(2026, 6, 1, 10, 0, 0).getTime();
+    expect(getDueAllDayReminders([todayItem], now, -1)).toHaveLength(0);
   });
 });
 

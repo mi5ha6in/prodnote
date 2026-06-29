@@ -1,9 +1,16 @@
-import { getDueEventReminders, shouldNotifyEventReminder, type EventReminder } from "../domain/event-alerts";
+import { taskDeadlineItems } from "../domain/calendar";
 import { EVENT_KIND_LABELS } from "../domain/defaults";
+import {
+  getDueAllDayReminders,
+  getDueEventReminders,
+  shouldNotifyEventReminder,
+  type EventReminder,
+} from "../domain/event-alerts";
 import { escapeHtml } from "../domain/markdown";
+import type { CalendarEventKind } from "../domain/types";
 import { showTimerNotification } from "../platform/notifications";
 import { appStore } from "../state";
-import { getEventReminderMinutes } from "../storage/reminder-prefs";
+import { getAllDayReminderHour, getEventReminderMinutes } from "../storage/reminder-prefs";
 import { buttonAttrs } from "../ui/html";
 import { renderShadow } from "./shadow";
 
@@ -13,7 +20,7 @@ export class EventReminderToast extends HTMLElement {
   private unsubscribe: (() => void) | null = null;
   private intervalId: number | null = null;
   private dismissId: number | null = null;
-  private active: EventReminder | null = null;
+  private active: { title: string; body: string } | null = null;
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.tick());
@@ -32,25 +39,43 @@ export class EventReminderToast extends HTMLElement {
   }
 
   private tick(): void {
-    const leadMinutes = getEventReminderMinutes();
-    const due = getDueEventReminders(appStore.getWorkspace().events, Date.now(), leadMinutes);
+    const workspace = appStore.getWorkspace();
+    const now = Date.now();
 
-    for (const reminder of due) {
-      if (!shouldNotifyEventReminder(reminder.key)) {
-        continue;
+    const dueTimed = getDueEventReminders(workspace.events, now, getEventReminderMinutes());
+    for (const reminder of dueTimed) {
+      if (shouldNotifyEventReminder(reminder.key)) {
+        this.fire(`Скоро: ${reminder.event.title}`, reminderBody(reminder));
+        return;
       }
-
-      this.active = reminder;
-      void showTimerNotification({
-        title: `Скоро: ${reminder.event.title}`,
-        body: reminderBody(reminder),
-        tag: "prodnote-event",
-        url: calendarUrl(),
-      });
-      this.scheduleDismiss();
-      this.render();
-      return;
     }
+
+    const allDayItems = [
+      ...workspace.events
+        .filter((event) => event.allDay)
+        .map((event) => ({ id: event.id, title: event.title, kind: event.kind, startsAt: event.startsAt })),
+      ...taskDeadlineItems(workspace.tasks).map((item) => ({
+        id: item.id,
+        title: item.title,
+        kind: item.kind,
+        startsAt: item.startsAt,
+      })),
+    ];
+    const dueAllDay = getDueAllDayReminders(allDayItems, now, getAllDayReminderHour());
+    for (const reminder of dueAllDay) {
+      if (shouldNotifyEventReminder(reminder.key)) {
+        const kindLabel = EVENT_KIND_LABELS[reminder.kind as CalendarEventKind] ?? reminder.kind;
+        this.fire(reminder.title, `Сегодня · ${kindLabel}`);
+        return;
+      }
+    }
+  }
+
+  private fire(title: string, body: string): void {
+    this.active = { title, body };
+    void showTimerNotification({ title, body, tag: "prodnote-event", url: calendarUrl() });
+    this.scheduleDismiss();
+    this.render();
   }
 
   private scheduleDismiss(): void {
@@ -77,8 +102,8 @@ export class EventReminderToast extends HTMLElement {
           <div class="reminder-dot" aria-hidden="true"></div>
           <div class="reminder-body">
             <p class="eyebrow">Напоминание</p>
-            <strong>${escapeHtml(reminder.event.title)}</strong>
-            <p class="muted">${escapeHtml(reminderBody(reminder))}</p>
+            <strong>${escapeHtml(reminder.title)}</strong>
+            <p class="muted">${escapeHtml(reminder.body)}</p>
           </div>
           <div class="row-actions">
             <a class="button ghost small" href="#/calendar">Открыть</a>

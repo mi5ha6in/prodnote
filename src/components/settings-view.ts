@@ -3,7 +3,14 @@ import { escapeHtml } from "../domain/markdown";
 import { getTimerNotificationStatus, requestTimerNotificationPermission } from "../platform/notifications";
 import { appStore } from "../state";
 import { parseWorkspaceExport, stringifyExport, validateImportSnapshot } from "../storage/export";
-import { getEventReminderMinutes, REMINDER_OPTIONS, setEventReminderMinutes } from "../storage/reminder-prefs";
+import {
+  ALLDAY_REMINDER_OPTIONS,
+  getAllDayReminderHour,
+  getEventReminderMinutes,
+  REMINDER_OPTIONS,
+  setAllDayReminderHour,
+  setEventReminderMinutes,
+} from "../storage/reminder-prefs";
 import { getThemePreference, setThemePreference, type ThemePreference } from "../storage/theme";
 import {
   getSyncState,
@@ -103,6 +110,7 @@ export class SettingsView extends HTMLElement {
     const settings = workspace.settings;
     const notificationStatus = getTimerNotificationStatus();
     const reminderMinutes = getEventReminderMinutes();
+    const allDayHour = getAllDayReminderHour();
     const themePreference = getThemePreference();
     const syncState = getSyncState();
     const isSyncing = syncState.status === "syncing";
@@ -212,6 +220,17 @@ export class SettingsView extends HTMLElement {
               </select>`,
             })}
             <p class="muted">Напоминание срабатывает один раз перед началом события (только когда приложение открыто).</p>
+            ${fieldHtml({
+              label: "Напоминание о делах на весь день и дедлайнах",
+              control: `<select data-allday-hour>
+                ${ALLDAY_REMINDER_OPTIONS.map(
+                  (hour) =>
+                    `<option value="${hour}" ${hour === allDayHour ? "selected" : ""}>${
+                      hour < 0 ? "Выключено" : `Утром в ${hour}:00`
+                    }</option>`,
+                ).join("")}
+              </select>`,
+            })}
           </article>
 
           <form class="card form-grid" data-form="sync">
@@ -474,6 +493,12 @@ export class SettingsView extends HTMLElement {
     root.querySelector<HTMLSelectElement>("[data-reminder-minutes]")?.addEventListener("change", (event) => {
       if (event.currentTarget instanceof HTMLSelectElement) {
         setEventReminderMinutes(Number(event.currentTarget.value));
+      }
+    });
+
+    root.querySelector<HTMLSelectElement>("[data-allday-hour]")?.addEventListener("change", (event) => {
+      if (event.currentTarget instanceof HTMLSelectElement) {
+        setAllDayReminderHour(Number(event.currentTarget.value));
       }
     });
 
