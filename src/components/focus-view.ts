@@ -155,15 +155,17 @@ export class FocusView extends HTMLElement {
         .focus-stage {
           align-items: center;
           background:
-            radial-gradient(circle at 50% 42%, rgba(42, 157, 143, 0.24), transparent 18rem),
-            linear-gradient(135deg, rgba(20, 33, 61, 0.98), rgba(20, 33, 61, 0.84));
-          border-radius: 2rem;
+            radial-gradient(circle at 50% 50%, rgba(77, 164, 124, 0.16), transparent 17rem),
+            #15251c;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 1.25rem;
+          box-shadow: var(--shadow-raised);
           color: white;
           display: grid;
           justify-items: center;
-          min-height: 22rem;
+          min-height: 20rem;
           overflow: hidden;
-          padding: 2rem;
+          padding: clamp(1.5rem, 4vw, 2.5rem);
           position: relative;
           text-align: center;
         }
@@ -179,13 +181,12 @@ export class FocusView extends HTMLElement {
 
         .focus-orb {
           background:
-            radial-gradient(circle, rgba(225, 159, 68, 0.88) 0 18%, rgba(42, 157, 143, 0.34) 19% 52%, transparent 53%),
-            radial-gradient(circle, rgba(255, 255, 255, 0.18), transparent 55%);
+            radial-gradient(circle, rgba(95, 187, 139, 0.36) 0 24%, rgba(95, 187, 139, 0.12) 25% 52%, transparent 53%);
           border-radius: 999px;
-          height: min(54vw, 22rem);
-          opacity: 0.9;
+          height: min(48vw, 19rem);
+          opacity: 0.72;
           position: absolute;
-          width: min(54vw, 22rem);
+          width: min(48vw, 19rem);
         }
 
         .focus-panel {
@@ -197,16 +198,17 @@ export class FocusView extends HTMLElement {
         }
 
         .focus-panel h2 {
-          font-size: clamp(2rem, 5vw, 4.5rem);
-          line-height: 0.95;
-          max-width: 13ch;
+          font-size: clamp(1.5rem, 3.5vw, 2.7rem);
+          line-height: 1.05;
+          max-width: 22ch;
         }
 
         .focus-readout {
-          font-size: clamp(3rem, 12vw, 8rem);
-          font-weight: 950;
-          letter-spacing: -0.08em;
-          line-height: 0.9;
+          font-size: clamp(3.2rem, 10vw, 6.5rem);
+          font-variant-numeric: tabular-nums;
+          font-weight: 700;
+          letter-spacing: -0.065em;
+          line-height: 1;
         }
 
         .focus-controls {

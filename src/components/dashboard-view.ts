@@ -209,48 +209,58 @@ export class DashboardView extends HTMLElement {
       `,
       `
         .hero-card {
-          align-items: end;
+          align-items: center;
           background:
-            linear-gradient(135deg, rgba(20, 33, 61, 0.96), rgba(20, 33, 61, 0.78)),
-            radial-gradient(circle at 85% 20%, rgba(225, 159, 68, 0.42), transparent 16rem);
-          border-radius: 2rem;
-          color: white;
+            linear-gradient(110deg, rgba(228, 241, 233, 0.92), rgba(255, 255, 255, 0.94)),
+            var(--paper);
+          border: 1px solid #d8e5dc;
+          border-radius: 1rem;
+          box-shadow: var(--shadow);
           display: flex;
           gap: 1rem;
           justify-content: space-between;
           overflow: hidden;
-          padding: clamp(1.2rem, 4vw, 2.2rem);
+          padding: clamp(1.2rem, 3vw, 1.8rem);
+          position: relative;
         }
 
-        .hero-card .muted,
-        .hero-card .eyebrow {
-          color: rgba(255, 255, 255, 0.72);
+        .hero-card::after {
+          background: var(--accent);
+          border-radius: 999px;
+          content: "";
+          height: 7rem;
+          opacity: 0.08;
+          position: absolute;
+          right: 8rem;
+          top: -4.5rem;
+          width: 7rem;
         }
 
         .hero-card h2 {
-          font-size: clamp(2rem, 5vw, 4.4rem);
-          line-height: 0.95;
-          max-width: 12ch;
+          font-size: clamp(1.65rem, 3.4vw, 2.7rem);
+          line-height: 1.05;
+          margin-top: 0.3rem;
+          max-width: 24ch;
         }
 
         .hero-card p:last-child {
-          margin-top: 1rem;
-          max-width: 42rem;
+          margin-top: 0.65rem;
+          max-width: 38rem;
         }
 
         .day-strip {
           display: grid;
-          gap: 0.75rem;
+          gap: 0.55rem;
           grid-template-columns: repeat(auto-fit, minmax(5.2rem, 1fr));
         }
 
         .day-cell {
-          background: rgba(42, 157, 143, 0.12);
-          border: 1px solid rgba(42, 157, 143, 0.2);
-          border-radius: 1rem;
+          background: var(--surface);
+          border: 1px solid var(--line);
+          border-radius: 0.72rem;
           display: grid;
           gap: 0.25rem;
-          padding: 0.8rem;
+          padding: 0.7rem;
         }
 
         .day-cell span {

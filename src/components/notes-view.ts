@@ -260,9 +260,9 @@ export class NotesView extends HTMLElement {
         }
 
         .preview-panel {
-          background: rgba(255, 255, 255, 0.58);
+          background: var(--surface);
           border: 1px solid var(--line);
-          border-radius: 1.1rem;
+          border-radius: 0.78rem;
           min-width: 0;
           padding: 0.85rem;
         }
@@ -283,9 +283,9 @@ export class NotesView extends HTMLElement {
 
         .syntax-item {
           align-items: center;
-          background: rgba(255, 255, 255, 0.64);
+          background: var(--surface);
           border: 1px solid var(--line);
-          border-radius: 0.9rem;
+          border-radius: 0.7rem;
           display: flex;
           gap: 0.75rem;
           justify-content: space-between;
@@ -306,9 +306,9 @@ export class NotesView extends HTMLElement {
 
         .edit-history-row {
           align-items: center;
-          background: rgba(255, 255, 255, 0.64);
+          background: var(--surface);
           border: 1px solid var(--line);
-          border-radius: 0.9rem;
+          border-radius: 0.7rem;
           display: flex;
           gap: 0.75rem;
           justify-content: space-between;
@@ -320,10 +320,11 @@ export class NotesView extends HTMLElement {
         }
 
         .note-card {
-          background: rgba(255, 255, 255, 0.72);
+          background: var(--paper);
           border: 1px solid var(--line);
-          border-radius: 1.25rem;
+          border-radius: 0.9rem;
           break-inside: avoid;
+          box-shadow: var(--shadow);
           display: inline-grid;
           gap: 0.7rem;
           margin: 0 0 1rem;
@@ -333,7 +334,7 @@ export class NotesView extends HTMLElement {
 
         fieldset {
           border: 1px solid var(--line);
-          border-radius: 1rem;
+          border-radius: 0.72rem;
           display: flex;
           flex-wrap: wrap;
           gap: 0.5rem;
@@ -350,7 +351,7 @@ export class NotesView extends HTMLElement {
 
         .check-row {
           align-items: center;
-          background: rgba(255, 255, 255, 0.68);
+          background: var(--surface);
           border-radius: 999px;
           display: flex;
           gap: 0.4rem;

@@ -132,12 +132,12 @@ const timerStyles = `
   }
 
   .mini-timer {
-    background: rgba(255, 255, 255, 0.66);
+    background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 1.35rem;
+    border-radius: 0.8rem;
     display: grid;
     gap: 0.55rem;
-    padding: 0.9rem;
+    padding: 0.75rem;
   }
 
   .mini-timer a {
@@ -148,9 +148,10 @@ const timerStyles = `
 
   .timer-readout {
     display: block;
-    font-size: 2.25rem;
-    font-weight: 950;
-    letter-spacing: -0.06em;
+    font-size: 1.8rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 720;
+    letter-spacing: -0.05em;
     line-height: 1;
   }
 

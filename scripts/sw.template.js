@@ -1,7 +1,14 @@
 const BUILD_ID = "__PRODNOTE_BUILD_ID__";
 const CACHE_NAME = `prodnote-${BUILD_ID}`;
 const INDEX_URL = new URL("index.html", self.registration.scope).pathname;
-const APP_SHELL = ["", "index.html", "manifest.webmanifest", "icons/icon.svg"].map(
+const APP_SHELL = [
+  "",
+  "index.html",
+  "manifest.webmanifest",
+  "icons/icon.svg",
+  "icons/icon-192.png",
+  "icons/icon-512.png",
+].map(
   (path) => new URL(path, self.registration.scope).pathname,
 );
 
