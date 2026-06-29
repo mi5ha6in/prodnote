@@ -4,7 +4,8 @@ import { formatDuration } from "../domain/stats";
 import type { Task, TaskStatus } from "../domain/types";
 import { requestTimerNotificationPermission } from "../platform/notifications";
 import { appStore } from "../state";
-import { badgeHtml, buttonAttrs, emptyStateHtml, fieldHtml } from "../ui/html";
+import { badgeHtml, buttonAttrs, emptyStateHtml, fieldHtml, metricBarHtml, modalHtml, viewHeaderHtml } from "../ui/html";
+import { wireModal } from "./modal";
 import { renderShadow } from "./shadow";
 import {
   formatDate,
@@ -23,6 +24,7 @@ export class TasksView extends HTMLElement {
   private mode: "kanban" | "list" = "kanban";
   private openedTaskId: string | null = null;
   private detailsMode: "view" | "edit" = "view";
+  private creating = false;
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
@@ -46,91 +48,27 @@ export class TasksView extends HTMLElement {
       `
         <section class="view-grid">
           ${this.renderTaskDetails(totalMinutesByTask)}
+          ${this.creating ? this.renderCreateModal(workspace) : ""}
 
-          <div class="three-grid">
-            <article class="card">
-              <p class="eyebrow">Всего задач</p>
-              <span class="stat-number">${workspace.tasks.length}</span>
-              <p class="muted">Включая завершённые.</p>
-            </article>
-            <article class="card">
-              <p class="eyebrow">Активный поток</p>
-              <span class="stat-number">${activeTasks}</span>
-              <p class="muted">Задачи, требующие внимания.</p>
-            </article>
-            <article class="card">
-              <p class="eyebrow">Журнал задач</p>
-              <span class="stat-number">${workspace.tasks.reduce((sum, task) => sum + task.history.length, 0)}</span>
-              <p class="muted">Записи прогресса и решений.</p>
-            </article>
-          </div>
+          ${viewHeaderHtml({
+            actions: `
+              <div class="segmented" role="group" aria-label="Режим просмотра">
+                <button type="button" data-mode="kanban" aria-pressed="${this.mode === "kanban"}">Канбан</button>
+                <button type="button" data-mode="list" aria-pressed="${this.mode === "list"}">Список</button>
+              </div>
+              <button ${buttonAttrs({ data: { action: "open-create" } })}>+ Новая задача</button>
+            `,
+          })}
 
-          <div class="split-grid">
-            <form class="card form-grid" data-form="task">
-              <div>
-                <p class="eyebrow">Новая задача</p>
-                <h2>Зафиксировать работу</h2>
-              </div>
-              ${fieldHtml({
-                label: "Название",
-                control: `<input name="title" required placeholder="Например: написать конспект по архитектуре" />`,
-              })}
-              ${fieldHtml({
-                label: "Описание",
-                control: `<textarea name="description" placeholder="Контекст, критерии готовности, ссылки"></textarea>`,
-              })}
-              <div class="inline-grid">
-                ${fieldHtml({
-                  label: "Проект",
-                  control: `<select name="projectId">${renderProjectOptions(workspace.projects)}</select>`,
-                })}
-                ${fieldHtml({
-                  label: "Приоритет",
-                  control: `<select name="priority">
-                    <option value="medium">Средний</option>
-                    <option value="high">Высокий</option>
-                    <option value="low">Низкий</option>
-                  </select>`,
-                })}
-              </div>
-              ${fieldHtml({
-                label: "Дедлайн",
-                control: `<input name="dueDate" type="date" />`,
-              })}
-              <fieldset class="tag-fieldset">
-                <legend>Теги</legend>
-                ${
-                  workspace.tags.length
-                    ? workspace.tags
-                        .map(
-                          (tag) => `
-                            <label class="check-row">
-                              <input type="checkbox" name="tagIds" value="${escapeHtml(tag.id)}" />
-                              <span style="--tag-color: ${escapeHtml(tag.color)}">${escapeHtml(tag.name)}</span>
-                            </label>
-                          `,
-                        )
-                        .join("")
-                    : `<p class="muted">Теги можно добавить в настройках.</p>`
-                }
-              </fieldset>
-              <button ${buttonAttrs({ type: "submit" })}>Создать задачу</button>
-            </form>
-
-            <article class="card">
-              <div class="card-header">
-                <div>
-                  <p class="eyebrow">Режим просмотра</p>
-                  <h2>${this.mode === "kanban" ? "Канбан" : "Список"}</h2>
-                </div>
-                <div class="row-actions">
-                  <button ${buttonAttrs({ tone: "ghost", size: "small", data: { mode: "kanban" } })}>Канбан</button>
-                  <button ${buttonAttrs({ tone: "ghost", size: "small", data: { mode: "list" } })}>Список</button>
-                </div>
-              </div>
-              <p class="muted">Канбан удобен для статусов, список лучше подходит для просмотра дедлайнов и накопленного времени.</p>
-            </article>
-          </div>
+          ${metricBarHtml([
+            { label: "Всего задач", value: workspace.tasks.length, hint: "Включая завершённые" },
+            { label: "Активный поток", value: activeTasks, hint: "Требуют внимания" },
+            {
+              label: "Записей в журнале",
+              value: workspace.tasks.reduce((sum, task) => sum + task.history.length, 0),
+              hint: "Прогресс и решения",
+            },
+          ])}
 
           ${
             this.mode === "kanban"
@@ -142,21 +80,21 @@ export class TasksView extends HTMLElement {
       `
         .kanban {
           display: grid;
-          gap: 0.75rem;
+          gap: var(--space-3);
           grid-template-columns: repeat(4, minmax(15rem, 1fr));
           overflow-x: auto;
-          padding-bottom: 0.25rem;
+          padding-bottom: var(--space-1);
         }
 
         .kanban-column {
           align-content: start;
-          background: rgba(255, 255, 255, 0.52);
+          background: var(--surface);
           border: 1px solid var(--line);
-          border-radius: 0.9rem;
+          border-radius: var(--radius-lg);
           display: grid;
-          gap: 0.55rem;
+          gap: var(--space-2);
           min-width: 0;
-          padding: 0.6rem;
+          padding: var(--space-3);
         }
 
         .task-card {
@@ -165,80 +103,37 @@ export class TasksView extends HTMLElement {
         }
 
         .task-card:focus-visible {
-          box-shadow: 0 0 0 4px rgba(42, 157, 143, 0.2);
+          border-color: var(--accent);
+          box-shadow: 0 0 0 3px var(--accent-soft);
           outline: none;
         }
 
-        .task-modal {
-          background: transparent;
-          border: none;
-          margin: auto;
-          max-height: calc(100dvh - 2rem);
-          max-width: 64rem;
-          overflow: visible;
-          padding: 0;
-          width: min(64rem, 100%);
-        }
-
-        .task-modal::backdrop {
-          backdrop-filter: blur(2px);
-          background: rgba(15, 23, 42, 0.55);
-        }
-
-        .task-modal[open] {
-          animation: task-modal-in 160ms ease;
-        }
-
         .task-details {
-          border-radius: 1.1rem;
-          box-shadow: 0 24px 60px rgba(15, 23, 42, 0.35);
           display: grid;
-          max-height: calc(100dvh - 2rem);
-          overflow: auto;
-          padding: clamp(1rem, 3vw, 2rem);
-          width: 100%;
-        }
-
-        @keyframes task-modal-in {
-          from {
-            opacity: 0;
-            transform: translateY(8px);
-          }
-
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+          gap: var(--space-4);
         }
 
         .task-details-grid {
           display: grid;
-          gap: 1rem;
-          grid-template-columns: minmax(0, 1.1fr) minmax(20rem, 0.9fr);
+          gap: var(--space-4);
+          grid-template-columns: minmax(0, 1.1fr) minmax(18rem, 0.9fr);
           min-width: 0;
         }
 
         .task-details-main,
         .task-details-side {
           display: grid;
-          gap: 1rem;
+          gap: var(--space-4);
           min-width: 0;
-        }
-
-        .task-details .markdown-preview {
-          background: rgba(255, 255, 255, 0.58);
-          border: 1px solid var(--line);
-          border-radius: 1rem;
-          padding: 1rem;
         }
 
         .task-quick-actions {
           display: grid;
-          gap: 0.65rem;
+          gap: var(--space-3);
         }
 
         .task-card .card-header {
-          margin-bottom: 0.35rem;
+          margin-bottom: var(--space-2);
         }
 
         .task-card .card-header > div {
@@ -246,24 +141,23 @@ export class TasksView extends HTMLElement {
         }
 
         .task-card h3 {
-          font-size: 1.05rem;
-          line-height: 1.15;
+          font-size: var(--text-base);
+          line-height: 1.2;
         }
 
         .task-history {
           background: var(--surface);
-          border-radius: 0.72rem;
+          border-radius: var(--radius-md);
           min-width: 0;
-          padding: 0.7rem;
+          padding: var(--space-3);
         }
 
         .kanban .task-card {
           box-shadow: none;
-          padding: 0.72rem;
         }
 
         .kanban .task-card label {
-          margin-top: 0.25rem;
+          margin-top: var(--space-1);
         }
 
         .kanban .markdown-preview {
@@ -275,34 +169,35 @@ export class TasksView extends HTMLElement {
 
         .history-entry {
           border-top: 1px solid var(--line);
-          margin-top: 0.65rem;
-          padding-top: 0.65rem;
+          margin-top: var(--space-3);
+          padding-top: var(--space-3);
         }
 
         fieldset {
           border: 1px solid var(--line);
-          border-radius: 0.72rem;
+          border-radius: var(--radius-md);
           display: flex;
           flex-wrap: wrap;
-          gap: 0.5rem;
+          gap: var(--space-2);
           margin: 0;
-          padding: 0.75rem;
+          padding: var(--space-3);
         }
 
         legend {
           color: var(--muted);
-          font-size: 0.84rem;
-          font-weight: 900;
-          padding: 0 0.35rem;
+          font-size: var(--text-sm);
+          font-weight: 700;
+          padding: 0 var(--space-1);
         }
 
         .check-row {
           align-items: center;
           background: var(--surface);
-          border-radius: 999px;
+          border: 1px solid var(--line);
+          border-radius: var(--radius-pill);
           display: flex;
-          gap: 0.4rem;
-          padding: 0.35rem 0.55rem;
+          gap: var(--space-2);
+          padding: 0.3rem var(--space-3);
         }
 
         .check-row input {
@@ -311,7 +206,7 @@ export class TasksView extends HTMLElement {
 
         .check-row span {
           color: var(--ink);
-          font-weight: 800;
+          font-weight: 600;
         }
 
         @media (max-width: 1100px) {
@@ -346,7 +241,28 @@ export class TasksView extends HTMLElement {
         tagIds,
       });
       form.reset();
+      this.creating = false;
+      this.render();
     });
+
+    root.querySelector<HTMLButtonElement>('[data-action="open-create"]')?.addEventListener("click", () => {
+      this.creating = true;
+      this.render();
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="close-create"]')?.addEventListener("click", () => {
+      this.creating = false;
+      this.render();
+    });
+
+    if (this.creating) {
+      wireModal(root, {
+        onClose: () => {
+          this.creating = false;
+          this.render();
+        },
+      });
+    }
 
     root.querySelectorAll<HTMLButtonElement>("[data-mode]").forEach((button) => {
       button.addEventListener("click", () => {
@@ -515,6 +431,67 @@ export class TasksView extends HTMLElement {
 
   }
 
+  private renderCreateModal(workspace: ReturnType<typeof appStore.getWorkspace>): string {
+    return modalHtml({
+      label: "Новая задача",
+      body: `
+        <form class="form-grid" data-form="task">
+          <div class="card-header" style="margin-bottom: 0;">
+            <div>
+              <p class="eyebrow">Новая задача</p>
+              <h2>Зафиксировать работу</h2>
+            </div>
+            <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-create" } })}>Закрыть</button>
+          </div>
+          ${fieldHtml({
+            label: "Название",
+            control: `<input name="title" required placeholder="Например: написать конспект по архитектуре" />`,
+          })}
+          ${fieldHtml({
+            label: "Описание",
+            control: `<textarea name="description" placeholder="Контекст, критерии готовности, ссылки"></textarea>`,
+          })}
+          <div class="inline-grid">
+            ${fieldHtml({
+              label: "Проект",
+              control: `<select name="projectId">${renderProjectOptions(workspace.projects)}</select>`,
+            })}
+            ${fieldHtml({
+              label: "Приоритет",
+              control: `<select name="priority">
+                <option value="medium">Средний</option>
+                <option value="high">Высокий</option>
+                <option value="low">Низкий</option>
+              </select>`,
+            })}
+          </div>
+          ${fieldHtml({
+            label: "Дедлайн",
+            control: `<input name="dueDate" type="date" />`,
+          })}
+          <fieldset class="tag-fieldset">
+            <legend>Теги</legend>
+            ${
+              workspace.tags.length
+                ? workspace.tags
+                    .map(
+                      (tag) => `
+                        <label class="check-row">
+                          <input type="checkbox" name="tagIds" value="${escapeHtml(tag.id)}" />
+                          <span style="--tag-color: ${escapeHtml(tag.color)}">${escapeHtml(tag.name)}</span>
+                        </label>
+                      `,
+                    )
+                    .join("")
+                : `<p class="muted">Теги можно добавить в настройках.</p>`
+            }
+          </fieldset>
+          <button ${buttonAttrs({ type: "submit" })}>Создать задачу</button>
+        </form>
+      `,
+    });
+  }
+
   private renderTaskDetails(totalMinutesByTask: Map<string, number>): string {
     if (!this.openedTaskId) {
       return "";
@@ -534,7 +511,7 @@ export class TasksView extends HTMLElement {
         ? this.renderTaskEditor(task, workspace)
         : this.renderTaskView(task, workspace, totalMinutesByTask, hasActiveTimer);
 
-    return `<dialog class="task-modal" data-task-modal>${content}</dialog>`;
+    return `<dialog class="modal" data-task-modal>${content}</dialog>`;
   }
 
   private renderTaskView(

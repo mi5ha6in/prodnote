@@ -134,29 +134,30 @@ const timerStyles = `
   .mini-timer {
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 0.8rem;
+    border-radius: var(--radius-md);
     display: grid;
-    gap: 0.55rem;
-    padding: 0.75rem;
+    gap: var(--space-2);
+    padding: var(--space-3);
   }
 
   .mini-timer a {
     color: var(--accent-strong);
-    font-weight: 850;
+    font-weight: 600;
     text-decoration: none;
   }
 
   .timer-readout {
     display: block;
-    font-size: 1.8rem;
+    font-size: var(--text-xl);
     font-variant-numeric: tabular-nums;
-    font-weight: 720;
-    letter-spacing: -0.05em;
+    font-weight: 650;
+    letter-spacing: -0.03em;
     line-height: 1;
   }
 
   .phase-chip {
     color: var(--muted);
-    font-weight: 800;
+    font-size: var(--text-xs);
+    font-weight: 600;
   }
 `;

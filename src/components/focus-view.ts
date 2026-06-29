@@ -12,6 +12,7 @@ export class FocusView extends HTMLElement {
   private intervalId: number | null = null;
   private sessionNote = "";
   private historyText = "";
+  private historyOpen = false;
   private selectedTaskId: string | null = null;
   private focusHistoryAfterRender = false;
 
@@ -40,8 +41,7 @@ export class FocusView extends HTMLElement {
     const root = renderShadow(
       this,
       `
-        <section class="focus-stage ${active ? "running" : ""}">
-          <div class="focus-orb" aria-hidden="true"></div>
+        <section class="focus-stage">
           <div class="focus-panel">
             <p class="eyebrow">${active ? getFocusEyebrow(active) : "Готов к работе"}</p>
             <h2>${contextTask ? escapeHtml(contextTask.title) : "Выберите задачу и запустите сессию"}</h2>
@@ -54,69 +54,49 @@ export class FocusView extends HTMLElement {
           </div>
         </section>
 
-        <section class="split-grid focus-controls">
-          ${
-            active
-              ? `
-                <article class="card form-grid">
-                  <div>
-                    <p class="eyebrow">Активная сессия</p>
-                    <h2>${active.mode === "pomodoro" ? "Помодоро" : "Таймер"}</h2>
-                  </div>
-                  <label>
-                    Заметка к сессии
-                    <textarea name="sessionNote" data-session-note placeholder="Что сделано за эту сессию">${escapeHtml(this.sessionNote)}</textarea>
-                  </label>
-                  <div class="row-actions">
-                    <button type="button" class="ghost" data-action="toggle-pause">${active.pausedAt ? "Продолжить" : "Пауза"}</button>
-                    ${
-                      active.mode === "pomodoro"
-                        ? `<button type="button" class="secondary" data-action="complete-phase" ${active.pausedAt ? "disabled" : ""}>Завершить фазу</button>`
-                        : `<button type="button" class="secondary" data-action="stop">Остановить и сохранить</button>`
-                    }
-                    <button type="button" class="ghost" data-action="cancel">Отменить без записи</button>
-                  </div>
-                </article>
-              `
-              : `
-                <form class="card form-grid" data-form="start">
-                  <div>
-                    <p class="eyebrow">Старт</p>
-                    <h2>Новая сессия</h2>
-                  </div>
-                  <label>
-                    Задача
-                    <select name="taskId" required ${canStart ? "" : "disabled"}>
-                      ${renderTaskOptions(focusableTasks, startTaskId)}
-                    </select>
-                  </label>
-                  <div class="row-actions">
-                    <button type="submit" name="mode" value="timer" ${canStart ? "" : "disabled"}>Запустить таймер</button>
-                    <button type="submit" class="secondary" name="mode" value="pomodoro" ${canStart ? "" : "disabled"}>Помодоро</button>
-                  </div>
-                  ${canStart ? "" : `<p class="muted">Сначала создайте незавершённую задачу.</p>`}
-                </form>
-              `
-          }
-
-          <form class="card form-grid" data-form="history">
-            <div>
-              <p class="eyebrow">История задачи</p>
-              <h2>Конспект работы</h2>
-            </div>
-            <label>
-              Задача
-              <select name="taskId" required ${workspace.tasks.length ? "" : "disabled"}>
-                ${renderTaskOptions(workspace.tasks, contextTaskId)}
-              </select>
-            </label>
-            <label>
-              Запись
-              <textarea name="history" placeholder="Что сделал, какие выводы появились, что проверить дальше">${escapeHtml(this.historyText)}</textarea>
-            </label>
-            <button type="submit" class="ghost" ${workspace.tasks.length ? "" : "disabled"}>Добавить в историю</button>
-          </form>
-        </section>
+        ${
+          active
+            ? `
+              <article class="card form-grid">
+                <div>
+                  <p class="eyebrow">Активная сессия</p>
+                  <h2>${active.mode === "pomodoro" ? "Помодоро" : "Таймер"}</h2>
+                </div>
+                <label>
+                  Заметка к сессии
+                  <textarea name="sessionNote" data-session-note placeholder="Что сделано за эту сессию">${escapeHtml(this.sessionNote)}</textarea>
+                </label>
+                <div class="row-actions">
+                  <button type="button" class="ghost" data-action="toggle-pause">${active.pausedAt ? "Продолжить" : "Пауза"}</button>
+                  ${
+                    active.mode === "pomodoro"
+                      ? `<button type="button" class="secondary" data-action="complete-phase" ${active.pausedAt ? "disabled" : ""}>Завершить фазу</button>`
+                      : `<button type="button" class="secondary" data-action="stop">Остановить и сохранить</button>`
+                  }
+                  <button type="button" class="ghost" data-action="cancel">Отменить без записи</button>
+                </div>
+              </article>
+            `
+            : `
+              <form class="card form-grid" data-form="start">
+                <div>
+                  <p class="eyebrow">Старт</p>
+                  <h2>Новая сессия</h2>
+                </div>
+                <label>
+                  Задача
+                  <select name="taskId" required ${canStart ? "" : "disabled"}>
+                    ${renderTaskOptions(focusableTasks, startTaskId)}
+                  </select>
+                </label>
+                <div class="row-actions">
+                  <button type="submit" name="mode" value="timer" ${canStart ? "" : "disabled"}>Запустить таймер</button>
+                  <button type="submit" class="secondary" name="mode" value="pomodoro" ${canStart ? "" : "disabled"}>Помодоро</button>
+                </div>
+                ${canStart ? "" : `<p class="muted">Сначала создайте незавершённую задачу.</p>`}
+              </form>
+            `
+        }
 
         ${
           contextTask
@@ -127,8 +107,24 @@ export class FocusView extends HTMLElement {
                     <p class="eyebrow">Контекст</p>
                     <h2>${escapeHtml(contextTask.title)}</h2>
                   </div>
+                  <button type="button" class="ghost small" data-action="toggle-history">${this.historyOpen ? "Отмена" : "+ Запись"}</button>
                 </div>
                 ${contextTask.description ? `<div class="markdown-preview">${renderMarkdown(contextTask.description)}</div>` : `<p class="muted">У задачи пока нет описания.</p>`}
+                ${
+                  this.historyOpen
+                    ? `
+                      <form class="form-grid history-form" data-form="history">
+                        <label>
+                          Запись в историю задачи
+                          <textarea name="history" placeholder="Что сделал, какие выводы появились, что проверить дальше">${escapeHtml(this.historyText)}</textarea>
+                        </label>
+                        <div class="row-actions">
+                          <button type="submit" class="ghost">Добавить в историю</button>
+                        </div>
+                      </form>
+                    `
+                    : ""
+                }
                 <div class="item-list history-list">
                   ${
                     contextTask.history.length
@@ -154,79 +150,43 @@ export class FocusView extends HTMLElement {
       `
         .focus-stage {
           align-items: center;
-          background:
-            radial-gradient(circle at 50% 50%, rgba(77, 164, 124, 0.16), transparent 17rem),
-            #15251c;
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 1.25rem;
-          box-shadow: var(--shadow-raised);
-          color: white;
+          background: var(--paper);
+          border: 1px solid var(--line);
+          border-radius: var(--radius-lg);
+          box-shadow: var(--shadow-sm);
           display: grid;
           justify-items: center;
-          min-height: 20rem;
-          overflow: hidden;
-          padding: clamp(1.5rem, 4vw, 2.5rem);
-          position: relative;
+          min-height: 16rem;
+          padding: var(--space-6);
           text-align: center;
-        }
-
-        .focus-stage .muted,
-        .focus-stage .eyebrow {
-          color: rgba(255, 255, 255, 0.72);
-        }
-
-        .focus-stage.running .focus-orb {
-          animation: breathe 4s ease-in-out infinite;
-        }
-
-        .focus-orb {
-          background:
-            radial-gradient(circle, rgba(95, 187, 139, 0.36) 0 24%, rgba(95, 187, 139, 0.12) 25% 52%, transparent 53%);
-          border-radius: 999px;
-          height: min(48vw, 19rem);
-          opacity: 0.72;
-          position: absolute;
-          width: min(48vw, 19rem);
         }
 
         .focus-panel {
           display: grid;
-          gap: 0.75rem;
+          gap: var(--space-3);
           justify-items: center;
-          position: relative;
-          z-index: 1;
         }
 
         .focus-panel h2 {
-          font-size: clamp(1.5rem, 3.5vw, 2.7rem);
-          line-height: 1.05;
+          font-size: var(--text-xl);
+          line-height: 1.2;
           max-width: 22ch;
         }
 
         .focus-readout {
-          font-size: clamp(3.2rem, 10vw, 6.5rem);
+          font-size: clamp(3rem, 9vw, 5.5rem);
           font-variant-numeric: tabular-nums;
-          font-weight: 700;
-          letter-spacing: -0.065em;
+          font-weight: 650;
+          letter-spacing: -0.04em;
           line-height: 1;
         }
 
-        .focus-controls {
-          margin-top: 1rem;
+        .history-form {
+          margin-top: var(--space-2);
         }
 
         .history-list {
-          margin-top: 1rem;
-        }
-
-        @keyframes breathe {
-          0%,
-          100% {
-            transform: scale(0.92);
-          }
-          50% {
-            transform: scale(1.08);
-          }
+          margin-top: var(--space-4);
         }
       `,
     );
@@ -265,6 +225,7 @@ export class FocusView extends HTMLElement {
     root.querySelector<HTMLButtonElement>('[data-action="stop"]')?.addEventListener("click", () => {
       const current = appStore.getActiveTimer();
       this.selectedTaskId = current?.taskId ?? this.selectedTaskId;
+      this.historyOpen = true;
       this.focusHistoryAfterRender = true;
       void appStore.stopTimer(this.sessionNote);
       this.sessionNote = "";
@@ -282,6 +243,7 @@ export class FocusView extends HTMLElement {
     root.querySelector<HTMLButtonElement>('[data-action="complete-phase"]')?.addEventListener("click", () => {
       const current = appStore.getActiveTimer();
       this.selectedTaskId = current?.taskId ?? this.selectedTaskId;
+      this.historyOpen = true;
       this.focusHistoryAfterRender = true;
       void appStore.completePomodoroPhase(this.sessionNote);
       this.sessionNote = "";
@@ -294,12 +256,12 @@ export class FocusView extends HTMLElement {
       this.sessionNote = "";
     });
 
-    root.querySelector<HTMLSelectElement>('[data-form="history"] select[name="taskId"]')?.addEventListener("change", (event) => {
-      const target = event.currentTarget;
-      if (target instanceof HTMLSelectElement) {
-        this.selectedTaskId = target.value || null;
-        this.render();
+    root.querySelector<HTMLButtonElement>('[data-action="toggle-history"]')?.addEventListener("click", () => {
+      this.historyOpen = !this.historyOpen;
+      if (!this.historyOpen) {
+        this.historyText = "";
       }
+      this.render();
     });
 
     root.querySelector<HTMLTextAreaElement>('textarea[name="history"]')?.addEventListener("input", (event) => {
@@ -312,13 +274,15 @@ export class FocusView extends HTMLElement {
     root.querySelector<HTMLFormElement>('[data-form="history"]')?.addEventListener("submit", (event) => {
       event.preventDefault();
       const form = event.currentTarget;
-      if (!(form instanceof HTMLFormElement)) {
+      if (!(form instanceof HTMLFormElement) || !contextTaskId) {
         return;
       }
 
-      void appStore.addTaskHistory(requireSelect(form, "taskId").value, requireTextArea(form, "history").value, "progress");
+      void appStore.addTaskHistory(contextTaskId, requireTextArea(form, "history").value, "progress");
       this.historyText = "";
+      this.historyOpen = false;
       form.reset();
+      this.render();
     });
   }
 

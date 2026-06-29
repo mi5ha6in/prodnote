@@ -96,9 +96,7 @@ export class AppRoot extends HTMLElement {
         }
 
         .app-shell {
-          background:
-            radial-gradient(circle at 88% 0%, rgba(47, 125, 92, 0.08), transparent 28rem),
-            #f3f6f3;
+          background: var(--bg);
           display: grid;
           grid-template-columns: 15.5rem minmax(0, 1fr);
           min-height: 100vh;
@@ -110,12 +108,12 @@ export class AppRoot extends HTMLElement {
         }
 
         .sidebar {
-          background: rgba(255, 255, 255, 0.92);
+          background: var(--paper);
           border-right: 1px solid var(--line);
           display: flex;
           flex-direction: column;
-          gap: 1.4rem;
-          padding: 1rem 0.8rem;
+          gap: var(--space-5);
+          padding: var(--space-4) var(--space-3);
           position: sticky;
           top: 0;
           height: 100vh;
@@ -124,15 +122,15 @@ export class AppRoot extends HTMLElement {
         .brand {
           align-items: center;
           display: flex;
-          gap: 0.7rem;
-          padding: 0.35rem 0.45rem;
+          gap: var(--space-3);
+          padding: var(--space-2);
           text-decoration: none;
         }
 
         .brand-mark {
-          border-radius: 0.72rem;
-          height: 2.45rem;
-          width: 2.45rem;
+          border-radius: var(--radius-md);
+          height: 2.25rem;
+          width: 2.25rem;
         }
 
         .brand strong,
@@ -140,35 +138,44 @@ export class AppRoot extends HTMLElement {
           display: block;
         }
 
+        .brand strong {
+          font-size: var(--text-base);
+          font-weight: 650;
+        }
+
         .brand small {
           color: var(--muted);
-          font-size: 0.7rem;
+          font-size: var(--text-xs);
         }
 
         .nav-list {
           display: grid;
-          gap: 0.2rem;
+          gap: 0.15rem;
         }
 
         .nav-item {
           align-items: center;
-          border-radius: 0.68rem;
+          border-radius: var(--radius-md);
           color: var(--muted);
           display: flex;
-          font-size: 0.85rem;
-          font-weight: 650;
-          gap: 0.65rem;
-          padding: 0.62rem 0.7rem;
+          font-size: var(--text-sm);
+          font-weight: 600;
+          gap: var(--space-3);
+          padding: var(--space-2) var(--space-3);
           text-decoration: none;
           transition:
             background 140ms ease,
             color 140ms ease;
         }
 
-        .nav-item.active,
         .nav-item:hover {
-          background: var(--accent-soft);
+          background: var(--surface);
           color: var(--ink);
+        }
+
+        .nav-item.active {
+          background: var(--accent-soft);
+          color: var(--accent-strong);
         }
 
         .nav-icon {
@@ -187,10 +194,6 @@ export class AppRoot extends HTMLElement {
           width: 1.05rem;
         }
 
-        .nav-item.active .nav-icon {
-          color: var(--accent-strong);
-        }
-
         .content-shell {
           display: grid;
           grid-template-rows: auto 1fr;
@@ -199,47 +202,53 @@ export class AppRoot extends HTMLElement {
 
         .topbar {
           align-items: center;
+          border-bottom: 1px solid var(--line);
           display: flex;
-          gap: 1rem;
+          gap: var(--space-4);
           justify-content: space-between;
-          padding: 1.35rem clamp(1rem, 3vw, 2rem) 0.8rem;
+          padding: var(--space-5) clamp(var(--space-4), 3vw, var(--space-6)) var(--space-4);
         }
 
         .topbar h1 {
-          font-size: clamp(1.65rem, 3vw, 2.2rem);
-          font-weight: 730;
-          letter-spacing: -0.055em;
-          line-height: 1.1;
+          font-size: var(--text-xl);
+          font-weight: 650;
+          letter-spacing: -0.02em;
+          line-height: 1.2;
         }
 
         .topbar p {
           color: var(--muted);
-          font-size: 0.78rem;
-          margin-top: 0.18rem;
+          font-size: var(--text-sm);
+          margin-top: 0.15rem;
         }
 
         .focus-link {
           align-items: center;
           background: var(--accent);
-          border-radius: 0.72rem;
+          border-radius: var(--radius-md);
           color: white;
           display: flex;
-          font-size: 0.82rem;
-          font-weight: 700;
-          gap: 0.45rem;
-          padding: 0.68rem 0.85rem;
+          font-size: var(--text-sm);
+          font-weight: 600;
+          gap: var(--space-2);
+          min-height: 2.5rem;
+          padding: 0 var(--space-4);
           text-decoration: none;
           white-space: nowrap;
         }
 
+        .focus-link:hover {
+          background: var(--accent-strong);
+        }
+
         .view-host {
           min-width: 0;
-          padding: 0.8rem clamp(1rem, 3vw, 2rem) 2rem;
+          padding: var(--space-5) clamp(var(--space-4), 3vw, var(--space-6)) var(--space-6);
         }
 
         .view-host > * {
           margin: 0 auto;
-          max-width: 96rem;
+          max-width: 80rem;
         }
 
         @media (max-width: 920px) {
@@ -249,8 +258,7 @@ export class AppRoot extends HTMLElement {
           }
 
           .sidebar {
-            background: rgba(255, 255, 255, 0.94);
-            backdrop-filter: blur(20px);
+            background: var(--paper);
             border-right: 0;
             border-top: 1px solid var(--line);
             bottom: 0;
@@ -258,7 +266,7 @@ export class AppRoot extends HTMLElement {
             height: auto;
             left: 0;
             overflow-x: auto;
-            padding: 0.45rem;
+            padding: var(--space-2);
             position: fixed;
             right: 0;
             top: auto;
@@ -279,25 +287,17 @@ export class AppRoot extends HTMLElement {
 
           .nav-item {
             display: grid;
-            font-size: 0.66rem;
+            font-size: var(--text-xs);
             gap: 0.15rem;
             justify-content: center;
             justify-items: center;
             min-width: 4.65rem;
-            padding: 0.45rem 0.5rem;
+            padding: var(--space-2);
           }
 
           .nav-icon svg {
             height: 1.15rem;
             width: 1.15rem;
-          }
-
-          .topbar {
-            padding-top: 1rem;
-          }
-
-          .focus-link span {
-            display: none;
           }
         }
 
@@ -312,10 +312,6 @@ export class AppRoot extends HTMLElement {
 
           .nav-label {
             display: none;
-          }
-
-          .topbar h1 {
-            font-size: 1.5rem;
           }
         }
       `,
