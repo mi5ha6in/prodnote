@@ -15,6 +15,35 @@ describe("workspace migrations", () => {
     );
   });
 
+  it("converts legacy plans into events and clears plans (idempotently)", () => {
+    const workspace = createStarterWorkspace();
+    const plan = {
+      id: "plan_1",
+      taskId: "task_1",
+      title: "Focus slot",
+      startsAt: "2026-06-01T10:00:00.000Z",
+      endsAt: "2026-06-01T11:00:00.000Z",
+      kind: "focus" as const,
+      createdAt: "2026-05-30T08:00:00.000Z",
+    };
+
+    const migrated = migrateWorkspace({ ...workspace, schemaVersion: 6, plans: [plan] });
+
+    expect(migrated.plans).toHaveLength(0);
+    expect(migrated.events).toHaveLength(1);
+    expect(migrated.events[0]).toMatchObject({
+      id: "evt_plan_plan_1",
+      taskId: "task_1",
+      title: "Focus slot",
+      kind: "focus",
+      allDay: false,
+    });
+
+    // Re-running with the same plan still present must not duplicate the event.
+    const again = migrateWorkspace({ ...workspace, schemaVersion: 6, plans: [plan], events: migrated.events });
+    expect(again.events).toHaveLength(1);
+  });
+
   it("caps legacy overdue pomodoro sessions to configured focus duration", () => {
     const workspace = createStarterWorkspace();
     const cycle = {

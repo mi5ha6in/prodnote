@@ -1,4 +1,4 @@
-import type { CalendarEvent, CalendarPlan, EntityId } from "./types";
+import type { CalendarEvent, EntityId } from "./types";
 
 export type CalendarItemSource = "event" | "plan";
 
@@ -54,23 +54,8 @@ export function eventToItem(event: CalendarEvent): CalendarItem {
   };
 }
 
-export function planToItem(plan: CalendarPlan): CalendarItem {
-  return {
-    id: plan.id,
-    source: "plan",
-    title: plan.title,
-    startsAt: plan.startsAt,
-    endsAt: plan.endsAt,
-    allDay: false,
-    kind: plan.kind,
-    taskId: plan.taskId,
-  };
-}
-
-export function toCalendarItems(events: CalendarEvent[], plans: CalendarPlan[]): CalendarItem[] {
-  return [...events.map(eventToItem), ...plans.map(planToItem)].sort(
-    (a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt),
-  );
+export function toCalendarItems(events: CalendarEvent[]): CalendarItem[] {
+  return events.map(eventToItem).sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
 }
 
 export function dayKey(date: Date): string {
