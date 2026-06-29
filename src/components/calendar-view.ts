@@ -283,7 +283,9 @@ export class CalendarView extends HTMLElement {
     const labels = weekdayLabels(workspace.settings.weekStartsOn);
     const allDayItems = items.filter((item) => item.allDay || isMultiDay(item));
     const timed = items.filter((item) => !item.allDay && !isMultiDay(item));
-    const allDayLanes = layoutWeekSegments(days, allDayItems).slice(0, MONTH_LANE_CAP);
+    const allDayLanesAll = layoutWeekSegments(days, allDayItems);
+    const allDayLanes = allDayLanesAll.slice(0, MONTH_LANE_CAP);
+    const allDayOverflow = days.map((_, col) => overflowForColumn(allDayLanesAll, col, MONTH_LANE_CAP));
     const hours = Array.from({ length: 24 }, (_, hour) => hour);
     const rangeLabel = `${formatDate(days[0].date.toISOString())} – ${formatDate(days[6].date.toISOString())}`;
 
@@ -334,6 +336,13 @@ export class CalendarView extends HTMLElement {
                     )
                     .join("")}
                 </div>
+                ${
+                  allDayOverflow.some((count) => count > 0)
+                    ? `<div class="week-allday-more">
+                        ${allDayOverflow.map((count) => `<span>${count > 0 ? `+${count}` : ""}</span>`).join("")}
+                      </div>`
+                    : ""
+                }
               </div>`
             : ""
         }
@@ -346,7 +355,7 @@ export class CalendarView extends HTMLElement {
             .map((day) => {
               const dayEvents = timed.filter((item) => dayKey(new Date(item.startsAt)) === day.dateKey);
               return `
-                <div class="week-col ${day.isToday ? "is-today" : ""}" data-new-event-date="${day.dateKey}">
+                <div class="week-col ${day.isToday ? "is-today" : ""}" data-week-col="${day.dateKey}">
                   ${hours.map(() => `<div class="week-hour-line"></div>`).join("")}
                   ${dayEvents.map((item) => this.renderWeekEvent(item, workspace)).join("")}
                 </div>
@@ -576,6 +585,22 @@ export class CalendarView extends HTMLElement {
         if (date) {
           this.openEventModal(null, `${date}T09:00:00`);
         }
+      });
+    });
+
+    root.querySelectorAll<HTMLElement>("[data-week-col]").forEach((column) => {
+      column.addEventListener("click", (event) => {
+        if (event.target instanceof Element && event.target.closest("button")) {
+          return;
+        }
+        const date = column.dataset.weekCol;
+        if (!date) {
+          return;
+        }
+        const rect = column.getBoundingClientRect();
+        const fraction = rect.height > 0 ? (event.clientY - rect.top) / rect.height : 0;
+        const hour = Math.max(0, Math.min(23, Math.floor(fraction * 24)));
+        this.openEventModal(null, `${date}T${hour.toString().padStart(2, "0")}:00:00`);
       });
     });
 
@@ -968,6 +993,18 @@ export class CalendarView extends HTMLElement {
         grid-column: 2 / -1;
         grid-template-columns: repeat(7, minmax(0, 1fr));
         padding: var(--space-1) 0;
+      }
+
+      .week-allday-more {
+        display: grid;
+        grid-column: 2 / -1;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+      }
+
+      .week-allday-more span {
+        color: var(--muted);
+        font-size: var(--text-xs);
+        padding-left: 0.2rem;
       }
 
       .week-grid {
