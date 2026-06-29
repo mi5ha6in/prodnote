@@ -111,6 +111,16 @@ export async function runMigrations(): Promise<void> {
       primary key (workspace_id, task_id, entity_id)
     );
 
+    create table if not exists task_subtasks (
+      workspace_id uuid not null,
+      task_id text not null,
+      entity_id text not null,
+      title text not null,
+      done boolean not null default false,
+      position integer not null default 0,
+      primary key (workspace_id, task_id, entity_id)
+    );
+
     create table if not exists notes (
       workspace_id uuid not null references workspaces(id) on delete cascade,
       entity_id text not null,

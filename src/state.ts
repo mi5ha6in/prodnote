@@ -319,6 +319,45 @@ export class ProdNoteStore {
     });
   }
 
+  async addSubtask(taskId: EntityId, title: string): Promise<void> {
+    const trimmed = title.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    await this.commit((workspace) => {
+      const task = workspace.tasks.find((item) => item.id === taskId);
+      if (!task) {
+        return;
+      }
+      task.subtasks.push({ id: createId("subtask"), title: trimmed, done: false });
+      task.updatedAt = nowIso();
+    });
+  }
+
+  async toggleSubtask(taskId: EntityId, subtaskId: EntityId): Promise<void> {
+    await this.commit((workspace) => {
+      const subtask = workspace.tasks.find((item) => item.id === taskId)?.subtasks.find((sub) => sub.id === subtaskId);
+      if (subtask) {
+        subtask.done = !subtask.done;
+        const task = workspace.tasks.find((item) => item.id === taskId);
+        if (task) {
+          task.updatedAt = nowIso();
+        }
+      }
+    });
+  }
+
+  async deleteSubtask(taskId: EntityId, subtaskId: EntityId): Promise<void> {
+    await this.commit((workspace) => {
+      const task = workspace.tasks.find((item) => item.id === taskId);
+      if (task) {
+        task.subtasks = task.subtasks.filter((sub) => sub.id !== subtaskId);
+        task.updatedAt = nowIso();
+      }
+    });
+  }
+
   async addTaskHistory(taskId: EntityId, markdown: string, kind: TaskHistoryEntry["kind"]): Promise<void> {
     const entry: TaskHistoryEntry = {
       id: createId("history"),

@@ -125,6 +125,7 @@ export function createTask(input: {
     dueDate: input.dueDate ?? null,
     plannedAt: null,
     estimateMinutes: null,
+    subtasks: [],
     history: [],
     createdAt,
     updatedAt: createdAt,

@@ -222,6 +222,54 @@ export class TasksView extends HTMLElement {
           font-weight: 600;
         }
 
+        .subtask-list {
+          display: grid;
+          gap: var(--space-1);
+          margin-bottom: var(--space-2);
+        }
+
+        .subtask-row {
+          align-items: center;
+          display: flex;
+          gap: var(--space-2);
+          justify-content: space-between;
+        }
+
+        .subtask-check {
+          align-items: center;
+          color: var(--ink);
+          display: flex;
+          flex-direction: row;
+          font-weight: 500;
+          gap: var(--space-2);
+        }
+
+        .subtask-check input {
+          width: auto;
+        }
+
+        .subtask-row.is-done .subtask-check span {
+          color: var(--muted);
+          text-decoration: line-through;
+        }
+
+        .subtask-add {
+          display: flex;
+          gap: var(--space-2);
+        }
+
+        .subtask-progress {
+          align-items: center;
+          display: grid;
+          gap: var(--space-2);
+          grid-template-columns: minmax(0, 1fr) auto;
+        }
+
+        .subtask-progress .muted {
+          font-size: var(--text-xs);
+          font-variant-numeric: tabular-nums;
+        }
+
         @media (max-width: 1100px) {
           .kanban {
             grid-template-columns: repeat(4, 15rem);
@@ -457,6 +505,39 @@ export class TasksView extends HTMLElement {
       });
     });
 
+    root.querySelector<HTMLFormElement>("[data-subtask-form]")?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!(form instanceof HTMLFormElement)) {
+        return;
+      }
+      const taskId = form.dataset.taskId;
+      const input = requireInput(form, "title");
+      if (taskId && input.value.trim()) {
+        void appStore.addSubtask(taskId, input.value);
+        input.value = "";
+      }
+    });
+
+    root.querySelectorAll<HTMLInputElement>("[data-subtask-toggle]").forEach((checkbox) => {
+      checkbox.addEventListener("change", () => {
+        const { taskId, subtaskId } = checkbox.dataset;
+        if (taskId && subtaskId) {
+          void appStore.toggleSubtask(taskId, subtaskId);
+        }
+      });
+    });
+
+    root.querySelectorAll<HTMLButtonElement>("[data-subtask-delete]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const taskId = button.dataset.taskId;
+        const subtaskId = button.dataset.subtaskDelete;
+        if (taskId && subtaskId) {
+          void appStore.deleteSubtask(taskId, subtaskId);
+        }
+      });
+    });
+
     root.querySelectorAll<HTMLFormElement>("[data-history-form]").forEach((form) => {
       form.addEventListener("submit", (event) => {
         event.preventDefault();
@@ -593,6 +674,21 @@ export class TasksView extends HTMLElement {
                   ? `<div class="markdown-preview">${renderMarkdown(task.description)}</div>`
                   : emptyStateHtml("У задачи пока нет описания.")
               }
+            </article>
+
+            <article class="card subtle">
+              <div class="card-header">
+                <div>
+                  <p class="eyebrow">Чеклист</p>
+                  <h3>Подзадачи</h3>
+                </div>
+                ${task.subtasks.length ? badgeHtml(`${task.subtasks.filter((sub) => sub.done).length}/${task.subtasks.length}`) : ""}
+              </div>
+              ${this.renderSubtasks(task)}
+              <form class="subtask-add" data-subtask-form data-task-id="${escapeHtml(task.id)}">
+                <input name="title" placeholder="Новая подзадача" aria-label="Новая подзадача" />
+                <button ${buttonAttrs({ type: "submit", tone: "ghost", size: "small" })}>Добавить</button>
+              </form>
             </article>
 
             <form class="card subtle form-grid" data-history-form data-task-id="${escapeHtml(task.id)}">
@@ -815,6 +911,30 @@ export class TasksView extends HTMLElement {
     `;
   }
 
+  private renderSubtasks(task: Task): string {
+    if (!task.subtasks.length) {
+      return `<p class="muted">Разбейте задачу на шаги.</p>`;
+    }
+
+    return `
+      <div class="subtask-list">
+        ${task.subtasks
+          .map(
+            (sub) => `
+              <div class="subtask-row ${sub.done ? "is-done" : ""}">
+                <label class="subtask-check">
+                  <input type="checkbox" data-subtask-toggle data-task-id="${escapeHtml(task.id)}" data-subtask-id="${escapeHtml(sub.id)}" ${sub.done ? "checked" : ""} />
+                  <span>${escapeHtml(sub.title)}</span>
+                </label>
+                <button ${buttonAttrs({ tone: "ghost", size: "small", data: { subtaskDelete: sub.id, taskId: task.id } })} aria-label="Удалить подзадачу">✕</button>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
+    `;
+  }
+
   private renderTaskCard(task: Task, totalMinutesByTask: Map<string, number>, variant: "kanban" | "list"): string {
     const workspace = appStore.getWorkspace();
     const recentHistory = task.history.slice(0, 2);
@@ -835,6 +955,14 @@ export class TasksView extends HTMLElement {
           </div>
         </div>
         ${task.description ? `<div class="markdown-preview">${renderMarkdown(task.description)}</div>` : ""}
+        ${
+          task.subtasks.length
+            ? `<div class="subtask-progress">
+                <div class="bar"><span style="width: ${Math.round((task.subtasks.filter((sub) => sub.done).length / task.subtasks.length) * 100)}%"></span></div>
+                <span class="muted">${task.subtasks.filter((sub) => sub.done).length}/${task.subtasks.length}</span>
+              </div>`
+            : ""
+        }
         <div class="meta-row">${renderTagPills(workspace.tags, task.tagIds)}</div>
         ${fieldHtml({
           label: "Статус",

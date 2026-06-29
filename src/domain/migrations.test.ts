@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createStarterWorkspace } from "./defaults";
+import { createStarterWorkspace, createTask } from "./defaults";
 import { migrateWorkspace } from "./migrations";
 import { SCHEMA_VERSION } from "./types";
 
@@ -42,6 +42,13 @@ describe("workspace migrations", () => {
     // Re-running with the same plan still present must not duplicate the event.
     const again = migrateWorkspace({ ...workspace, schemaVersion: 6, plans: [plan], events: migrated.events });
     expect(again.events).toHaveLength(1);
+  });
+
+  it("defaults missing subtasks on legacy tasks", () => {
+    const workspace = createStarterWorkspace();
+    const { subtasks: _omit, ...legacyTask } = createTask({ title: "Legacy" });
+    const migrated = migrateWorkspace({ ...workspace, schemaVersion: 7, tasks: [legacyTask as never] });
+    expect(migrated.tasks[0]?.subtasks).toEqual([]);
   });
 
   it("caps legacy overdue pomodoro sessions to configured focus duration", () => {
