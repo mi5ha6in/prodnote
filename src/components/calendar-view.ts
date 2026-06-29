@@ -74,7 +74,7 @@ export class CalendarView extends HTMLElement {
   private render(): void {
     const workspace = appStore.getWorkspace();
     const now = new Date();
-    const items = toCalendarItems(workspace.events, workspace.plans);
+    const items = toCalendarItems(workspace.events);
     const sortedSessions = [...workspace.sessions].sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
 
     const root = renderShadow(
@@ -99,7 +99,6 @@ export class CalendarView extends HTMLElement {
 
           ${metricBarHtml([
             { label: "Событий", value: workspace.events.length, hint: "Включая импортированные" },
-            { label: "Запланировано", value: workspace.plans.length, hint: "Слоты по задачам" },
             { label: "Сессий", value: workspace.sessions.length, hint: "Фактический журнал" },
           ])}
 
@@ -191,12 +190,9 @@ export class CalendarView extends HTMLElement {
         : formatDateTime(item.startsAt);
     const taskName = item.taskId ? getTaskName(workspace.tasks, item.taskId) : "";
     const kindLabel = EVENT_KIND_LABELS[item.kind as CalendarEventKind] ?? item.kind;
-    const editable = item.source === "event";
 
     return `
-      <div class="list-item calendar-item ${editable ? "is-editable" : ""}" ${
-        editable ? `data-edit-event="${escapeHtml(item.id)}" tabindex="0"` : ""
-      }>
+      <div class="list-item calendar-item is-editable" data-edit-event="${escapeHtml(item.id)}" tabindex="0">
         <div class="calendar-item-row">
           <div class="calendar-item-main">
             <strong>${escapeHtml(item.title)}</strong>
@@ -204,14 +200,9 @@ export class CalendarView extends HTMLElement {
               <span class="status-pill">${escapeHtml(kindLabel)}</span>
               <span>${escapeHtml(when)}</span>
               ${taskName ? `<span>${escapeHtml(taskName)}</span>` : ""}
-              ${item.source === "plan" ? `<span class="muted">план</span>` : ""}
             </div>
           </div>
-          <button ${buttonAttrs({
-            tone: "ghost",
-            size: "small",
-            data: item.source === "event" ? { deleteEvent: item.id } : { deletePlan: item.id },
-          })}>Удалить</button>
+          <button ${buttonAttrs({ tone: "ghost", size: "small", data: { deleteEvent: item.id } })}>Удалить</button>
         </div>
       </div>
     `;
@@ -595,15 +586,6 @@ export class CalendarView extends HTMLElement {
           this.modal = null;
           this.editingEventId = null;
           void appStore.deleteEvent(id);
-        }
-      });
-    });
-
-    root.querySelectorAll<HTMLButtonElement>("[data-delete-plan]").forEach((button) => {
-      button.addEventListener("click", () => {
-        const id = button.dataset.deletePlan;
-        if (id && confirmDestructive("Удалить запланированный слот?")) {
-          void appStore.deletePlan(id);
         }
       });
     });

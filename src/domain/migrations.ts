@@ -1,6 +1,15 @@
 import { createDefaultSettings, createId } from "./defaults";
 import { addMinutesIso } from "./pomodoro";
-import { SCHEMA_VERSION, type Note, type NoteEditEntry, type PomodoroCycle, type TimeSession, type Workspace } from "./types";
+import {
+  SCHEMA_VERSION,
+  type CalendarEvent,
+  type CalendarPlan,
+  type Note,
+  type NoteEditEntry,
+  type PomodoroCycle,
+  type TimeSession,
+  type Workspace,
+} from "./types";
 
 type LegacyNoteEditEntry =
   | NoteEditEntry
@@ -34,19 +43,58 @@ export function migrateWorkspace(workspace: LegacyWorkspace): Workspace {
     throw new Error(`Неподдерживаемая версия схемы: ${workspace.schemaVersion}.`);
   }
 
+  const plans = Array.isArray(workspace.plans) ? workspace.plans : [];
+  const existingEvents = Array.isArray(workspace.events) ? workspace.events : [];
+
   return {
     ...workspace,
     schemaVersion: SCHEMA_VERSION,
     exportedAt: workspace.exportedAt ?? null,
     notes: workspace.notes.map(normalizeNote),
     pomodoroCycles: Array.isArray(workspace.pomodoroCycles) ? workspace.pomodoroCycles.map(normalizePomodoroCycle) : [],
-    events: Array.isArray(workspace.events) ? workspace.events : [],
+    events: mergePlansIntoEvents(existingEvents, plans),
+    plans: [],
     sessions: normalizeSessions(
       workspace.sessions,
       Array.isArray(workspace.pomodoroCycles) ? workspace.pomodoroCycles.map(normalizePomodoroCycle) : [],
     ),
     settings: workspace.settings ?? createDefaultSettings(),
   };
+}
+
+/**
+ * Fold legacy task-linked plans into the unified events list. The derived event
+ * id is deterministic, so re-running the migration (e.g. on every sync pull
+ * while stale plan rows linger on the server) never creates duplicates.
+ */
+function mergePlansIntoEvents(events: CalendarEvent[], plans: CalendarPlan[]): CalendarEvent[] {
+  const existingIds = new Set(events.map((event) => event.id));
+  const converted: CalendarEvent[] = [];
+
+  for (const plan of plans) {
+    const id = `evt_plan_${plan.id}`;
+    if (existingIds.has(id)) {
+      continue;
+    }
+
+    converted.push({
+      id,
+      title: plan.title,
+      description: "",
+      location: "",
+      startsAt: plan.startsAt,
+      endsAt: plan.endsAt,
+      allDay: false,
+      kind: plan.kind,
+      taskId: plan.taskId,
+      source: "manual",
+      externalUid: null,
+      createdAt: plan.createdAt,
+      updatedAt: plan.createdAt,
+    });
+  }
+
+  return [...converted, ...events];
 }
 
 function normalizeNote(note: LegacyNote): Note {

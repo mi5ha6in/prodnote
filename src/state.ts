@@ -1,6 +1,5 @@
 import {
   createCalendarEvent,
-  createCalendarPlan,
   createId,
   createNote,
   createProject,
@@ -27,7 +26,6 @@ import type {
   ActiveTimer,
   CalendarEvent,
   CalendarEventKind,
-  CalendarPlan,
   EntityId,
   Note,
   Project,
@@ -190,27 +188,6 @@ export class ProdNoteStore {
         editedAt,
       });
     });
-  }
-
-  async addPlan(input: {
-    taskId: string;
-    title: string;
-    startsAt: string;
-    endsAt: string;
-    kind: CalendarPlan["kind"];
-  }): Promise<CalendarPlan> {
-    const plan = createCalendarPlan(input);
-    await this.commit((workspace) => {
-      workspace.plans.push(plan);
-    });
-    return plan;
-  }
-
-  async deletePlan(planId: EntityId): Promise<void> {
-    await this.commit((workspace) => {
-      workspace.plans = workspace.plans.filter((plan) => plan.id !== planId);
-    });
-    recordSyncDeletion("plan", planId);
   }
 
   async addEvent(input: {
