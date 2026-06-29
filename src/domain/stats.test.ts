@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { createProject, createTag, createTask } from "./defaults";
+import { createCalendarEvent, createProject, createTag, createTask } from "./defaults";
 import {
   formatDuration,
+  getPlanVsActualByTask,
   getPomodoroStats,
   getProductiveHours,
   getTotalMinutes,
@@ -98,5 +99,45 @@ describe("statistics", () => {
       breakMinutes: 5,
       totalMinutes: 40,
     });
+  });
+});
+
+describe("getPlanVsActualByTask", () => {
+  const task = { ...createTask({ title: "Задача" }), id: "task-pa" };
+  const sessions: TimeSession[] = [
+    {
+      id: "s1",
+      taskId: "task-pa",
+      startedAt: "2026-05-27T08:00:00.000Z",
+      endedAt: "2026-05-27T08:40:00.000Z",
+      durationMinutes: 40,
+      mode: "timer",
+      note: "",
+      pomodoroCycleId: null,
+    },
+  ];
+
+  it("pairs planned event minutes with actual session minutes", () => {
+    const event = createCalendarEvent({
+      title: "plan",
+      startsAt: "2026-05-27T09:00:00.000Z",
+      endsAt: "2026-05-27T10:00:00.000Z",
+      taskId: "task-pa",
+    });
+
+    const [row] = getPlanVsActualByTask([event], sessions, [task]);
+    expect(row).toMatchObject({ id: "task-pa", plannedMinutes: 60, actualMinutes: 40 });
+  });
+
+  it("ignores all-day events and tasks with no time", () => {
+    const allDay = createCalendarEvent({
+      title: "holiday",
+      startsAt: "2026-05-27T00:00:00.000Z",
+      endsAt: "2026-05-27T00:00:00.000Z",
+      allDay: true,
+      taskId: "task-pa",
+    });
+
+    expect(getPlanVsActualByTask([allDay], [], [task])).toHaveLength(0);
   });
 });

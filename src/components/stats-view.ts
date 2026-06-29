@@ -1,6 +1,7 @@
 import { escapeHtml } from "../domain/markdown";
 import {
   formatDuration,
+  getPlanVsActualByTask,
   getPomodoroStats,
   getProductiveHours,
   getTotalMinutes,
@@ -8,6 +9,7 @@ import {
   groupSessionsByProject,
   groupSessionsByTag,
   groupSessionsByTask,
+  type PlanActualStat,
 } from "../domain/stats";
 import { appStore } from "../state";
 import { metricBarHtml } from "../ui/html";
@@ -35,6 +37,7 @@ export class StatsView extends HTMLElement {
     const productiveHours = getProductiveHours(workspace.sessions);
     const bestHour = [...productiveHours].sort((a, b) => b.minutes - a.minutes)[0];
     const pomodoro = getPomodoroStats(workspace.sessions, workspace.pomodoroCycles);
+    const planActual = getPlanVsActualByTask(workspace.events, workspace.sessions, workspace.tasks).slice(0, 8);
 
     renderShadow(
       this,
@@ -117,9 +120,80 @@ export class StatsView extends HTMLElement {
               </div>
             </article>
           </div>
+
+          <article class="card">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">План и факт</p>
+                <h2>Запланировано против отработанного</h2>
+              </div>
+            </div>
+            ${this.renderPlanActual(planActual)}
+          </article>
         </section>
       `,
       `
+        .plan-actual {
+          display: grid;
+          gap: var(--space-3);
+        }
+
+        .plan-actual-row {
+          display: grid;
+          gap: var(--space-2);
+        }
+
+        .plan-actual-head {
+          align-items: baseline;
+          display: flex;
+          gap: var(--space-3);
+          justify-content: space-between;
+        }
+
+        .plan-actual-bars {
+          display: grid;
+          gap: 0.3rem;
+        }
+
+        .pa-track {
+          align-items: center;
+          display: grid;
+          gap: var(--space-2);
+          grid-template-columns: 3rem minmax(0, 1fr) auto;
+        }
+
+        .pa-track .pa-label {
+          color: var(--muted);
+          font-size: var(--text-xs);
+        }
+
+        .pa-track .pa-value {
+          color: var(--muted);
+          font-size: var(--text-xs);
+          font-variant-numeric: tabular-nums;
+        }
+
+        .pa-bar {
+          background: var(--line);
+          border-radius: var(--radius-pill);
+          height: 0.5rem;
+          overflow: hidden;
+        }
+
+        .pa-bar > span {
+          border-radius: inherit;
+          display: block;
+          height: 100%;
+        }
+
+        .pa-bar.plan > span {
+          background: var(--ink-soft);
+        }
+
+        .pa-bar.actual > span {
+          background: var(--accent);
+        }
+
         .heatmap {
           display: grid;
           gap: var(--space-2);
@@ -182,6 +256,44 @@ export class StatsView extends HTMLElement {
         }
       `,
     );
+  }
+
+  private renderPlanActual(items: PlanActualStat[]): string {
+    if (!items.length) {
+      return `<div class="empty">Свяжите события с задачами и поработайте по таймеру, чтобы увидеть план и факт.</div>`;
+    }
+
+    const max = Math.max(1, ...items.map((item) => Math.max(item.plannedMinutes, item.actualMinutes)));
+
+    return `
+      <div class="plan-actual">
+        ${items
+          .map((item) => {
+            const planWidth = Math.round((item.plannedMinutes / max) * 100);
+            const actualWidth = Math.round((item.actualMinutes / max) * 100);
+            return `
+              <div class="plan-actual-row">
+                <div class="plan-actual-head">
+                  <strong>${escapeHtml(item.name)}</strong>
+                </div>
+                <div class="plan-actual-bars">
+                  <div class="pa-track">
+                    <span class="pa-label">План</span>
+                    <div class="pa-bar plan"><span style="width: ${planWidth}%"></span></div>
+                    <span class="pa-value">${formatDuration(item.plannedMinutes)}</span>
+                  </div>
+                  <div class="pa-track">
+                    <span class="pa-label">Факт</span>
+                    <div class="pa-bar actual"><span style="width: ${actualWidth}%"></span></div>
+                    <span class="pa-value">${formatDuration(item.actualMinutes)}</span>
+                  </div>
+                </div>
+              </div>
+            `;
+          })
+          .join("")}
+      </div>
+    `;
   }
 
   private renderBars(items: Array<{ id: string; name: string; minutes: number }>, totalMinutes: number): string {
