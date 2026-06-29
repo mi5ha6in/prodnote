@@ -1,4 +1,4 @@
-import type { PomodoroCycle, Project, Tag, Task, TimeSession } from "./types";
+import type { CalendarEvent, PomodoroCycle, Project, Tag, Task, TimeSession } from "./types";
 
 export interface NamedStat {
   id: string;
@@ -113,6 +113,48 @@ export function groupSessionsByTag(sessions: TimeSession[], tasks: Task[], tags:
   }
 
   return [...map.values()].sort((a, b) => b.minutes - a.minutes);
+}
+
+export interface PlanActualStat {
+  id: string;
+  name: string;
+  plannedMinutes: number;
+  actualMinutes: number;
+}
+
+/** Planned (task-linked timed events) vs actual (sessions) minutes per task. */
+export function getPlanVsActualByTask(
+  events: CalendarEvent[],
+  sessions: TimeSession[],
+  tasks: Task[],
+): PlanActualStat[] {
+  const names = new Map(tasks.map((task) => [task.id, task.title]));
+  const stats = new Map<string, PlanActualStat>();
+
+  const ensure = (taskId: string): PlanActualStat => {
+    let stat = stats.get(taskId);
+    if (!stat) {
+      stat = { id: taskId, name: names.get(taskId) ?? "Без задачи", plannedMinutes: 0, actualMinutes: 0 };
+      stats.set(taskId, stat);
+    }
+    return stat;
+  };
+
+  for (const event of events) {
+    if (!event.taskId || event.allDay) {
+      continue;
+    }
+    const minutes = Math.max(0, Math.round((Date.parse(event.endsAt) - Date.parse(event.startsAt)) / 60000));
+    ensure(event.taskId).plannedMinutes += minutes;
+  }
+
+  for (const session of sessions) {
+    ensure(session.taskId).actualMinutes += getSessionMinutes(session);
+  }
+
+  return [...stats.values()]
+    .filter((stat) => stat.plannedMinutes > 0 || stat.actualMinutes > 0)
+    .sort((a, b) => b.plannedMinutes + b.actualMinutes - (a.plannedMinutes + a.actualMinutes));
 }
 
 export function getProductiveHours(sessions: TimeSession[]): HourStat[] {
