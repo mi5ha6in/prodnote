@@ -3,6 +3,7 @@ import { initTheme } from "./storage/theme";
 import "./components/mini-timer";
 import "./components/phase-alert";
 import "./components/event-reminder";
+import "./components/command-palette";
 import "./components/dashboard-view";
 import "./components/tasks-view";
 import "./components/notes-view";
