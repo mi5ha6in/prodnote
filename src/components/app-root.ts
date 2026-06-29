@@ -75,6 +75,7 @@ export class AppRoot extends HTMLElement {
           <pn-mini-timer></pn-mini-timer>
         </aside>
         <pn-phase-alert></pn-phase-alert>
+        <pn-event-reminder></pn-event-reminder>
         <main class="content-shell">
           <header class="topbar">
             <div>

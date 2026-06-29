@@ -3,6 +3,7 @@ import { escapeHtml } from "../domain/markdown";
 import { getTimerNotificationStatus, requestTimerNotificationPermission } from "../platform/notifications";
 import { appStore } from "../state";
 import { parseWorkspaceExport, stringifyExport, validateImportSnapshot } from "../storage/export";
+import { getEventReminderMinutes, REMINDER_OPTIONS, setEventReminderMinutes } from "../storage/reminder-prefs";
 import {
   getSyncState,
   loginPasskey,
@@ -100,6 +101,7 @@ export class SettingsView extends HTMLElement {
     const workspace = appStore.getWorkspace();
     const settings = workspace.settings;
     const notificationStatus = getTimerNotificationStatus();
+    const reminderMinutes = getEventReminderMinutes();
     const syncState = getSyncState();
     const isSyncing = syncState.status === "syncing";
     const root = renderShadow(
@@ -175,6 +177,18 @@ export class SettingsView extends HTMLElement {
                 disabled: notificationStatus !== "default",
               })}>Разрешить уведомления</button>
             </div>
+            ${fieldHtml({
+              label: "Напоминать о событиях календаря",
+              control: `<select data-reminder-minutes>
+                ${REMINDER_OPTIONS.map(
+                  (minutes) =>
+                    `<option value="${minutes}" ${minutes === reminderMinutes ? "selected" : ""}>${
+                      minutes === 0 ? "Выключено" : `За ${minutes} минут`
+                    }</option>`,
+                ).join("")}
+              </select>`,
+            })}
+            <p class="muted">Напоминание срабатывает один раз перед началом события (только когда приложение открыто).</p>
           </article>
 
           <form class="card form-grid" data-form="sync">
@@ -432,6 +446,12 @@ export class SettingsView extends HTMLElement {
 
     root.querySelector<HTMLButtonElement>('[data-action="request-notifications"]')?.addEventListener("click", () => {
       void requestTimerNotificationPermission().then(() => this.render());
+    });
+
+    root.querySelector<HTMLSelectElement>("[data-reminder-minutes]")?.addEventListener("change", (event) => {
+      if (event.currentTarget instanceof HTMLSelectElement) {
+        setEventReminderMinutes(Number(event.currentTarget.value));
+      }
     });
 
     root.querySelector<HTMLFormElement>('[data-form="sync"]')?.addEventListener("submit", (event) => {

@@ -20,7 +20,12 @@ export async function requestTimerNotificationPermission(): Promise<Notification
   return Notification.permission;
 }
 
-export async function showTimerNotification(input: { title: string; body: string; url?: string }): Promise<void> {
+export async function showTimerNotification(input: {
+  title: string;
+  body: string;
+  url?: string;
+  tag?: string;
+}): Promise<void> {
   if (typeof window === "undefined" || !("Notification" in window) || Notification.permission !== "granted") {
     return;
   }
@@ -31,7 +36,7 @@ export async function showTimerNotification(input: { title: string; body: string
     body: input.body,
     icon,
     badge: icon,
-    tag: "prodnote-timer",
+    tag: input.tag ?? "prodnote-timer",
     requireInteraction: true,
     data: {
       url: targetUrl,
