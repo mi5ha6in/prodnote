@@ -2,10 +2,12 @@ import {
   buildMonthMatrix,
   groupByHorizon,
   isMultiDay,
-  itemsForDay,
+  layoutWeekSegments,
+  overflowForColumn,
   toCalendarItems,
   weekdayLabels,
   type CalendarItem,
+  type MonthCell,
 } from "../domain/calendar";
 import { EVENT_KIND_LABELS, SESSION_MODE_LABELS } from "../domain/defaults";
 import { buildIcs, parseIcs } from "../domain/ics";
@@ -30,6 +32,7 @@ import {
 } from "./view-utils";
 
 const EVENT_KINDS: CalendarEventKind[] = ["event", "focus", "meeting", "deadline", "review"];
+const MONTH_LANE_CAP = 3;
 const MONTH_LABELS = [
   "Январь",
   "Февраль",
@@ -218,12 +221,26 @@ export class CalendarView extends HTMLElement {
             <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "next-month" } })}>›</button>
           </div>
         </div>
-        <div class="month-grid">
+        <div class="month-head">
           ${labels.map((label) => `<div class="month-weekday">${escapeHtml(label)}</div>`).join("")}
-          ${weeks
-            .flat()
-            .map((cell) => {
-              const dayItems = itemsForDay(items, cell.dateKey);
+        </div>
+        <div class="month-weeks">
+          ${weeks.map((week) => this.renderWeekRow(week, items)).join("")}
+        </div>
+      </article>
+    `;
+  }
+
+  private renderWeekRow(week: MonthCell[], items: CalendarItem[]): string {
+    const lanes = layoutWeekSegments(week, items);
+    const visible = lanes.slice(0, MONTH_LANE_CAP);
+
+    return `
+      <div class="month-week" style="--lanes: ${visible.length}">
+        <div class="week-days">
+          ${week
+            .map((cell, col) => {
+              const overflow = overflowForColumn(lanes, col, MONTH_LANE_CAP);
               return `
                 <div
                   class="month-cell ${cell.inMonth ? "" : "is-outside"} ${cell.isToday ? "is-today" : ""}"
@@ -231,24 +248,31 @@ export class CalendarView extends HTMLElement {
                   tabindex="0"
                 >
                   <span class="month-day">${cell.day}</span>
-                  <div class="month-chips">
-                    ${dayItems
-                      .slice(0, 3)
-                      .map(
-                        (item) =>
-                          `<button class="month-chip" ${
-                            item.source === "event" ? `data-edit-event="${escapeHtml(item.id)}"` : "disabled"
-                          } title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</button>`,
-                      )
-                      .join("")}
-                    ${dayItems.length > 3 ? `<span class="month-more">+${dayItems.length - 3}</span>` : ""}
-                  </div>
+                  ${overflow ? `<span class="month-more">+${overflow}</span>` : ""}
                 </div>
               `;
             })
             .join("")}
         </div>
-      </article>
+        <div class="week-bars">
+          ${visible
+            .map((lane, laneIndex) =>
+              lane
+                .map(
+                  (segment) => `
+                    <button
+                      class="month-bar ${segment.continuesLeft ? "cont-left" : ""} ${segment.continuesRight ? "cont-right" : ""}"
+                      style="grid-column: ${segment.startCol + 1} / span ${segment.span}; grid-row: ${laneIndex + 1};"
+                      ${segment.item.source === "event" ? `data-edit-event="${escapeHtml(segment.item.id)}"` : "disabled"}
+                      title="${escapeHtml(segment.item.title)}"
+                    >${escapeHtml(segment.item.title)}</button>
+                  `,
+                )
+                .join(""),
+            )
+            .join("")}
+        </div>
+      </div>
     `;
   }
 
@@ -653,9 +677,8 @@ export class CalendarView extends HTMLElement {
         font-size: var(--text-lg);
       }
 
-      .month-grid {
+      .month-head {
         display: grid;
-        gap: 1px;
         grid-template-columns: repeat(7, minmax(7rem, 1fr));
       }
 
@@ -668,15 +691,29 @@ export class CalendarView extends HTMLElement {
         text-transform: uppercase;
       }
 
+      .month-weeks {
+        display: grid;
+        gap: 1px;
+      }
+
+      .month-week {
+        position: relative;
+      }
+
+      .week-days {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(7rem, 1fr));
+        gap: 1px;
+      }
+
       .month-cell {
         background: var(--surface);
         border: 1px solid var(--line);
         border-radius: var(--radius-sm);
         cursor: pointer;
-        display: grid;
-        gap: var(--space-1);
-        min-height: 6.5rem;
+        min-height: calc(2rem + var(--lanes, 0) * 1.4rem + 0.6rem);
         padding: var(--space-2);
+        position: relative;
       }
 
       .month-cell:hover {
@@ -703,12 +740,28 @@ export class CalendarView extends HTMLElement {
         font-variant-numeric: tabular-nums;
       }
 
-      .month-chips {
-        display: grid;
-        gap: 0.15rem;
+      .month-more {
+        bottom: 0.25rem;
+        color: var(--muted);
+        font-size: var(--text-xs);
+        position: absolute;
+        right: 0.4rem;
       }
 
-      .month-chip {
+      .week-bars {
+        display: grid;
+        gap: 0.15rem;
+        grid-auto-rows: 1.25rem;
+        grid-template-columns: repeat(7, minmax(7rem, 1fr));
+        left: 0;
+        padding: 0 var(--space-1);
+        pointer-events: none;
+        position: absolute;
+        right: 0;
+        top: 1.9rem;
+      }
+
+      .month-bar {
         background: var(--accent-soft);
         border: none;
         border-radius: var(--radius-sm);
@@ -718,21 +771,26 @@ export class CalendarView extends HTMLElement {
         font-weight: 600;
         min-height: auto;
         overflow: hidden;
-        padding: 0.1rem 0.3rem;
+        padding: 0.1rem 0.4rem;
+        pointer-events: auto;
         text-align: left;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
 
-      .month-chip:disabled {
+      .month-bar:disabled {
         cursor: default;
         opacity: 1;
       }
 
-      .month-more {
-        color: var(--muted);
-        font-size: var(--text-xs);
-        padding-left: 0.3rem;
+      .month-bar.cont-left {
+        border-bottom-left-radius: 0;
+        border-top-left-radius: 0;
+      }
+
+      .month-bar.cont-right {
+        border-bottom-right-radius: 0;
+        border-top-right-radius: 0;
       }
 
       .check-row {
@@ -756,12 +814,15 @@ export class CalendarView extends HTMLElement {
       }
 
       @media (max-width: 720px) {
-        .month-grid {
-          grid-template-columns: repeat(7, minmax(3rem, 1fr));
+        .month-head,
+        .week-days,
+        .week-bars {
+          grid-template-columns: repeat(7, minmax(2.6rem, 1fr));
         }
 
-        .month-chips {
-          display: none;
+        .month-bar {
+          font-size: 0;
+          padding: 0.1rem;
         }
       }
     `;
