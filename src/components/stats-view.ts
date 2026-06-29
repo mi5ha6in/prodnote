@@ -10,6 +10,7 @@ import {
   groupSessionsByTask,
 } from "../domain/stats";
 import { appStore } from "../state";
+import { metricBarHtml } from "../ui/html";
 import { renderShadow } from "./shadow";
 
 export class StatsView extends HTMLElement {
@@ -39,23 +40,19 @@ export class StatsView extends HTMLElement {
       this,
       `
         <section class="view-grid">
-          <div class="three-grid">
-            <article class="card">
-              <p class="eyebrow">Всего</p>
-              <span class="stat-number">${formatDuration(totalMinutes)}</span>
-              <p class="muted">${workspace.sessions.length} сессий.</p>
-            </article>
-            <article class="card">
-              <p class="eyebrow">Помодоро</p>
-              <span class="stat-number">${pomodoro.total}</span>
-              <p class="muted">Работа ${formatDuration(pomodoro.focusMinutes)}, отдых ${formatDuration(pomodoro.breakMinutes)}.</p>
-            </article>
-            <article class="card">
-              <p class="eyebrow">Лучший час</p>
-              <span class="stat-number">${bestHour && bestHour.minutes > 0 ? `${bestHour.hour}:00` : "—"}</span>
-              <p class="muted">${bestHour && bestHour.minutes > 0 ? formatDuration(bestHour.minutes) : "Недостаточно данных."}</p>
-            </article>
-          </div>
+          ${metricBarHtml([
+            { label: "Всего", value: formatDuration(totalMinutes), hint: `${workspace.sessions.length} сессий` },
+            {
+              label: "Помодоро",
+              value: pomodoro.total,
+              hint: `Работа ${formatDuration(pomodoro.focusMinutes)}, отдых ${formatDuration(pomodoro.breakMinutes)}`,
+            },
+            {
+              label: "Лучший час",
+              value: bestHour && bestHour.minutes > 0 ? `${bestHour.hour}:00` : "—",
+              hint: bestHour && bestHour.minutes > 0 ? formatDuration(bestHour.minutes) : "Недостаточно данных",
+            },
+          ])}
 
           <article class="card">
             <div class="card-header">
@@ -125,7 +122,7 @@ export class StatsView extends HTMLElement {
       `
         .heatmap {
           display: grid;
-          gap: 0.5rem;
+          gap: var(--space-2);
           grid-template-columns: repeat(14, minmax(0, 1fr));
         }
 
@@ -133,45 +130,45 @@ export class StatsView extends HTMLElement {
           aspect-ratio: 1;
           background: color-mix(in srgb, var(--accent) calc(var(--heat) * 82%), var(--paper-strong));
           border: 1px solid var(--line);
-          border-radius: 0.4rem;
+          border-radius: var(--radius-sm);
           display: grid;
           place-items: center;
         }
 
         .heat-cell small {
           color: var(--ink);
-          font-size: 0.68rem;
-          font-weight: 850;
+          font-size: var(--text-xs);
+          font-weight: 700;
         }
 
         .bars {
           display: grid;
-          gap: 0.75rem;
+          gap: var(--space-3);
         }
 
         .hour-grid {
           display: grid;
-          gap: 0.4rem;
+          gap: var(--space-2);
           grid-template-columns: repeat(12, minmax(0, 1fr));
         }
 
         .hour-cell {
           display: grid;
-          gap: 0.25rem;
+          gap: var(--space-1);
           justify-items: center;
         }
 
         .hour-cell span {
           aspect-ratio: 1;
           background: var(--accent);
-          border-radius: 0.3rem;
+          border-radius: var(--radius-sm);
           display: block;
           width: 100%;
         }
 
         .hour-cell small {
           color: var(--muted);
-          font-size: 0.7rem;
+          font-size: var(--text-xs);
         }
 
         @media (max-width: 720px) {

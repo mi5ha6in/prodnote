@@ -56,6 +56,52 @@ export function fieldHtml(options: {
   `;
 }
 
+export function viewHeaderHtml(options: { eyebrow?: string; title?: string; actions?: string }): string {
+  const hasText = Boolean(options.eyebrow || options.title);
+  return `
+    <header class="view-header">
+      ${
+        hasText
+          ? `<div class="view-header-text">
+              ${options.eyebrow ? `<p class="eyebrow">${escapeHtml(options.eyebrow)}</p>` : ""}
+              ${options.title ? `<h2>${escapeHtml(options.title)}</h2>` : ""}
+            </div>`
+          : ""
+      }
+      ${options.actions ? `<div class="view-header-actions">${options.actions}</div>` : ""}
+    </header>
+  `;
+}
+
+export function metricBarHtml(items: Array<{ label: string; value: string | number; hint?: string }>): string {
+  return `
+    <div class="metric-bar">
+      ${items
+        .map(
+          (item) => `
+            <div class="metric">
+              <span class="metric-label">${escapeHtml(item.label)}</span>
+              <span class="metric-value">${escapeHtml(String(item.value))}</span>
+              ${item.hint ? `<span class="metric-hint">${escapeHtml(item.hint)}</span>` : ""}
+            </div>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+export function modalHtml(options: { body: string; wide?: boolean; label?: string }): string {
+  const labelAttr = options.label ? ` aria-label="${escapeHtml(options.label)}"` : "";
+  return `
+    <dialog class="modal" data-modal${labelAttr}>
+      <div class="modal-card${options.wide ? " wide" : ""}">
+        ${options.body}
+      </div>
+    </dialog>
+  `;
+}
+
 function toKebabCase(value: string): string {
   return value.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
 }

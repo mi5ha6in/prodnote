@@ -2,6 +2,7 @@ import { TASK_STATUS_LABELS } from "../domain/defaults";
 import { escapeHtml } from "../domain/markdown";
 import { formatDuration, getTotalMinutes, groupSessionsByDay, groupSessionsByProject } from "../domain/stats";
 import { appStore } from "../state";
+import { metricBarHtml } from "../ui/html";
 import { renderShadow } from "./shadow";
 import { formatDate, formatDateTime, getProjectName, getTaskName } from "./view-utils";
 
@@ -33,32 +34,15 @@ export class DashboardView extends HTMLElement {
       this,
       `
         <section class="view-grid">
-          <div class="hero-card">
-            <div>
-              <p class="eyebrow">Сегодня</p>
-              <h2>План, фокус и рабочий журнал в одном месте.</h2>
-              <p class="muted">Данные остаются в браузере. Экспортируйте файл в настройках для бэкапа.</p>
-            </div>
-            <a class="button secondary" href="#/focus">Начать фокус</a>
-          </div>
-
-          <div class="three-grid">
-            <article class="card">
-              <p class="eyebrow">Время сегодня</p>
-              <span class="stat-number">${formatDuration(todayMinutes)}</span>
-              <p class="muted">Фактически завершённые сессии.</p>
-            </article>
-            <article class="card">
-              <p class="eyebrow">Активные задачи</p>
-              <span class="stat-number">${activeTasks.length}</span>
-              <p class="muted">Бэклог, в работе и заблокированные.</p>
-            </article>
-            <article class="card">
-              <p class="eyebrow">Всего времени</p>
-              <span class="stat-number">${formatDuration(getTotalMinutes(workspace.sessions))}</span>
-              <p class="muted">${workspace.sessions.length} сессий в журнале.</p>
-            </article>
-          </div>
+          ${metricBarHtml([
+            { label: "Время сегодня", value: formatDuration(todayMinutes), hint: "Завершённые сессии" },
+            { label: "Активные задачи", value: activeTasks.length, hint: "В работе и бэклоге" },
+            {
+              label: "Всего времени",
+              value: formatDuration(getTotalMinutes(workspace.sessions)),
+              hint: `${workspace.sessions.length} сессий`,
+            },
+          ])}
 
           <div class="split-grid">
             <article class="card">
@@ -208,71 +192,28 @@ export class DashboardView extends HTMLElement {
         </section>
       `,
       `
-        .hero-card {
-          align-items: center;
-          background:
-            linear-gradient(110deg, rgba(228, 241, 233, 0.92), rgba(255, 255, 255, 0.94)),
-            var(--paper);
-          border: 1px solid #d8e5dc;
-          border-radius: 1rem;
-          box-shadow: var(--shadow);
-          display: flex;
-          gap: 1rem;
-          justify-content: space-between;
-          overflow: hidden;
-          padding: clamp(1.2rem, 3vw, 1.8rem);
-          position: relative;
-        }
-
-        .hero-card::after {
-          background: var(--accent);
-          border-radius: 999px;
-          content: "";
-          height: 7rem;
-          opacity: 0.08;
-          position: absolute;
-          right: 8rem;
-          top: -4.5rem;
-          width: 7rem;
-        }
-
-        .hero-card h2 {
-          font-size: clamp(1.65rem, 3.4vw, 2.7rem);
-          line-height: 1.05;
-          margin-top: 0.3rem;
-          max-width: 24ch;
-        }
-
-        .hero-card p:last-child {
-          margin-top: 0.65rem;
-          max-width: 38rem;
-        }
-
         .day-strip {
           display: grid;
-          gap: 0.55rem;
+          gap: var(--space-2);
           grid-template-columns: repeat(auto-fit, minmax(5.2rem, 1fr));
         }
 
         .day-cell {
           background: var(--surface);
           border: 1px solid var(--line);
-          border-radius: 0.72rem;
+          border-radius: var(--radius-md);
           display: grid;
-          gap: 0.25rem;
-          padding: 0.7rem;
+          gap: 0.15rem;
+          padding: var(--space-3);
+        }
+
+        .day-cell strong {
+          font-variant-numeric: tabular-nums;
         }
 
         .day-cell span {
           color: var(--muted);
-          font-size: 0.85rem;
-        }
-
-        @media (max-width: 720px) {
-          .hero-card {
-            align-items: start;
-            flex-direction: column;
-          }
+          font-size: var(--text-sm);
         }
       `,
     );

@@ -2,7 +2,8 @@ import { escapeHtml, renderMarkdown } from "../domain/markdown";
 import { applyMarkdownSnippetToText, MARKDOWN_SNIPPETS, type MarkdownSnippet } from "../domain/markdown-snippets";
 import type { Note, Workspace } from "../domain/types";
 import { appStore } from "../state";
-import { badgeHtml, buttonAttrs, emptyStateHtml, fieldHtml } from "../ui/html";
+import { badgeHtml, buttonAttrs, emptyStateHtml, fieldHtml, metricBarHtml, modalHtml, viewHeaderHtml } from "../ui/html";
+import { wireModal } from "./modal";
 import { renderShadow } from "./shadow";
 import {
   formatDate,
@@ -21,7 +22,7 @@ const EMPTY_PREVIEW_HTML = `<p class="muted">Начните писать Markdow
 
 export class NotesView extends HTMLElement {
   private unsubscribe: (() => void) | null = null;
-  private editorFullscreen = false;
+  private creating = false;
   private openedNoteId: string | null = null;
   private openedNoteMode: "preview" | "edit" = "preview";
 
@@ -34,143 +35,63 @@ export class NotesView extends HTMLElement {
     this.unsubscribe?.();
   }
 
+  private get modalOpen(): boolean {
+    return this.creating || this.openedNoteId !== null;
+  }
+
+  private closeModals(): void {
+    this.creating = false;
+    this.openedNoteId = null;
+    this.openedNoteMode = "preview";
+    this.render();
+  }
+
   private render(): void {
     const workspace = appStore.getWorkspace();
     const root = renderShadow(
       this,
       `
         <section class="view-grid">
-          ${this.renderOpenedNotePanel(workspace)}
+          ${this.renderModal(workspace)}
 
-          <div class="split-grid">
-            <form class="card form-grid editor-card ${this.editorFullscreen ? "is-fullscreen" : ""}" data-markdown-editor data-form="note">
-              <div class="card-header editor-header">
-                <div>
-                  <p class="eyebrow">Markdown</p>
-                  <h2>Новый конспект</h2>
-                </div>
-                <button
-                  ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "toggle-fullscreen" } })}
-                  aria-pressed="${this.editorFullscreen ? "true" : "false"}"
-                >
-                  ${this.editorFullscreen ? "Свернуть" : "На весь экран"}
-                </button>
-              </div>
-
-              ${fieldHtml({
-                label: "Название",
-                control: `<input name="title" required placeholder="Например: итоги исследования" />`,
-              })}
-              <div class="inline-grid">
-                ${fieldHtml({
-                  label: "Проект",
-                  control: `<select name="projectId">${renderProjectOptions(workspace.projects)}</select>`,
-                })}
-                ${fieldHtml({
-                  label: "Связанная задача",
-                  control: `<select name="taskId">
-                  <option value="">Без задачи</option>
-                  ${renderTaskOptions(workspace.tasks)}
-                </select>`,
-                })}
-              </div>
-              <fieldset>
-                <legend>Теги</legend>
-                ${
-                  workspace.tags.length
-                    ? workspace.tags
-                        .map(
-                          (tag) => `
-                            <label class="check-row">
-                              <input type="checkbox" name="tagIds" value="${escapeHtml(tag.id)}" />
-                              <span>${escapeHtml(tag.name)}</span>
-                            </label>
-                          `,
-                        )
-                        .join("")
-                    : `<p class="muted">Теги можно добавить в настройках.</p>`
-                }
-              </fieldset>
-              <div class="markdown-tools" aria-label="Сниппеты Markdown">
-                ${this.renderSnippetButtons()}
-              </div>
-              <div class="editor-grid">
-                ${fieldHtml({
-                  label: "Текст",
-                  className: "markdown-field",
-                  control: `<textarea
-                    name="markdown"
-                    required
-                    data-note-markdown
-                    placeholder="# Заголовок&#10;- тезис&#10;- следующий шаг"
-                  ></textarea>`,
-                })}
-                <article class="preview-panel" aria-live="polite">
-                  <div class="card-header compact">
-                    <div>
-                      <p class="eyebrow">Preview</p>
-                      <h3>Живой просмотр</h3>
-                    </div>
-                  </div>
-                  <div class="markdown-preview" data-note-preview>${EMPTY_PREVIEW_HTML}</div>
-                </article>
-              </div>
-              <button type="submit">Сохранить заметку</button>
-            </form>
-
-            <article class="card syntax-card">
-              <div class="card-header">
-                <div>
-                  <p class="eyebrow">Синтаксис</p>
-                  <h2>Шпаргалка Markdown</h2>
-                </div>
-              </div>
-              <p class="muted">Поддерживается безопасный subset: заголовки, списки, цитаты, inline-код, ссылки, жирный и курсив.</p>
-              <div class="syntax-list">
-                ${MARKDOWN_SNIPPETS.map(
-                  (snippet) => `
-                    <div class="syntax-item">
-                      <strong>${escapeHtml(snippet.label)}</strong>
-                      <code>${escapeHtml(snippet.hint)}</code>
-                    </div>
-                  `,
-                ).join("")}
-              </div>
-            </article>
-          </div>
+          ${viewHeaderHtml({
+            actions: `<button ${buttonAttrs({ data: { action: "open-create" } })}>+ Новый конспект</button>`,
+          })}
 
           <article class="card">
             <div class="card-header">
               <div>
-                <p class="eyebrow">База знаний</p>
-                <h2>Заметки</h2>
+                <p class="eyebrow">Библиотека</p>
+                <h2>Все конспекты</h2>
               </div>
               ${badgeHtml(workspace.notes.length)}
             </div>
             <div class="notes-grid">
               ${
                 workspace.notes.length
-                  ? workspace.notes.map((note) => {
-                      const linkedTasks = note.linkedTaskIds
-                        .map((taskId) => getTaskName(workspace.tasks, taskId))
-                        .join(", ");
-                      return `
-                        <article class="note-card">
-                          <div class="meta-row">
-                            <span>${escapeHtml(getProjectName(workspace.projects, note.projectId))}</span>
-                            <span>${formatDate(note.updatedAt)}</span>
-                            <span>${note.editHistory.length} ред.</span>
-                          </div>
-                          <h3>${escapeHtml(note.title)}</h3>
-                          <div class="markdown-preview">${renderMarkdown(note.markdown)}</div>
-                          <div class="meta-row">
-                            ${linkedTasks ? `<span>задачи: ${escapeHtml(linkedTasks)}</span>` : ""}
-                            ${renderTagPills(workspace.tags, note.tagIds)}
-                          </div>
-                          <button ${buttonAttrs({ tone: "ghost", size: "small", data: { openNote: note.id } })}>Открыть</button>
-                        </article>
-                      `;
-                    }).join("")
+                  ? workspace.notes
+                      .map((note) => {
+                        const linkedTasks = note.linkedTaskIds
+                          .map((taskId) => getTaskName(workspace.tasks, taskId))
+                          .join(", ");
+                        return `
+                          <article class="note-card">
+                            <div class="meta-row">
+                              <span>${escapeHtml(getProjectName(workspace.projects, note.projectId))}</span>
+                              <span>${formatDate(note.updatedAt)}</span>
+                              <span>${note.editHistory.length} ред.</span>
+                            </div>
+                            <h3>${escapeHtml(note.title)}</h3>
+                            <div class="markdown-preview">${renderMarkdown(note.markdown)}</div>
+                            <div class="meta-row">
+                              ${linkedTasks ? `<span>задачи: ${escapeHtml(linkedTasks)}</span>` : ""}
+                              ${renderTagPills(workspace.tags, note.tagIds)}
+                            </div>
+                            <button ${buttonAttrs({ tone: "ghost", size: "small", data: { openNote: note.id } })}>Открыть</button>
+                          </article>
+                        `;
+                      })
+                      .join("")
                   : emptyStateHtml("Пока нет заметок. Создайте первый Markdown-конспект.")
               }
             </div>
@@ -180,62 +101,32 @@ export class NotesView extends HTMLElement {
       `
         .notes-grid {
           column-count: 2;
-          column-gap: 1rem;
+          column-gap: var(--space-4);
         }
 
-        .editor-card {
-          transition:
-            border-radius 180ms ease,
-            box-shadow 180ms ease,
-            inset 180ms ease;
+        .note-card {
+          background: var(--surface);
+          border: 1px solid var(--line);
+          border-radius: var(--radius-md);
+          break-inside: avoid;
+          display: inline-grid;
+          gap: var(--space-2);
+          margin: 0 0 var(--space-4);
+          padding: var(--space-4);
+          width: 100%;
         }
 
-        .editor-card.is-fullscreen {
-          border-radius: 0;
-          display: grid;
-          inset: 0;
-          max-height: 100vh;
-          overflow: auto;
-          padding: clamp(1rem, 3vw, 2rem);
-          position: fixed;
-          z-index: 50;
-        }
-
-        .existing-editor {
-          border-radius: 0;
-          display: grid;
-          inset: 0;
-          max-height: 100vh;
-          overflow: auto;
-          padding: clamp(1rem, 3vw, 2rem);
-          position: fixed;
-          z-index: 60;
-        }
-
-        .existing-editor .editor-grid {
-          grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.85fr);
-        }
-
-        .existing-editor textarea {
-          min-height: min(58vh, 44rem);
-        }
-
-        .editor-card.is-fullscreen .editor-grid {
-          grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.85fr);
-        }
-
-        .editor-card.is-fullscreen textarea {
-          min-height: min(58vh, 44rem);
-        }
-
-        .editor-header {
-          margin-bottom: 0;
+        .note-card .markdown-preview {
+          display: -webkit-box;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 5;
+          overflow: hidden;
         }
 
         .editor-grid {
           display: grid;
-          gap: 0.85rem;
-          grid-template-columns: minmax(0, 1fr);
+          gap: var(--space-3);
+          grid-template-columns: minmax(0, 1.1fr) minmax(16rem, 0.9fr);
           min-width: 0;
         }
 
@@ -245,52 +136,45 @@ export class NotesView extends HTMLElement {
             "Consolas",
             "Liberation Mono",
             monospace;
-          min-height: 17rem;
+          min-height: min(48vh, 30rem);
         }
 
         .markdown-tools {
           display: flex;
           flex-wrap: wrap;
-          gap: 0.45rem;
+          gap: var(--space-2);
         }
 
         .snippet-button {
-          background: rgba(42, 157, 143, 0.12);
-          color: var(--ink);
+          background: var(--accent-soft);
+          border-color: transparent;
+          color: var(--accent-strong);
         }
 
         .preview-panel {
           background: var(--surface);
           border: 1px solid var(--line);
-          border-radius: 0.78rem;
+          border-radius: var(--radius-md);
           min-width: 0;
-          padding: 0.85rem;
-        }
-
-        .preview-panel .compact {
-          margin-bottom: 0.6rem;
-        }
-
-        .syntax-card {
-          display: grid;
-          gap: 0.85rem;
+          overflow: auto;
+          padding: var(--space-3);
         }
 
         .syntax-list {
           display: grid;
-          gap: 0.55rem;
+          gap: var(--space-2);
         }
 
         .syntax-item {
           align-items: center;
           background: var(--surface);
           border: 1px solid var(--line);
-          border-radius: 0.7rem;
+          border-radius: var(--radius-sm);
           display: flex;
-          gap: 0.75rem;
+          gap: var(--space-3);
           justify-content: space-between;
           min-width: 0;
-          padding: 0.65rem 0.75rem;
+          padding: var(--space-2) var(--space-3);
         }
 
         .syntax-item code {
@@ -301,61 +185,58 @@ export class NotesView extends HTMLElement {
 
         .edit-history {
           display: grid;
-          gap: 0.55rem;
+          gap: var(--space-2);
         }
 
         .edit-history-row {
           align-items: center;
           background: var(--surface);
           border: 1px solid var(--line);
-          border-radius: 0.7rem;
+          border-radius: var(--radius-sm);
           display: flex;
-          gap: 0.75rem;
+          gap: var(--space-3);
           justify-content: space-between;
-          padding: 0.65rem 0.75rem;
+          padding: var(--space-2) var(--space-3);
         }
 
         .edit-history-row span {
           color: var(--muted);
         }
 
-        .note-card {
-          background: var(--paper);
-          border: 1px solid var(--line);
-          border-radius: 0.9rem;
-          break-inside: avoid;
-          box-shadow: var(--shadow);
-          display: inline-grid;
-          gap: 0.7rem;
-          margin: 0 0 1rem;
-          padding: 1rem;
-          width: 100%;
+        details.cheatsheet summary {
+          cursor: pointer;
+          font-weight: 600;
+        }
+
+        details.cheatsheet[open] summary {
+          margin-bottom: var(--space-3);
         }
 
         fieldset {
           border: 1px solid var(--line);
-          border-radius: 0.72rem;
+          border-radius: var(--radius-md);
           display: flex;
           flex-wrap: wrap;
-          gap: 0.5rem;
+          gap: var(--space-2);
           margin: 0;
-          padding: 0.75rem;
+          padding: var(--space-3);
         }
 
         legend {
           color: var(--muted);
-          font-size: 0.84rem;
-          font-weight: 900;
-          padding: 0 0.35rem;
+          font-size: var(--text-sm);
+          font-weight: 700;
+          padding: 0 var(--space-1);
         }
 
         .check-row {
           align-items: center;
           background: var(--surface);
-          border-radius: 999px;
+          border: 1px solid var(--line);
+          border-radius: var(--radius-pill);
           display: flex;
-          gap: 0.4rem;
-          padding: 0.35rem 0.55rem;
+          gap: var(--space-2);
+          padding: 0.3rem var(--space-3);
         }
 
         .check-row input {
@@ -367,106 +248,21 @@ export class NotesView extends HTMLElement {
             column-count: 1;
           }
 
-          .editor-card.is-fullscreen .editor-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .existing-editor .editor-grid {
+          .editor-grid {
             grid-template-columns: 1fr;
           }
         }
       `,
     );
 
-    this.bindEditorActions(root);
-
-    root.querySelector<HTMLFormElement>('[data-form="note"]')?.addEventListener("submit", (event) => {
-      event.preventDefault();
-      const form = event.currentTarget;
-      if (!(form instanceof HTMLFormElement)) {
-        return;
-      }
-
-      const taskId = requireSelect(form, "taskId").value;
-      const tagIds = [...form.querySelectorAll<HTMLInputElement>('input[name="tagIds"]:checked')].map(
-        (input) => input.value,
-      );
-
-      void appStore.addNote({
-        title: requireInput(form, "title").value,
-        markdown: requireTextArea(form, "markdown").value,
-        projectId: requireSelect(form, "projectId").value || null,
-        linkedTaskIds: taskId ? [taskId] : [],
-        tagIds,
-      });
-      this.editorFullscreen = false;
-      form.reset();
-      this.updateNotePreview(form);
-    });
-
-    root.querySelector<HTMLFormElement>('[data-form="edit-note"]')?.addEventListener("submit", (event) => {
-      event.preventDefault();
-      const form = event.currentTarget;
-      if (!(form instanceof HTMLFormElement) || !this.openedNoteId || this.openedNoteMode !== "edit") {
-        return;
-      }
-
-      const taskId = requireSelect(form, "taskId").value;
-      const tagIds = [...form.querySelectorAll<HTMLInputElement>('input[name="tagIds"]:checked')].map(
-        (input) => input.value,
-      );
-      const noteId = this.openedNoteId;
-      void appStore
-        .updateNote({
-          noteId,
-          title: requireInput(form, "title").value,
-          markdown: requireTextArea(form, "markdown").value,
-          projectId: requireSelect(form, "projectId").value || null,
-          linkedTaskIds: taskId ? [taskId] : [],
-          tagIds,
-        })
-        .then(() => {
-          this.openedNoteId = noteId;
-          this.openedNoteMode = "preview";
-          this.render();
-        });
-    });
-
-    root.querySelectorAll<HTMLButtonElement>("[data-open-note]").forEach((button) => {
-      button.addEventListener("click", () => {
-        const noteId = button.dataset.openNote;
-        if (!noteId) {
-          return;
-        }
-
-        this.openedNoteId = noteId;
-        this.openedNoteMode = "preview";
-        this.render();
-      });
-    });
-
-    root.querySelector<HTMLButtonElement>('[data-action="edit-open-note"]')?.addEventListener("click", () => {
-      if (!this.openedNoteId) {
-        return;
-      }
-
-      this.openedNoteMode = "edit";
-      this.render();
-    });
-
-    root.querySelector<HTMLButtonElement>('[data-action="cancel-note-edit"]')?.addEventListener("click", () => {
-      this.openedNoteMode = "preview";
-      this.render();
-    });
-
-    root.querySelector<HTMLButtonElement>('[data-action="close-open-note"]')?.addEventListener("click", () => {
-      this.openedNoteId = null;
-      this.openedNoteMode = "preview";
-      this.render();
-    });
+    this.bindModalActions(root);
   }
 
-  private renderOpenedNotePanel(workspace: Workspace): string {
+  private renderModal(workspace: Workspace): string {
+    if (this.creating) {
+      return this.renderEditorModal(workspace, null);
+    }
+
     if (!this.openedNoteId) {
       return "";
     }
@@ -476,165 +272,173 @@ export class NotesView extends HTMLElement {
       return "";
     }
 
-    if (this.openedNoteMode === "preview") {
-      return this.renderOpenedNotePreview(workspace, note);
-    }
-
-    return this.renderOpenedNoteEditor(workspace, note);
+    return this.openedNoteMode === "edit"
+      ? this.renderEditorModal(workspace, note)
+      : this.renderNotePreviewModal(workspace, note);
   }
 
-  private renderOpenedNotePreview(workspace: Workspace, note: Note): string {
+  private renderEditorModal(workspace: Workspace, note: Note | null): string {
+    const isEdit = note !== null;
+    const cancelAction = isEdit ? "cancel-note-edit" : "close-create";
+
+    return modalHtml({
+      wide: true,
+      label: isEdit ? "Редактирование заметки" : "Новый конспект",
+      body: `
+        <form class="form-grid" data-markdown-editor data-form="${isEdit ? "edit-note" : "note"}">
+          <div class="card-header" style="margin-bottom: 0;">
+            <div>
+              <p class="eyebrow">${isEdit ? "Редактирование" : "Markdown"}</p>
+              <h2>${isEdit ? escapeHtml(note.title) : "Новый конспект"}</h2>
+            </div>
+            <div class="row-actions">
+              <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: cancelAction } })}>${isEdit ? "Отмена" : "Закрыть"}</button>
+              <button ${buttonAttrs({ type: "submit", size: "small" })}>Сохранить</button>
+            </div>
+          </div>
+
+          ${
+            isEdit
+              ? metricBarHtml([
+                  { label: "Создана", value: formatDateTime(note.createdAt) },
+                  { label: "Обновлена", value: formatDateTime(note.updatedAt) },
+                  { label: "Редактирований", value: note.editHistory.length },
+                ])
+              : ""
+          }
+
+          ${fieldHtml({
+            label: "Название",
+            control: `<input name="title" required value="${isEdit ? escapeHtml(note.title) : ""}" placeholder="Например: итоги исследования" />`,
+          })}
+          <div class="inline-grid">
+            ${fieldHtml({
+              label: "Проект",
+              control: `<select name="projectId">${renderProjectOptions(workspace.projects, note?.projectId ?? null)}</select>`,
+            })}
+            ${fieldHtml({
+              label: "Связанная задача",
+              control: `<select name="taskId">
+                <option value="">Без задачи</option>
+                ${renderTaskOptions(workspace.tasks, note?.linkedTaskIds[0] ?? null)}
+              </select>`,
+            })}
+          </div>
+          <fieldset>
+            <legend>Теги</legend>
+            ${
+              workspace.tags.length
+                ? workspace.tags
+                    .map(
+                      (tag) => `
+                        <label class="check-row">
+                          <input type="checkbox" name="tagIds" value="${escapeHtml(tag.id)}" ${
+                            note?.tagIds.includes(tag.id) ? "checked" : ""
+                          } />
+                          <span>${escapeHtml(tag.name)}</span>
+                        </label>
+                      `,
+                    )
+                    .join("")
+                : `<p class="muted">Теги можно добавить в настройках.</p>`
+            }
+          </fieldset>
+          <div class="markdown-tools" aria-label="Сниппеты Markdown">
+            ${this.renderSnippetButtons()}
+          </div>
+          <div class="editor-grid">
+            ${fieldHtml({
+              label: "Текст",
+              className: "markdown-field",
+              control: `<textarea name="markdown" required data-note-markdown placeholder="# Заголовок&#10;- тезис&#10;- следующий шаг">${
+                isEdit ? escapeHtml(note.markdown) : ""
+              }</textarea>`,
+            })}
+            <article class="preview-panel" aria-live="polite">
+              <div class="markdown-preview" data-note-preview>${isEdit ? renderMarkdown(note.markdown) : EMPTY_PREVIEW_HTML}</div>
+            </article>
+          </div>
+
+          <details class="cheatsheet">
+            <summary>Шпаргалка Markdown</summary>
+            <div class="syntax-list">
+              ${MARKDOWN_SNIPPETS.map(
+                (snippet) => `
+                  <div class="syntax-item">
+                    <strong>${escapeHtml(snippet.label)}</strong>
+                    <code>${escapeHtml(snippet.hint)}</code>
+                  </div>
+                `,
+              ).join("")}
+            </div>
+          </details>
+
+          ${
+            isEdit
+              ? `
+                <article class="card subtle">
+                  <div class="card-header" style="margin-bottom: var(--space-3);">
+                    <div>
+                      <p class="eyebrow">История</p>
+                      <h3>История сохранений</h3>
+                    </div>
+                  </div>
+                  ${this.renderEditHistory(note)}
+                </article>
+              `
+              : ""
+          }
+        </form>
+      `,
+    });
+  }
+
+  private renderNotePreviewModal(workspace: Workspace, note: Note): string {
     const linkedTasks = note.linkedTaskIds.map((taskId) => getTaskName(workspace.tasks, taskId)).join(", ");
 
-    return `
-      <article class="card existing-editor note-reader" data-open-note-panel>
-        <div class="card-header editor-header">
-          <div>
-            <p class="eyebrow">Заметка</p>
-            <h2>${escapeHtml(note.title)}</h2>
-          </div>
-          <div class="row-actions">
-            <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-open-note" } })}>Закрыть</button>
-            <button ${buttonAttrs({ size: "small", data: { action: "edit-open-note" } })}>Редактировать</button>
-          </div>
-        </div>
-
-        <div class="three-grid">
-          <article class="card subtle">
-            <p class="eyebrow">Проект</p>
-            <strong>${escapeHtml(getProjectName(workspace.projects, note.projectId))}</strong>
-          </article>
-          <article class="card subtle">
-            <p class="eyebrow">Обновлена</p>
-            <strong>${formatDateTime(note.updatedAt)}</strong>
-          </article>
-          <article class="card subtle">
-            <p class="eyebrow">Редактирований</p>
-            <strong>${note.editHistory.length}</strong>
-          </article>
-        </div>
-
-        <article class="preview-panel note-reader-body">
-          <div class="markdown-preview">${renderMarkdown(note.markdown)}</div>
-        </article>
-
-        <div class="meta-row">
-          ${linkedTasks ? `<span>задачи: ${escapeHtml(linkedTasks)}</span>` : ""}
-          ${renderTagPills(workspace.tags, note.tagIds)}
-        </div>
-
-        <article class="card subtle">
-          <div class="card-header compact">
+    return modalHtml({
+      wide: true,
+      label: "Заметка",
+      body: `
+        <article class="form-grid">
+          <div class="card-header" style="margin-bottom: 0;">
             <div>
-              <p class="eyebrow">История</p>
-              <h3>История сохранений</h3>
+              <p class="eyebrow">Заметка</p>
+              <h2>${escapeHtml(note.title)}</h2>
+            </div>
+            <div class="row-actions">
+              <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-open-note" } })}>Закрыть</button>
+              <button ${buttonAttrs({ size: "small", data: { action: "edit-open-note" } })}>Редактировать</button>
             </div>
           </div>
-          ${this.renderEditHistory(note)}
-        </article>
-      </article>
-    `;
-  }
 
-  private renderOpenedNoteEditor(workspace: Workspace, note: Note): string {
-    return `
-      <form class="card form-grid editor-card existing-editor" data-markdown-editor data-form="edit-note">
-        <div class="card-header editor-header">
-          <div>
-            <p class="eyebrow">Редактирование</p>
-            <h2>${escapeHtml(note.title)}</h2>
+          ${metricBarHtml([
+            { label: "Проект", value: getProjectName(workspace.projects, note.projectId) },
+            { label: "Обновлена", value: formatDateTime(note.updatedAt) },
+            { label: "Редактирований", value: note.editHistory.length },
+          ])}
+
+          <article class="preview-panel">
+            <div class="markdown-preview">${renderMarkdown(note.markdown)}</div>
+          </article>
+
+          <div class="meta-row">
+            ${linkedTasks ? `<span>задачи: ${escapeHtml(linkedTasks)}</span>` : ""}
+            ${renderTagPills(workspace.tags, note.tagIds)}
           </div>
-          <div class="row-actions">
-            <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "cancel-note-edit" } })}>Отмена</button>
-            <button ${buttonAttrs({ type: "submit", size: "small" })}>Сохранить</button>
-          </div>
-        </div>
 
-        <div class="three-grid">
           <article class="card subtle">
-            <p class="eyebrow">Создана</p>
-            <strong>${formatDateTime(note.createdAt)}</strong>
-          </article>
-          <article class="card subtle">
-            <p class="eyebrow">Обновлена</p>
-            <strong>${formatDateTime(note.updatedAt)}</strong>
-          </article>
-          <article class="card subtle">
-            <p class="eyebrow">Редактирований</p>
-            <strong>${note.editHistory.length}</strong>
-          </article>
-        </div>
-
-        ${fieldHtml({
-          label: "Название",
-          control: `<input name="title" required value="${escapeHtml(note.title)}" />`,
-        })}
-        <div class="inline-grid">
-          ${fieldHtml({
-            label: "Проект",
-            control: `<select name="projectId">${renderProjectOptions(workspace.projects, note.projectId)}</select>`,
-          })}
-          ${fieldHtml({
-            label: "Связанная задача",
-            control: `<select name="taskId">
-              <option value="">Без задачи</option>
-              ${renderTaskOptions(workspace.tasks, note.linkedTaskIds[0] ?? null)}
-            </select>`,
-          })}
-        </div>
-        <fieldset>
-          <legend>Теги</legend>
-          ${
-            workspace.tags.length
-              ? workspace.tags
-                  .map(
-                    (tag) => `
-                      <label class="check-row">
-                        <input
-                          type="checkbox"
-                          name="tagIds"
-                          value="${escapeHtml(tag.id)}"
-                          ${note.tagIds.includes(tag.id) ? "checked" : ""}
-                        />
-                        <span>${escapeHtml(tag.name)}</span>
-                      </label>
-                    `,
-                  )
-                  .join("")
-              : `<p class="muted">Теги можно добавить в настройках.</p>`
-          }
-        </fieldset>
-        <div class="markdown-tools" aria-label="Сниппеты Markdown">
-          ${this.renderSnippetButtons()}
-        </div>
-        <div class="editor-grid">
-          ${fieldHtml({
-            label: "Текст",
-            className: "markdown-field",
-            control: `<textarea name="markdown" required data-note-markdown>${escapeHtml(note.markdown)}</textarea>`,
-          })}
-          <article class="preview-panel" aria-live="polite">
-            <div class="card-header compact">
+            <div class="card-header" style="margin-bottom: var(--space-3);">
               <div>
-                <p class="eyebrow">Preview</p>
-                <h3>Живой просмотр</h3>
+                <p class="eyebrow">История</p>
+                <h3>История сохранений</h3>
               </div>
             </div>
-            <div class="markdown-preview" data-note-preview>${renderMarkdown(note.markdown)}</div>
+            ${this.renderEditHistory(note)}
           </article>
-        </div>
-
-        <article class="card subtle">
-          <div class="card-header compact">
-            <div>
-              <p class="eyebrow">История</p>
-              <h3>История сохранений</h3>
-            </div>
-          </div>
-          ${this.renderEditHistory(note)}
         </article>
-      </form>
-    `;
+      `,
+    });
   }
 
   private renderEditHistory(note: Note): string {
@@ -676,6 +480,118 @@ export class NotesView extends HTMLElement {
     ).join("");
   }
 
+  private bindModalActions(root: ShadowRoot): void {
+    root.querySelector<HTMLButtonElement>('[data-action="open-create"]')?.addEventListener("click", () => {
+      this.creating = true;
+      this.openedNoteId = null;
+      this.render();
+    });
+
+    root.querySelectorAll<HTMLButtonElement>("[data-open-note]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const noteId = button.dataset.openNote;
+        if (!noteId) {
+          return;
+        }
+
+        this.creating = false;
+        this.openedNoteId = noteId;
+        this.openedNoteMode = "preview";
+        this.render();
+      });
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="edit-open-note"]')?.addEventListener("click", () => {
+      if (!this.openedNoteId) {
+        return;
+      }
+
+      this.openedNoteMode = "edit";
+      this.render();
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="cancel-note-edit"]')?.addEventListener("click", () => {
+      this.openedNoteMode = "preview";
+      this.render();
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="close-open-note"]')?.addEventListener("click", () => {
+      this.closeModals();
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="close-create"]')?.addEventListener("click", () => {
+      this.creating = false;
+      this.render();
+    });
+
+    if (this.modalOpen) {
+      wireModal(root, {
+        onClose: () => {
+          if (this.openedNoteId && this.openedNoteMode === "edit") {
+            this.openedNoteMode = "preview";
+            this.render();
+            return;
+          }
+
+          this.closeModals();
+        },
+      });
+    }
+
+    this.bindEditorActions(root);
+
+    root.querySelector<HTMLFormElement>('[data-form="note"]')?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!(form instanceof HTMLFormElement)) {
+        return;
+      }
+
+      const taskId = requireSelect(form, "taskId").value;
+      const tagIds = [...form.querySelectorAll<HTMLInputElement>('input[name="tagIds"]:checked')].map(
+        (input) => input.value,
+      );
+
+      void appStore.addNote({
+        title: requireInput(form, "title").value,
+        markdown: requireTextArea(form, "markdown").value,
+        projectId: requireSelect(form, "projectId").value || null,
+        linkedTaskIds: taskId ? [taskId] : [],
+        tagIds,
+      });
+      this.creating = false;
+      this.render();
+    });
+
+    root.querySelector<HTMLFormElement>('[data-form="edit-note"]')?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!(form instanceof HTMLFormElement) || !this.openedNoteId || this.openedNoteMode !== "edit") {
+        return;
+      }
+
+      const taskId = requireSelect(form, "taskId").value;
+      const tagIds = [...form.querySelectorAll<HTMLInputElement>('input[name="tagIds"]:checked')].map(
+        (input) => input.value,
+      );
+      const noteId = this.openedNoteId;
+      void appStore
+        .updateNote({
+          noteId,
+          title: requireInput(form, "title").value,
+          markdown: requireTextArea(form, "markdown").value,
+          projectId: requireSelect(form, "projectId").value || null,
+          linkedTaskIds: taskId ? [taskId] : [],
+          tagIds,
+        })
+        .then(() => {
+          this.openedNoteId = noteId;
+          this.openedNoteMode = "preview";
+          this.render();
+        });
+    });
+  }
+
   private bindEditorActions(root: ShadowRoot): void {
     root.querySelectorAll<HTMLElement>("[data-markdown-editor]").forEach((editor) => {
       const textarea = editor.querySelector<HTMLTextAreaElement>("[data-note-markdown]");
@@ -697,42 +613,7 @@ export class NotesView extends HTMLElement {
           this.updateNotePreview(editor);
         });
       });
-
-      editor.querySelector<HTMLButtonElement>('[data-action="toggle-fullscreen"]')?.addEventListener("click", () => {
-        this.setEditorFullscreen(editor, !this.editorFullscreen);
-      });
     });
-
-    root.addEventListener("keydown", (event) => {
-      if (!(event instanceof KeyboardEvent) || event.key !== "Escape") {
-        return;
-      }
-
-      if (this.openedNoteId) {
-        this.openedNoteId = null;
-        this.openedNoteMode = "preview";
-        this.render();
-        return;
-      }
-
-      if (this.editorFullscreen) {
-        const editor = root.querySelector<HTMLElement>('[data-form="note"]');
-        if (editor) {
-          this.setEditorFullscreen(editor, false);
-        }
-      }
-    });
-  }
-
-  private setEditorFullscreen(editor: HTMLElement, enabled: boolean): void {
-    this.editorFullscreen = enabled;
-    const button = editor.querySelector<HTMLButtonElement>('[data-action="toggle-fullscreen"]');
-
-    editor.classList.toggle("is-fullscreen", enabled);
-    if (button) {
-      button.textContent = enabled ? "Свернуть" : "На весь экран";
-      button.setAttribute("aria-pressed", enabled ? "true" : "false");
-    }
   }
 
   private updateNotePreview(container: ParentNode): void {

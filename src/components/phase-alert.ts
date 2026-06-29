@@ -79,27 +79,25 @@ export class PhaseAlert extends HTMLElement {
         .phase-alert {
           align-items: center;
           animation: slide-in 220ms ease-out;
-          background:
-            linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(255, 250, 240, 0.98)),
-            var(--paper);
+          background: var(--paper);
           border: 1px solid var(--line);
-          border-radius: 1.4rem;
-          box-shadow: 0 24px 80px rgba(20, 33, 61, 0.24);
+          border-radius: var(--radius-lg);
+          box-shadow: var(--shadow-md);
           display: grid;
-          gap: 1rem;
+          gap: var(--space-4);
           grid-template-columns: auto minmax(0, 1fr) auto;
-          padding: 1rem;
+          padding: var(--space-4);
         }
 
         .phase-alert h2 {
-          font-size: clamp(1.25rem, 3vw, 1.8rem);
+          font-size: var(--text-lg);
         }
 
         .signal-dot {
           animation: pulse 900ms ease-in-out infinite;
-          background: var(--gold);
-          border-radius: 999px;
-          box-shadow: 0 0 0 0 rgba(225, 159, 68, 0.42);
+          background: var(--accent);
+          border-radius: var(--radius-pill);
+          box-shadow: 0 0 0 0 rgba(47, 125, 92, 0.42);
           height: 1.2rem;
           width: 1.2rem;
         }
@@ -118,10 +116,10 @@ export class PhaseAlert extends HTMLElement {
         @keyframes pulse {
           0%,
           100% {
-            box-shadow: 0 0 0 0 rgba(225, 159, 68, 0.42);
+            box-shadow: 0 0 0 0 rgba(47, 125, 92, 0.42);
           }
           50% {
-            box-shadow: 0 0 0 0.75rem rgba(225, 159, 68, 0);
+            box-shadow: 0 0 0 0.75rem rgba(47, 125, 92, 0);
           }
         }
 

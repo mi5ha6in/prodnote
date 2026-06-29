@@ -13,13 +13,15 @@ import {
   subscribeSync,
 } from "../sync/client";
 import { confirmDestructive } from "../ui/actions";
-import { badgeHtml, buttonAttrs, fieldHtml } from "../ui/html";
+import { badgeHtml, buttonAttrs, fieldHtml, modalHtml } from "../ui/html";
+import { wireModal } from "./modal";
 import { renderShadow } from "./shadow";
 import { requireInput, requireSelect, requireTextArea } from "./view-utils";
 
 export class SettingsView extends HTMLElement {
   private unsubscribe: (() => void) | null = null;
   private syncUnsubscribe: (() => void) | null = null;
+  private creating: "project" | "tag" | null = null;
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
@@ -33,6 +35,66 @@ export class SettingsView extends HTMLElement {
     this.syncUnsubscribe?.();
   }
 
+  private renderCreateModal(): string {
+    if (this.creating === "project") {
+      return modalHtml({
+        label: "Новый проект",
+        body: `
+          <form class="form-grid" data-form="project">
+            <div class="card-header" style="margin-bottom: 0;">
+              <div>
+                <p class="eyebrow">Проекты</p>
+                <h2>Новый проект</h2>
+              </div>
+              <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-create" } })}>Закрыть</button>
+            </div>
+            ${fieldHtml({
+              label: "Название",
+              control: `<input name="name" required placeholder="Например: Исследования" />`,
+            })}
+            ${fieldHtml({
+              label: "Цвет",
+              control: `<input name="color" type="color" value="#2f7d5c" />`,
+            })}
+            ${fieldHtml({
+              label: "Описание",
+              control: `<textarea name="description" placeholder="Для чего этот проект"></textarea>`,
+            })}
+            <button ${buttonAttrs({ type: "submit" })}>Добавить проект</button>
+          </form>
+        `,
+      });
+    }
+
+    if (this.creating === "tag") {
+      return modalHtml({
+        label: "Новый тег",
+        body: `
+          <form class="form-grid" data-form="tag">
+            <div class="card-header" style="margin-bottom: 0;">
+              <div>
+                <p class="eyebrow">Теги</p>
+                <h2>Новый тег</h2>
+              </div>
+              <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-create" } })}>Закрыть</button>
+            </div>
+            ${fieldHtml({
+              label: "Название",
+              control: `<input name="name" required placeholder="Например: глубокая работа" />`,
+            })}
+            ${fieldHtml({
+              label: "Цвет",
+              control: `<input name="color" type="color" value="#c98b38" />`,
+            })}
+            <button ${buttonAttrs({ type: "submit" })}>Добавить тег</button>
+          </form>
+        `,
+      });
+    }
+
+    return "";
+  }
+
   private render(): void {
     const workspace = appStore.getWorkspace();
     const settings = workspace.settings;
@@ -43,23 +105,7 @@ export class SettingsView extends HTMLElement {
       this,
       `
         <section class="view-grid">
-          <div class="three-grid">
-            <article class="card">
-              <p class="eyebrow">Схема</p>
-                <span class="stat-number">v${SCHEMA_VERSION}</span>
-              <p class="muted">Формат .prodnote.json.</p>
-            </article>
-            <article class="card">
-              <p class="eyebrow">Данные</p>
-              <span class="stat-number">${workspace.tasks.length + workspace.notes.length}</span>
-              <p class="muted">Задачи и заметки.</p>
-            </article>
-            <article class="card">
-              <p class="eyebrow">Локально</p>
-              <span class="stat-number">IDB</span>
-              <p class="muted">IndexedDB prodnote-db.</p>
-            </article>
-          </div>
+          ${this.renderCreateModal()}
 
           <div class="split-grid">
             <form class="card form-grid" data-form="settings">
@@ -158,51 +204,16 @@ export class SettingsView extends HTMLElement {
           </form>
 
           <div class="split-grid">
-            <form class="card form-grid" data-form="project">
-              <div>
-                <p class="eyebrow">Проекты</p>
-                <h2>Новый проект</h2>
-              </div>
-              ${fieldHtml({
-                label: "Название",
-                control: `<input name="name" required placeholder="Например: Исследования" />`,
-              })}
-              ${fieldHtml({
-                label: "Цвет",
-                control: `<input name="color" type="color" value="#2a9d8f" />`,
-              })}
-              ${fieldHtml({
-                label: "Описание",
-                control: `<textarea name="description" placeholder="Для чего этот проект"></textarea>`,
-              })}
-              <button ${buttonAttrs({ type: "submit" })}>Добавить проект</button>
-            </form>
-
-            <form class="card form-grid" data-form="tag">
-              <div>
-                <p class="eyebrow">Теги</p>
-                <h2>Новый тег</h2>
-              </div>
-              ${fieldHtml({
-                label: "Название",
-                control: `<input name="name" required placeholder="Например: глубокая работа" />`,
-              })}
-              ${fieldHtml({
-                label: "Цвет",
-                control: `<input name="color" type="color" value="#e19f44" />`,
-              })}
-              <button ${buttonAttrs({ type: "submit" })}>Добавить тег</button>
-            </form>
-          </div>
-
-          <div class="split-grid">
             <article class="card">
               <div class="card-header">
                 <div>
                   <p class="eyebrow">Проекты</p>
                   <h2>Список</h2>
                 </div>
-                ${badgeHtml(workspace.projects.length)}
+                <div class="row-actions">
+                  ${badgeHtml(workspace.projects.length)}
+                  <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "open-project" } })}>+ Добавить</button>
+                </div>
               </div>
               <div class="item-list">
                 ${workspace.projects
@@ -238,7 +249,10 @@ export class SettingsView extends HTMLElement {
                   <p class="eyebrow">Теги</p>
                   <h2>Список</h2>
                 </div>
-                ${badgeHtml(workspace.tags.length)}
+                <div class="row-actions">
+                  ${badgeHtml(workspace.tags.length)}
+                  <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "open-tag" } })}>+ Добавить</button>
+                </div>
               </div>
               <div class="tag-cloud">
                 ${workspace.tags
@@ -250,19 +264,37 @@ export class SettingsView extends HTMLElement {
               </div>
             </article>
           </div>
+
+          <p class="muted settings-footer">
+            Схема v${SCHEMA_VERSION} · ${workspace.tasks.length + workspace.notes.length} задач и заметок ·
+            хранилище IndexedDB <code>prodnote-db</code> · формат .prodnote.json
+          </p>
         </section>
       `,
       `
+        .settings-footer {
+          font-size: var(--text-xs);
+          text-align: center;
+        }
+
+        .settings-footer code {
+          background: var(--paper-strong);
+          border-radius: var(--radius-sm);
+          padding: 0.05rem 0.3rem;
+        }
+
         .file-label {
           align-items: center;
-          background: rgba(20, 33, 61, 0.06);
-          border-radius: 999px;
-          color: var(--ink);
+          background: var(--surface);
+          border: 1px solid var(--line-strong);
+          border-radius: var(--radius-md);
+          color: var(--ink-soft);
           cursor: pointer;
           display: inline-flex;
-          font-weight: 900;
-          min-height: 2.65rem;
-          padding: 0.75rem 1.15rem;
+          font-size: var(--text-sm);
+          font-weight: 600;
+          min-height: 2.5rem;
+          padding: 0 var(--space-4);
         }
 
         .file-label input {
@@ -271,7 +303,7 @@ export class SettingsView extends HTMLElement {
 
         .color-dot {
           background: var(--project-color);
-          border-radius: 999px;
+          border-radius: var(--radius-pill);
           display: inline-block;
           height: 0.9rem;
           width: 0.9rem;
@@ -280,14 +312,14 @@ export class SettingsView extends HTMLElement {
         .project-row {
           align-items: center;
           display: flex;
-          gap: 1rem;
+          gap: var(--space-4);
           justify-content: space-between;
         }
 
         .tag-cloud {
           display: flex;
           flex-wrap: wrap;
-          gap: 0.5rem;
+          gap: var(--space-2);
         }
       `,
     );
@@ -321,6 +353,8 @@ export class SettingsView extends HTMLElement {
         description: requireTextArea(form, "description").value,
       });
       form.reset();
+      this.creating = null;
+      this.render();
     });
 
     root.querySelector<HTMLFormElement>('[data-form="tag"]')?.addEventListener("submit", (event) => {
@@ -335,7 +369,33 @@ export class SettingsView extends HTMLElement {
         color: requireInput(form, "color").value,
       });
       form.reset();
+      this.creating = null;
+      this.render();
     });
+
+    root.querySelector<HTMLButtonElement>('[data-action="open-project"]')?.addEventListener("click", () => {
+      this.creating = "project";
+      this.render();
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="open-tag"]')?.addEventListener("click", () => {
+      this.creating = "tag";
+      this.render();
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="close-create"]')?.addEventListener("click", () => {
+      this.creating = null;
+      this.render();
+    });
+
+    if (this.creating) {
+      wireModal(root, {
+        onClose: () => {
+          this.creating = null;
+          this.render();
+        },
+      });
+    }
 
     root.querySelectorAll<HTMLButtonElement>("[data-delete-project]").forEach((button) => {
       button.addEventListener("click", () => {
