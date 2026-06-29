@@ -17,6 +17,7 @@ import { EVENT_KIND_LABELS, SESSION_MODE_LABELS } from "../domain/defaults";
 import { buildIcs, parseIcs } from "../domain/ics";
 import { expandRecurrence, type RecurrenceRule } from "../domain/recurrence";
 import { escapeHtml } from "../domain/markdown";
+import { requestTimerNotificationPermission } from "../platform/notifications";
 import { formatDuration } from "../domain/stats";
 import type { CalendarEvent, CalendarEventKind, Workspace } from "../domain/types";
 import { appStore } from "../state";
@@ -502,11 +503,14 @@ export class CalendarView extends HTMLElement {
           }
 
           <div class="row-actions" style="justify-content: space-between;">
-            ${
-              event
-                ? `<button ${buttonAttrs({ tone: "danger", data: { deleteEvent: event.id } })}>Удалить</button>`
-                : "<span></span>"
-            }
+            <div class="row-actions">
+              ${event ? `<button ${buttonAttrs({ tone: "danger", data: { deleteEvent: event.id } })}>Удалить</button>` : ""}
+              ${
+                event?.taskId
+                  ? `<button ${buttonAttrs({ tone: "ghost", data: { action: "start-focus", taskId: event.taskId } })}>Запустить фокус</button>`
+                  : ""
+              }
+            </div>
             <button ${buttonAttrs({ type: "submit" })}>${event ? "Сохранить" : "Создать событие"}</button>
           </div>
         </form>
@@ -580,6 +584,17 @@ export class CalendarView extends HTMLElement {
 
     root.querySelector<HTMLButtonElement>('[data-action="close-modal"]')?.addEventListener("click", () => {
       this.closeModal();
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="start-focus"]')?.addEventListener("click", (event) => {
+      const taskId = event.currentTarget instanceof HTMLElement ? event.currentTarget.dataset.taskId : undefined;
+      if (!taskId || appStore.getActiveTimer()) {
+        return;
+      }
+      void requestTimerNotificationPermission();
+      void appStore.startTimer(taskId);
+      this.closeModal();
+      window.location.hash = "#/focus";
     });
 
     if (this.modal) {
