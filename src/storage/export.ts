@@ -9,6 +9,7 @@ export interface ImportPreview {
   tags: number;
   sessions: number;
   plans: number;
+  events: number;
 }
 
 export function createExportSnapshot(workspace: Workspace): Workspace {
@@ -53,6 +54,7 @@ export function validateImportSnapshot(value: unknown): ImportPreview {
     tags: (snapshot.tags ?? []).length,
     sessions: (snapshot.sessions ?? []).length,
     plans: (snapshot.plans ?? []).length,
+    events: (snapshot.events ?? []).length,
   };
 }
 
@@ -65,5 +67,6 @@ export function parseWorkspaceExport(text: string): Workspace {
     ...workspace,
     exportedAt: workspace.exportedAt ?? null,
     pomodoroCycles: Array.isArray(workspace.pomodoroCycles) ? workspace.pomodoroCycles : [],
+    events: Array.isArray(workspace.events) ? workspace.events : [],
   });
 }

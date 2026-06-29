@@ -1,10 +1,20 @@
-import { PLAN_KIND_LABELS, SESSION_MODE_LABELS } from "../domain/defaults";
+import {
+  buildMonthMatrix,
+  groupByHorizon,
+  itemsForDay,
+  toCalendarItems,
+  weekdayLabels,
+  type CalendarItem,
+} from "../domain/calendar";
+import { EVENT_KIND_LABELS, SESSION_MODE_LABELS } from "../domain/defaults";
+import { buildIcs, parseIcs } from "../domain/ics";
 import { escapeHtml } from "../domain/markdown";
 import { formatDuration } from "../domain/stats";
-import type { CalendarPlanKind, Workspace } from "../domain/types";
+import type { CalendarEventKind, Workspace } from "../domain/types";
 import { appStore } from "../state";
-import { buttonAttrs, fieldHtml, modalHtml, viewHeaderHtml } from "../ui/html";
-import { wireModal } from "./modal";
+import { confirmDestructive } from "../ui/actions";
+import { buttonAttrs, fieldHtml, metricBarHtml, modalHtml, viewHeaderHtml } from "../ui/html";
+import { setBodyScrollLock, wireModal } from "./modal";
 import { renderShadow } from "./shadow";
 import {
   formatDateTime,
@@ -17,9 +27,30 @@ import {
   toDateTimeLocalValue,
 } from "./view-utils";
 
+const EVENT_KINDS: CalendarEventKind[] = ["event", "focus", "meeting", "deadline", "review"];
+const MONTH_LABELS = [
+  "Январь",
+  "Февраль",
+  "Март",
+  "Апрель",
+  "Май",
+  "Июнь",
+  "Июль",
+  "Август",
+  "Сентябрь",
+  "Октябрь",
+  "Ноябрь",
+  "Декабрь",
+];
+
 export class CalendarView extends HTMLElement {
   private unsubscribe: (() => void) | null = null;
-  private creating: "plan" | "manual" | null = null;
+  private viewMode: "agenda" | "month" = "agenda";
+  private modal: "event" | "manual" | null = null;
+  private editingEventId: string | null = null;
+  private draftAllDay = false;
+  private draftStart: string | null = null;
+  private monthCursor = { year: new Date().getFullYear(), month: new Date().getMonth() };
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
@@ -28,191 +59,288 @@ export class CalendarView extends HTMLElement {
 
   disconnectedCallback(): void {
     this.unsubscribe?.();
+    setBodyScrollLock(false);
   }
 
   private render(): void {
     const workspace = appStore.getWorkspace();
     const now = new Date();
-    const sortedPlans = [...workspace.plans].sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
+    const items = toCalendarItems(workspace.events, workspace.plans);
     const sortedSessions = [...workspace.sessions].sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
-    const hasTasks = workspace.tasks.length > 0;
 
     const root = renderShadow(
       this,
       `
         <section class="view-grid">
-          ${this.renderModal(workspace, now)}
+          ${this.renderModal(workspace)}
 
           ${viewHeaderHtml({
             actions: `
-              <button ${buttonAttrs({ tone: "ghost", data: { action: "open-plan" }, disabled: !hasTasks })}>+ Запланировать</button>
-              <button ${buttonAttrs({ data: { action: "open-manual" }, disabled: !hasTasks })}>+ Записать время</button>
+              <div class="segmented" role="group" aria-label="Вид календаря">
+                <button type="button" data-view="agenda" aria-pressed="${this.viewMode === "agenda"}">Повестка</button>
+                <button type="button" data-view="month" aria-pressed="${this.viewMode === "month"}">Месяц</button>
+              </div>
+              <button ${buttonAttrs({ tone: "ghost", data: { action: "import-ics" } })}>Импорт .ics</button>
+              <button ${buttonAttrs({ tone: "ghost", data: { action: "export-ics" }, disabled: workspace.events.length === 0 })}>Экспорт .ics</button>
+              <button ${buttonAttrs({ tone: "ghost", data: { action: "open-manual" }, disabled: workspace.tasks.length === 0 })}>+ Записать время</button>
+              <button ${buttonAttrs({ data: { action: "open-event" } })}>+ Событие</button>
             `,
           })}
 
-          ${hasTasks ? "" : `<p class="muted">Сначала создайте задачу в разделе «Задачи».</p>`}
+          ${metricBarHtml([
+            { label: "Событий", value: workspace.events.length, hint: "Включая импортированные" },
+            { label: "Запланировано", value: workspace.plans.length, hint: "Слоты по задачам" },
+            { label: "Сессий", value: workspace.sessions.length, hint: "Фактический журнал" },
+          ])}
 
-          <div class="split-grid">
-            <article class="card">
-              <div class="card-header">
-                <div>
-                  <p class="eyebrow">План и дедлайны</p>
-                  <h2>Запланировано</h2>
-                </div>
-                <span class="status-pill">${sortedPlans.length}</span>
-              </div>
-              <div class="timeline">
-                ${
-                  sortedPlans.length
-                    ? sortedPlans
-                        .map(
-                          (plan) => `
-                            <div class="timeline-item">
-                              <span class="timeline-dot"></span>
-                              <div class="list-item">
-                                <div class="meta-row">
-                                  <span class="status-pill">${PLAN_KIND_LABELS[plan.kind]}</span>
-                                  <span>${formatDateTime(plan.startsAt)} - ${formatDateTime(plan.endsAt)}</span>
-                                </div>
-                                <strong>${escapeHtml(plan.title)}</strong>
-                                <p class="muted">${escapeHtml(getTaskName(workspace.tasks, plan.taskId))}</p>
-                              </div>
-                            </div>
-                          `,
-                        )
-                        .join("")
-                    : `<div class="empty">Запланированные фокус-сессии и дедлайны появятся здесь.</div>`
-                }
-              </div>
-            </article>
+          ${this.viewMode === "agenda" ? this.renderAgenda(items, workspace, now) : this.renderMonth(items, workspace)}
 
-            <article class="card">
-              <div class="card-header">
-                <div>
-                  <p class="eyebrow">Факт</p>
-                  <h2>Рабочие сессии</h2>
-                </div>
-                <span class="status-pill">${sortedSessions.length}</span>
+          <article class="card">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">Факт</p>
+                <h2>Рабочие сессии</h2>
               </div>
-              <div class="timeline">
-                ${
-                  sortedSessions.length
-                    ? sortedSessions
-                        .map(
-                          (session) => `
-                            <div class="timeline-item">
-                              <span class="timeline-dot fact"></span>
-                              <div class="list-item">
-                                <div class="meta-row">
-                                  <span class="status-pill">${SESSION_MODE_LABELS[session.mode]}</span>
-                                  <span>${formatDuration(session.durationMinutes)}</span>
-                                  <span>${formatDateTime(session.startedAt)}</span>
-                                </div>
-                                <strong>${escapeHtml(getTaskName(workspace.tasks, session.taskId))}</strong>
-                                ${session.note ? `<p class="muted">${escapeHtml(session.note)}</p>` : ""}
-                              </div>
+              <span class="status-pill">${sortedSessions.length}</span>
+            </div>
+            <div class="item-list">
+              ${
+                sortedSessions.length
+                  ? sortedSessions
+                      .slice(0, 12)
+                      .map(
+                        (session) => `
+                          <div class="list-item">
+                            <div class="meta-row">
+                              <span class="status-pill">${SESSION_MODE_LABELS[session.mode]}</span>
+                              <span>${formatDuration(session.durationMinutes)}</span>
+                              <span>${formatDateTime(session.startedAt)}</span>
                             </div>
-                          `,
-                        )
-                        .join("")
-                    : `<div class="empty">Остановите таймер или добавьте ручную сессию.</div>`
-                }
-              </div>
-            </article>
-          </div>
+                            <strong>${escapeHtml(getTaskName(workspace.tasks, session.taskId))}</strong>
+                            ${session.note ? `<p class="muted">${escapeHtml(session.note)}</p>` : ""}
+                          </div>
+                        `,
+                      )
+                      .join("")
+                  : `<div class="empty">Остановите таймер или добавьте ручную сессию.</div>`
+              }
+            </div>
+          </article>
+
+          <input type="file" accept=".ics,text/calendar" data-ics-input hidden />
         </section>
       `,
-      `
-        .timeline {
-          display: grid;
-          gap: var(--space-3);
-          position: relative;
-        }
-
-        .timeline-item {
-          display: grid;
-          gap: var(--space-2);
-          grid-template-columns: 0.9rem minmax(0, 1fr);
-        }
-
-        .timeline-dot {
-          background: var(--accent);
-          border: 3px solid var(--paper);
-          border-radius: var(--radius-pill);
-          box-shadow: 0 0 0 1px var(--line-strong);
-          height: 0.9rem;
-          margin-top: 0.75rem;
-          width: 0.9rem;
-        }
-
-        .timeline-dot.fact {
-          background: var(--ink);
-        }
-      `,
+      this.styles(),
     );
 
+    setBodyScrollLock(this.modal !== null);
     this.bindActions(root);
   }
 
-  private renderModal(workspace: Workspace, now: Date): string {
-    if (this.creating === "plan") {
-      return this.renderPlanModal(workspace, now);
+  private renderAgenda(items: CalendarItem[], workspace: Workspace, now: Date): string {
+    const sections = groupByHorizon(items, now, workspace.settings.weekStartsOn);
+
+    if (!sections.length) {
+      return `<div class="empty">Пока нет событий. Создайте событие или импортируйте .ics.</div>`;
     }
 
-    if (this.creating === "manual") {
-      return this.renderManualModal(workspace, now);
+    return `
+      <div class="agenda">
+        ${sections
+          .map(
+            (section) => `
+              <section class="agenda-section">
+                <div class="agenda-head">
+                  <h3>${escapeHtml(section.label)}</h3>
+                  <span class="status-pill">${section.items.length}</span>
+                </div>
+                <div class="item-list">
+                  ${section.items.map((item) => this.renderAgendaItem(item, workspace)).join("")}
+                </div>
+              </section>
+            `,
+          )
+          .join("")}
+      </div>
+    `;
+  }
+
+  private renderAgendaItem(item: CalendarItem, workspace: Workspace): string {
+    const when = item.allDay ? "Весь день" : formatDateTime(item.startsAt);
+    const taskName = item.taskId ? getTaskName(workspace.tasks, item.taskId) : "";
+    const kindLabel = EVENT_KIND_LABELS[item.kind as CalendarEventKind] ?? item.kind;
+    const editable = item.source === "event";
+
+    return `
+      <div class="list-item calendar-item ${editable ? "is-editable" : ""}" ${
+        editable ? `data-edit-event="${escapeHtml(item.id)}" tabindex="0"` : ""
+      }>
+        <div class="calendar-item-row">
+          <div class="calendar-item-main">
+            <strong>${escapeHtml(item.title)}</strong>
+            <div class="meta-row">
+              <span class="status-pill">${escapeHtml(kindLabel)}</span>
+              <span>${escapeHtml(when)}</span>
+              ${taskName ? `<span>${escapeHtml(taskName)}</span>` : ""}
+              ${item.source === "plan" ? `<span class="muted">план</span>` : ""}
+            </div>
+          </div>
+          <button ${buttonAttrs({
+            tone: "ghost",
+            size: "small",
+            data: item.source === "event" ? { deleteEvent: item.id } : { deletePlan: item.id },
+          })}>Удалить</button>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderMonth(items: CalendarItem[], workspace: Workspace): string {
+    const { year, month } = this.monthCursor;
+    const weeks = buildMonthMatrix(year, month, workspace.settings.weekStartsOn, new Date());
+    const labels = weekdayLabels(workspace.settings.weekStartsOn);
+
+    return `
+      <article class="card month-card">
+        <div class="card-header month-nav">
+          <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "prev-month" } })}>‹</button>
+          <h2>${MONTH_LABELS[month]} ${year}</h2>
+          <div class="row-actions">
+            <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "today-month" } })}>Сегодня</button>
+            <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "next-month" } })}>›</button>
+          </div>
+        </div>
+        <div class="month-grid">
+          ${labels.map((label) => `<div class="month-weekday">${escapeHtml(label)}</div>`).join("")}
+          ${weeks
+            .flat()
+            .map((cell) => {
+              const dayItems = itemsForDay(items, cell.dateKey);
+              return `
+                <div
+                  class="month-cell ${cell.inMonth ? "" : "is-outside"} ${cell.isToday ? "is-today" : ""}"
+                  data-new-event-date="${cell.dateKey}"
+                  tabindex="0"
+                >
+                  <span class="month-day">${cell.day}</span>
+                  <div class="month-chips">
+                    ${dayItems
+                      .slice(0, 3)
+                      .map(
+                        (item) =>
+                          `<button class="month-chip" ${
+                            item.source === "event" ? `data-edit-event="${escapeHtml(item.id)}"` : "disabled"
+                          } title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</button>`,
+                      )
+                      .join("")}
+                    ${dayItems.length > 3 ? `<span class="month-more">+${dayItems.length - 3}</span>` : ""}
+                  </div>
+                </div>
+              `;
+            })
+            .join("")}
+        </div>
+      </article>
+    `;
+  }
+
+  private renderModal(workspace: Workspace): string {
+    if (this.modal === "event") {
+      return this.renderEventModal(workspace);
+    }
+
+    if (this.modal === "manual") {
+      return this.renderManualModal(workspace);
     }
 
     return "";
   }
 
-  private renderPlanModal(workspace: Workspace, now: Date): string {
-    const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
+  private renderEventModal(workspace: Workspace): string {
+    const event = this.editingEventId
+      ? workspace.events.find((item) => item.id === this.editingEventId) ?? null
+      : null;
+    const allDay = this.draftAllDay;
+    const startIso = event?.startsAt ?? this.draftStart ?? defaultStartIso();
+    const endIso = event?.endsAt ?? new Date(Date.parse(startIso) + 60 * 60 * 1000).toISOString();
+
+    const startControl = allDay
+      ? `<input name="startsAt" type="date" required value="${toDateInputValue(startIso)}" />`
+      : `<input name="startsAt" type="datetime-local" required value="${toDateTimeLocalValue(new Date(startIso))}" />`;
+    const endControl = allDay
+      ? `<input name="endsAt" type="date" required value="${toDateInputValue(endIso)}" />`
+      : `<input name="endsAt" type="datetime-local" required value="${toDateTimeLocalValue(new Date(endIso))}" />`;
 
     return modalHtml({
-      label: "Запланировать слот",
+      label: event ? "Редактирование события" : "Новое событие",
       body: `
-        <form class="form-grid" data-form="plan">
+        <form class="form-grid" data-form="event">
           <div class="card-header" style="margin-bottom: 0;">
             <div>
-              <p class="eyebrow">План</p>
-              <h2>Запланировать слот</h2>
+              <p class="eyebrow">${event ? "Редактирование" : "Календарь"}</p>
+              <h2>${event ? escapeHtml(event.title) : "Новое событие"}</h2>
             </div>
             <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-modal" } })}>Закрыть</button>
           </div>
-          ${fieldHtml({
-            label: "Задача",
-            control: `<select name="taskId" required>${renderTaskOptions(workspace.tasks)}</select>`,
-          })}
+
           ${fieldHtml({
             label: "Название",
-            control: `<input name="title" required placeholder="Фокус по задаче" />`,
+            control: `<input name="title" required value="${event ? escapeHtml(event.title) : ""}" placeholder="Например: встреча с командой" />`,
           })}
+
+          <label class="check-row">
+            <input type="checkbox" name="allDay" data-all-day ${allDay ? "checked" : ""} />
+            <span>Весь день</span>
+          </label>
+
+          <div class="inline-grid">
+            ${fieldHtml({ label: "Начало", control: startControl })}
+            ${fieldHtml({ label: "Конец", control: endControl })}
+          </div>
+
           <div class="inline-grid">
             ${fieldHtml({
-              label: "Начало",
-              control: `<input name="startsAt" type="datetime-local" required value="${toDateTimeLocalValue(now)}" />`,
+              label: "Вид",
+              control: `<select name="kind">
+                ${EVENT_KINDS.map(
+                  (kind) =>
+                    `<option value="${kind}" ${event?.kind === kind ? "selected" : ""}>${EVENT_KIND_LABELS[kind]}</option>`,
+                ).join("")}
+              </select>`,
             })}
             ${fieldHtml({
-              label: "Конец",
-              control: `<input name="endsAt" type="datetime-local" required value="${toDateTimeLocalValue(inOneHour)}" />`,
+              label: "Связать с задачей",
+              control: `<select name="taskId">
+                <option value="">Без задачи</option>
+                ${renderTaskOptions(workspace.tasks, event?.taskId ?? null)}
+              </select>`,
             })}
           </div>
+
           ${fieldHtml({
-            label: "Тип",
-            control: `<select name="kind">
-              <option value="focus">Фокус</option>
-              <option value="deadline">Дедлайн</option>
-              <option value="review">Ревью</option>
-            </select>`,
+            label: "Место",
+            control: `<input name="location" value="${event ? escapeHtml(event.location) : ""}" placeholder="Ссылка или адрес" />`,
           })}
-          <button ${buttonAttrs({ type: "submit" })}>Добавить в календарь</button>
+          ${fieldHtml({
+            label: "Описание",
+            control: `<textarea name="description" placeholder="Детали события">${event ? escapeHtml(event.description) : ""}</textarea>`,
+          })}
+
+          <div class="row-actions" style="justify-content: space-between;">
+            ${
+              event
+                ? `<button ${buttonAttrs({ tone: "danger", data: { deleteEvent: event.id } })}>Удалить</button>`
+                : "<span></span>"
+            }
+            <button ${buttonAttrs({ type: "submit" })}>${event ? "Сохранить" : "Создать событие"}</button>
+          </div>
         </form>
       `,
     });
   }
 
-  private renderManualModal(workspace: Workspace, now: Date): string {
+  private renderManualModal(workspace: Workspace): string {
+    const now = new Date();
     const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
 
     return modalHtml({
@@ -251,46 +379,181 @@ export class CalendarView extends HTMLElement {
   }
 
   private bindActions(root: ShadowRoot): void {
-    root.querySelector<HTMLButtonElement>('[data-action="open-plan"]')?.addEventListener("click", () => {
-      this.creating = "plan";
-      this.render();
+    root.querySelectorAll<HTMLButtonElement>("[data-view]").forEach((button) => {
+      button.addEventListener("click", () => {
+        this.viewMode = button.dataset.view === "month" ? "month" : "agenda";
+        this.render();
+      });
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="open-event"]')?.addEventListener("click", () => {
+      this.openEventModal(null, null);
     });
 
     root.querySelector<HTMLButtonElement>('[data-action="open-manual"]')?.addEventListener("click", () => {
-      this.creating = "manual";
+      this.modal = "manual";
       this.render();
     });
 
     root.querySelector<HTMLButtonElement>('[data-action="close-modal"]')?.addEventListener("click", () => {
-      this.creating = null;
+      this.closeModal();
+    });
+
+    if (this.modal) {
+      wireModal(root, { onClose: () => this.closeModal() });
+    }
+
+    root.querySelectorAll<HTMLElement>("[data-edit-event]").forEach((element) => {
+      const open = () => {
+        const id = element.dataset.editEvent;
+        if (id) {
+          this.openEventModal(id, null);
+        }
+      };
+      element.addEventListener("click", (event) => {
+        if (event.target instanceof Element && event.target.closest("button[data-delete-event]")) {
+          return;
+        }
+        open();
+      });
+      element.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          open();
+        }
+      });
+    });
+
+    root.querySelectorAll<HTMLElement>("[data-new-event-date]").forEach((cell) => {
+      cell.addEventListener("click", (event) => {
+        if (event.target instanceof Element && event.target.closest("button")) {
+          return;
+        }
+        const date = cell.dataset.newEventDate;
+        if (date) {
+          this.openEventModal(null, `${date}T09:00:00`);
+        }
+      });
+    });
+
+    root.querySelectorAll<HTMLButtonElement>("[data-delete-event]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.dataset.deleteEvent;
+        if (id && confirmDestructive("Удалить это событие?")) {
+          this.modal = null;
+          this.editingEventId = null;
+          void appStore.deleteEvent(id);
+        }
+      });
+    });
+
+    root.querySelectorAll<HTMLButtonElement>("[data-delete-plan]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.dataset.deletePlan;
+        if (id && confirmDestructive("Удалить запланированный слот?")) {
+          void appStore.deletePlan(id);
+        }
+      });
+    });
+
+    root.querySelector<HTMLInputElement>("[data-all-day]")?.addEventListener("change", (event) => {
+      if (event.currentTarget instanceof HTMLInputElement) {
+        this.draftAllDay = event.currentTarget.checked;
+        this.render();
+      }
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="prev-month"]')?.addEventListener("click", () => this.shiftMonth(-1));
+    root.querySelector<HTMLButtonElement>('[data-action="next-month"]')?.addEventListener("click", () => this.shiftMonth(1));
+    root.querySelector<HTMLButtonElement>('[data-action="today-month"]')?.addEventListener("click", () => {
+      const today = new Date();
+      this.monthCursor = { year: today.getFullYear(), month: today.getMonth() };
       this.render();
     });
 
-    if (this.creating) {
-      wireModal(root, {
-        onClose: () => {
-          this.creating = null;
-          this.render();
-        },
-      });
-    }
+    root.querySelector<HTMLButtonElement>('[data-action="export-ics"]')?.addEventListener("click", () => {
+      const ics = buildIcs(appStore.getWorkspace().events);
+      const blob = new Blob([ics], { type: "text/calendar" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `prodnote-${new Date().toISOString().slice(0, 10)}.ics`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    });
 
-    root.querySelector<HTMLFormElement>('[data-form="plan"]')?.addEventListener("submit", (event) => {
+    const fileInput = root.querySelector<HTMLInputElement>("[data-ics-input]");
+    root.querySelector<HTMLButtonElement>('[data-action="import-ics"]')?.addEventListener("click", () => {
+      fileInput?.click();
+    });
+    fileInput?.addEventListener("change", (event) => {
+      const input = event.currentTarget;
+      if (!(input instanceof HTMLInputElement)) {
+        return;
+      }
+      const file = input.files?.[0] ?? null;
+      if (!file) {
+        return;
+      }
+
+      void file
+        .text()
+        .then((text) => {
+          const parsed = parseIcs(text);
+          if (!parsed.length) {
+            window.alert("В файле не найдено событий.");
+            return;
+          }
+          if (!confirmDestructive(`Импортировать событий: ${parsed.length}? Дубликаты по UID обновятся.`)) {
+            return;
+          }
+          return appStore.importEvents(parsed);
+        })
+        .catch((error: unknown) => {
+          window.alert(`Не удалось импортировать .ics: ${String(error)}`);
+        })
+        .finally(() => {
+          input.value = "";
+        });
+    });
+
+    root.querySelector<HTMLFormElement>('[data-form="event"]')?.addEventListener("submit", (event) => {
       event.preventDefault();
       const form = event.currentTarget;
       if (!(form instanceof HTMLFormElement)) {
         return;
       }
 
-      void appStore.addPlan({
-        taskId: requireSelect(form, "taskId").value,
-        title: requireInput(form, "title").value,
-        startsAt: fromDateTimeLocalValue(requireInput(form, "startsAt").value),
-        endsAt: fromDateTimeLocalValue(requireInput(form, "endsAt").value),
-        kind: requireSelect(form, "kind").value as CalendarPlanKind,
-      });
-      this.creating = null;
-      this.render();
+      const allDay = this.draftAllDay;
+      const startsAt = allDay
+        ? fromDateInputValue(requireInput(form, "startsAt").value)
+        : fromDateTimeLocalValue(requireInput(form, "startsAt").value);
+      const endsAt = allDay
+        ? fromDateInputValue(requireInput(form, "endsAt").value)
+        : fromDateTimeLocalValue(requireInput(form, "endsAt").value);
+      const taskId = requireSelect(form, "taskId").value || null;
+      const kind = requireSelect(form, "kind").value as CalendarEventKind;
+      const title = requireInput(form, "title").value;
+      const description = requireTextArea(form, "description").value;
+      const location = requireInput(form, "location").value;
+
+      if (this.editingEventId) {
+        void appStore.updateEvent({
+          eventId: this.editingEventId,
+          title,
+          startsAt,
+          endsAt,
+          allDay,
+          kind,
+          taskId,
+          description,
+          location,
+        });
+      } else {
+        void appStore.addEvent({ title, startsAt, endsAt, allDay, kind, taskId, description, location });
+      }
+
+      this.closeModal();
     });
 
     root.querySelector<HTMLFormElement>('[data-form="manual"]')?.addEventListener("submit", (event) => {
@@ -306,10 +569,219 @@ export class CalendarView extends HTMLElement {
         endedAt: fromDateTimeLocalValue(requireInput(form, "endedAt").value),
         note: requireTextArea(form, "note").value,
       });
-      this.creating = null;
-      this.render();
+      this.closeModal();
     });
   }
+
+  private openEventModal(eventId: string | null, draftStart: string | null): void {
+    this.modal = "event";
+    this.editingEventId = eventId;
+    this.draftStart = draftStart;
+    const event = eventId ? appStore.getWorkspace().events.find((item) => item.id === eventId) : null;
+    this.draftAllDay = event?.allDay ?? false;
+    this.render();
+  }
+
+  private closeModal(): void {
+    this.modal = null;
+    this.editingEventId = null;
+    this.draftStart = null;
+    this.draftAllDay = false;
+    this.render();
+  }
+
+  private shiftMonth(delta: number): void {
+    const date = new Date(this.monthCursor.year, this.monthCursor.month + delta, 1);
+    this.monthCursor = { year: date.getFullYear(), month: date.getMonth() };
+    this.render();
+  }
+
+  private styles(): string {
+    return `
+      .agenda {
+        display: grid;
+        gap: var(--space-5);
+      }
+
+      .agenda-head {
+        align-items: center;
+        display: flex;
+        gap: var(--space-3);
+        margin-bottom: var(--space-3);
+      }
+
+      .calendar-item.is-editable {
+        cursor: pointer;
+      }
+
+      .calendar-item:focus-visible {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
+        outline: none;
+      }
+
+      .calendar-item-row {
+        align-items: center;
+        display: flex;
+        gap: var(--space-3);
+        justify-content: space-between;
+      }
+
+      .calendar-item-main {
+        display: grid;
+        gap: var(--space-2);
+        min-width: 0;
+      }
+
+      .month-card {
+        overflow-x: auto;
+      }
+
+      .month-nav {
+        align-items: center;
+      }
+
+      .month-nav h2 {
+        font-size: var(--text-lg);
+      }
+
+      .month-grid {
+        display: grid;
+        gap: 1px;
+        grid-template-columns: repeat(7, minmax(7rem, 1fr));
+      }
+
+      .month-weekday {
+        color: var(--muted);
+        font-size: var(--text-xs);
+        font-weight: 700;
+        padding: var(--space-2);
+        text-align: center;
+        text-transform: uppercase;
+      }
+
+      .month-cell {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        display: grid;
+        gap: var(--space-1);
+        min-height: 6.5rem;
+        padding: var(--space-2);
+      }
+
+      .month-cell:hover {
+        border-color: var(--line-strong);
+      }
+
+      .month-cell:focus-visible {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
+        outline: none;
+      }
+
+      .month-cell.is-outside {
+        opacity: 0.5;
+      }
+
+      .month-cell.is-today {
+        border-color: var(--accent);
+      }
+
+      .month-day {
+        font-size: var(--text-sm);
+        font-weight: 650;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .month-chips {
+        display: grid;
+        gap: 0.15rem;
+      }
+
+      .month-chip {
+        background: var(--accent-soft);
+        border: none;
+        border-radius: var(--radius-sm);
+        color: var(--accent-strong);
+        cursor: pointer;
+        font-size: var(--text-xs);
+        font-weight: 600;
+        min-height: auto;
+        overflow: hidden;
+        padding: 0.1rem 0.3rem;
+        text-align: left;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .month-chip:disabled {
+        cursor: default;
+        opacity: 1;
+      }
+
+      .month-more {
+        color: var(--muted);
+        font-size: var(--text-xs);
+        padding-left: 0.3rem;
+      }
+
+      .check-row {
+        align-items: center;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-pill);
+        display: inline-flex;
+        gap: var(--space-2);
+        justify-self: start;
+        padding: 0.3rem var(--space-3);
+      }
+
+      .check-row input {
+        width: auto;
+      }
+
+      .check-row span {
+        color: var(--ink);
+        font-weight: 600;
+      }
+
+      @media (max-width: 720px) {
+        .month-grid {
+          grid-template-columns: repeat(7, minmax(3rem, 1fr));
+        }
+
+        .month-chips {
+          display: none;
+        }
+      }
+    `;
+  }
+}
+
+function defaultStartIso(): string {
+  const date = new Date();
+  date.setMinutes(0, 0, 0);
+  date.setHours(date.getHours() + 1);
+  return date.toISOString();
+}
+
+function toDateInputValue(iso: string): string {
+  const date = new Date(iso);
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function fromDateInputValue(value: string): string {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) {
+    return new Date().toISOString();
+  }
+  return new Date(year, month - 1, day, 0, 0, 0, 0).toISOString();
+}
+
+function pad(value: number): string {
+  return value.toString().padStart(2, "0");
 }
 
 customElements.define("pn-calendar-view", CalendarView);

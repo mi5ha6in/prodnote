@@ -18,10 +18,11 @@ type LegacyNote = Omit<Note, "editHistory"> & {
 type LegacyPomodoroCycle = Omit<PomodoroCycle, "completedShortBreakCount" | "completedLongBreakCount"> &
   Partial<Pick<PomodoroCycle, "completedShortBreakCount" | "completedLongBreakCount">>;
 
-type LegacyWorkspace = Omit<Workspace, "notes" | "pomodoroCycles" | "schemaVersion"> & {
+type LegacyWorkspace = Omit<Workspace, "notes" | "pomodoroCycles" | "events" | "schemaVersion"> & {
   schemaVersion: number;
   notes: LegacyNote[];
   pomodoroCycles?: LegacyPomodoroCycle[];
+  events?: Workspace["events"];
 };
 
 export function migrateWorkspace(workspace: LegacyWorkspace): Workspace {
@@ -39,6 +40,7 @@ export function migrateWorkspace(workspace: LegacyWorkspace): Workspace {
     exportedAt: workspace.exportedAt ?? null,
     notes: workspace.notes.map(normalizeNote),
     pomodoroCycles: Array.isArray(workspace.pomodoroCycles) ? workspace.pomodoroCycles.map(normalizePomodoroCycle) : [],
+    events: Array.isArray(workspace.events) ? workspace.events : [],
     sessions: normalizeSessions(
       workspace.sessions,
       Array.isArray(workspace.pomodoroCycles) ? workspace.pomodoroCycles.map(normalizePomodoroCycle) : [],

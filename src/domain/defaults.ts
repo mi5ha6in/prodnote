@@ -1,5 +1,7 @@
 import {
   SCHEMA_VERSION,
+  type CalendarEvent,
+  type CalendarEventKind,
   type CalendarPlan,
   type EntityId,
   type Note,
@@ -27,6 +29,14 @@ export const PLAN_KIND_LABELS = {
   focus: "Фокус",
   deadline: "Дедлайн",
   review: "Ревью",
+} as const;
+
+export const EVENT_KIND_LABELS = {
+  event: "Событие",
+  focus: "Фокус",
+  deadline: "Дедлайн",
+  review: "Ревью",
+  meeting: "Встреча",
 } as const;
 
 export const SESSION_MODE_LABELS = {
@@ -89,6 +99,7 @@ export function createStarterWorkspace(): Workspace {
     sessions: [],
     pomodoroCycles: [],
     plans: [],
+    events: [],
     settings: createDefaultSettings(),
   };
 }
@@ -180,5 +191,36 @@ export function createCalendarPlan(input: {
     endsAt: input.endsAt,
     kind: input.kind,
     createdAt: nowIso(),
+  };
+}
+
+export function createCalendarEvent(input: {
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  allDay?: boolean;
+  kind?: CalendarEventKind;
+  taskId?: string | null;
+  description?: string;
+  location?: string;
+  source?: "manual" | "import";
+  externalUid?: string | null;
+}): CalendarEvent {
+  const createdAt = nowIso();
+
+  return {
+    id: createId("event"),
+    title: input.title.trim(),
+    description: input.description?.trim() ?? "",
+    location: input.location?.trim() ?? "",
+    startsAt: input.startsAt,
+    endsAt: input.endsAt,
+    allDay: input.allDay ?? false,
+    kind: input.kind ?? "event",
+    taskId: input.taskId ?? null,
+    source: input.source ?? "manual",
+    externalUid: input.externalUid ?? null,
+    createdAt,
+    updatedAt: createdAt,
   };
 }

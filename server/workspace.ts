@@ -12,7 +12,8 @@ export type DeletedEntityType =
   | "note"
   | "session"
   | "pomodoroCycle"
-  | "plan";
+  | "plan"
+  | "event";
 
 export interface DeletedEntity {
   type: DeletedEntityType;
@@ -44,6 +45,7 @@ export async function getSyncedWorkspace(userId: string): Promise<SyncedWorkspac
     sessions,
     cycles,
     plans,
+    events,
     settingsRows,
   ] = await Promise.all([
     sqlClient<Row[]>`select * from projects where workspace_id = ${workspaceId} and deleted_at is null order by created_at desc`,
@@ -58,6 +60,7 @@ export async function getSyncedWorkspace(userId: string): Promise<SyncedWorkspac
     sqlClient<Row[]>`select * from time_sessions where workspace_id = ${workspaceId} and deleted_at is null order by ended_at desc`,
     sqlClient<Row[]>`select * from pomodoro_cycles where workspace_id = ${workspaceId} and deleted_at is null order by started_at desc`,
     sqlClient<Row[]>`select * from calendar_plans where workspace_id = ${workspaceId} and deleted_at is null order by starts_at asc`,
+    sqlClient<Row[]>`select * from calendar_events where workspace_id = ${workspaceId} and deleted_at is null order by starts_at asc`,
     sqlClient<Row[]>`select * from settings where workspace_id = ${workspaceId}`,
   ]);
 
@@ -154,6 +157,21 @@ export async function getSyncedWorkspace(userId: string): Promise<SyncedWorkspac
         endsAt: toIso(plan.ends_at),
         kind: asString(plan.kind) as Workspace["plans"][number]["kind"],
         createdAt: toIso(plan.created_at),
+      })),
+      events: events.map((event) => ({
+        id: asString(event.entity_id),
+        title: asString(event.title),
+        description: asString(event.description),
+        location: asString(event.location),
+        startsAt: toIso(event.starts_at),
+        endsAt: toIso(event.ends_at),
+        allDay: Boolean(event.all_day),
+        kind: asString(event.kind) as Workspace["events"][number]["kind"],
+        taskId: asNullableString(event.task_id),
+        source: asString(event.source) as Workspace["events"][number]["source"],
+        externalUid: asNullableString(event.external_uid),
+        createdAt: toIso(event.created_at),
+        updatedAt: toIso(event.updated_at),
       })),
       settings: settings
         ? {
@@ -344,6 +362,28 @@ export async function putSyncedWorkspace(
       `;
     }
 
+    for (const event of workspace.events) {
+      await transaction`
+        insert into calendar_events (
+          workspace_id, entity_id, task_id, title, description, location, starts_at, ends_at, all_day,
+          kind, source, external_uid, created_at, client_updated_at, server_revision, deleted_at
+        )
+        values (
+          ${workspaceId}, ${event.id}, ${event.taskId}, ${event.title}, ${event.description}, ${event.location},
+          ${toSqlTimestamp(event.startsAt)}, ${toSqlTimestamp(event.endsAt)}, ${event.allDay}, ${event.kind},
+          ${event.source}, ${event.externalUid}, ${toSqlTimestamp(event.createdAt)}, ${toSqlTimestamp(event.updatedAt)},
+          ${nextRevision}, null
+        )
+        on conflict (workspace_id, entity_id) do update
+        set task_id = excluded.task_id, title = excluded.title, description = excluded.description,
+          location = excluded.location, starts_at = excluded.starts_at, ends_at = excluded.ends_at,
+          all_day = excluded.all_day, kind = excluded.kind, source = excluded.source,
+          external_uid = excluded.external_uid, created_at = excluded.created_at,
+          client_updated_at = excluded.client_updated_at, server_revision = excluded.server_revision, deleted_at = null
+        where calendar_events.client_updated_at < excluded.client_updated_at or calendar_events.deleted_at is not null
+      `;
+    }
+
     await transaction`
       insert into settings (
         workspace_id, pomodoro_focus_minutes, pomodoro_short_break_minutes, pomodoro_long_break_minutes,
@@ -408,8 +448,10 @@ async function markDeleted(
     await transaction`update time_sessions set deleted_at = ${deletedAt}, server_revision = ${revision} where workspace_id = ${workspaceId} and entity_id = ${entity.id}`;
   } else if (entity.type === "pomodoroCycle") {
     await transaction`update pomodoro_cycles set deleted_at = ${deletedAt}, server_revision = ${revision} where workspace_id = ${workspaceId} and entity_id = ${entity.id}`;
-  } else {
+  } else if (entity.type === "plan") {
     await transaction`update calendar_plans set deleted_at = ${deletedAt}, server_revision = ${revision} where workspace_id = ${workspaceId} and entity_id = ${entity.id}`;
+  } else {
+    await transaction`update calendar_events set deleted_at = ${deletedAt}, server_revision = ${revision} where workspace_id = ${workspaceId} and entity_id = ${entity.id}`;
   }
 }
 

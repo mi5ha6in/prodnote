@@ -1,4 +1,5 @@
 import {
+  createCalendarEvent,
   createCalendarPlan,
   createId,
   createNote,
@@ -24,6 +25,8 @@ import {
 } from "./domain/pomodoro";
 import type {
   ActiveTimer,
+  CalendarEvent,
+  CalendarEventKind,
   CalendarPlan,
   EntityId,
   Note,
@@ -201,6 +204,104 @@ export class ProdNoteStore {
       workspace.plans.push(plan);
     });
     return plan;
+  }
+
+  async deletePlan(planId: EntityId): Promise<void> {
+    await this.commit((workspace) => {
+      workspace.plans = workspace.plans.filter((plan) => plan.id !== planId);
+    });
+    recordSyncDeletion("plan", planId);
+  }
+
+  async addEvent(input: {
+    title: string;
+    startsAt: string;
+    endsAt: string;
+    allDay?: boolean;
+    kind?: CalendarEventKind;
+    taskId?: string | null;
+    description?: string;
+    location?: string;
+  }): Promise<CalendarEvent> {
+    const event = createCalendarEvent(input);
+    await this.commit((workspace) => {
+      workspace.events.unshift(event);
+    });
+    return event;
+  }
+
+  async updateEvent(input: {
+    eventId: EntityId;
+    title: string;
+    startsAt: string;
+    endsAt: string;
+    allDay: boolean;
+    kind: CalendarEventKind;
+    taskId: string | null;
+    description?: string;
+    location?: string;
+  }): Promise<void> {
+    await this.commit((workspace) => {
+      const event = workspace.events.find((item) => item.id === input.eventId);
+      if (!event) {
+        return;
+      }
+
+      event.title = input.title.trim();
+      event.startsAt = input.startsAt;
+      event.endsAt = input.endsAt;
+      event.allDay = input.allDay;
+      event.kind = input.kind;
+      event.taskId = input.taskId;
+      event.description = input.description?.trim() ?? "";
+      event.location = input.location?.trim() ?? "";
+      event.updatedAt = nowIso();
+    });
+  }
+
+  async deleteEvent(eventId: EntityId): Promise<void> {
+    await this.commit((workspace) => {
+      workspace.events = workspace.events.filter((event) => event.id !== eventId);
+    });
+    recordSyncDeletion("event", eventId);
+  }
+
+  async importEvents(
+    events: Array<{
+      title: string;
+      startsAt: string;
+      endsAt: string;
+      allDay: boolean;
+      description?: string;
+      location?: string;
+      externalUid: string | null;
+    }>,
+  ): Promise<number> {
+    let imported = 0;
+
+    await this.commit((workspace) => {
+      for (const incoming of events) {
+        const existing = incoming.externalUid
+          ? workspace.events.find((event) => event.externalUid === incoming.externalUid)
+          : undefined;
+
+        if (existing) {
+          existing.title = incoming.title.trim();
+          existing.startsAt = incoming.startsAt;
+          existing.endsAt = incoming.endsAt;
+          existing.allDay = incoming.allDay;
+          existing.description = incoming.description?.trim() ?? "";
+          existing.location = incoming.location?.trim() ?? "";
+          existing.source = "import";
+          existing.updatedAt = nowIso();
+        } else {
+          workspace.events.unshift(createCalendarEvent({ ...incoming, source: "import" }));
+        }
+        imported += 1;
+      }
+    });
+
+    return imported;
   }
 
   async updateTask(input: {

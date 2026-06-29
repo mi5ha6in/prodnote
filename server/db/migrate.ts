@@ -197,6 +197,26 @@ export async function runMigrations(): Promise<void> {
       primary key (workspace_id, entity_id)
     );
 
+    create table if not exists calendar_events (
+      workspace_id uuid not null references workspaces(id) on delete cascade,
+      entity_id text not null,
+      task_id text,
+      title text not null,
+      description text not null default '',
+      location text not null default '',
+      starts_at timestamptz not null,
+      ends_at timestamptz not null,
+      all_day boolean not null default false,
+      kind text not null,
+      source text not null default 'manual',
+      external_uid text,
+      created_at timestamptz not null,
+      client_updated_at timestamptz not null,
+      server_revision bigint not null,
+      deleted_at timestamptz,
+      primary key (workspace_id, entity_id)
+    );
+
     create table if not exists settings (
       workspace_id uuid primary key references workspaces(id) on delete cascade,
       pomodoro_focus_minutes integer not null,
