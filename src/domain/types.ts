@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export type EntityId = string;
 
@@ -6,6 +6,7 @@ export type TaskStatus = "backlog" | "active" | "blocked" | "done";
 export type TaskPriority = "low" | "medium" | "high";
 export type SessionMode = "timer" | "manual" | "pomodoro";
 export type CalendarPlanKind = "focus" | "deadline" | "review";
+export type CalendarEventKind = "event" | "focus" | "deadline" | "review" | "meeting";
 export type PomodoroStatus = "running" | "paused" | "completed" | "cancelled";
 export type PomodoroPhase = "focus" | "shortBreak" | "longBreak";
 
@@ -101,6 +102,22 @@ export interface CalendarPlan {
   createdAt: string;
 }
 
+export interface CalendarEvent {
+  id: EntityId;
+  title: string;
+  description: string;
+  location: string;
+  startsAt: string;
+  endsAt: string;
+  allDay: boolean;
+  kind: CalendarEventKind;
+  taskId: EntityId | null;
+  source: "manual" | "import";
+  externalUid: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Settings {
   pomodoroFocusMinutes: number;
   pomodoroShortBreakMinutes: number;
@@ -119,6 +136,7 @@ export interface WorkspaceExport {
   sessions: TimeSession[];
   pomodoroCycles: PomodoroCycle[];
   plans: CalendarPlan[];
+  events: CalendarEvent[];
   settings: Settings;
 }
 

@@ -20,7 +20,7 @@ import { runMigrations } from "./db/migrate";
 import { getSyncedWorkspace, putSyncedWorkspace, type DeletedEntityType } from "./workspace";
 
 const config = getServerConfig();
-const deletedEntityTypes = ["project", "tag", "task", "note", "session", "pomodoroCycle", "plan"] as const satisfies readonly DeletedEntityType[];
+const deletedEntityTypes = ["project", "tag", "task", "note", "session", "pomodoroCycle", "plan", "event"] as const satisfies readonly DeletedEntityType[];
 
 const putWorkspaceSchema = z.object({
   schemaVersion: z.number().int().positive(),

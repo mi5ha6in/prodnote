@@ -210,7 +210,28 @@ export async function syncNow(workspace: Workspace): Promise<Workspace> {
   return pulled.workspace;
 }
 
-export function recordSyncDeletion(type: "project", id: string): void {
+export type SyncEntityType =
+  | "project"
+  | "tag"
+  | "task"
+  | "note"
+  | "session"
+  | "pomodoroCycle"
+  | "plan"
+  | "event";
+
+const SYNC_ENTITY_TYPES: readonly SyncEntityType[] = [
+  "project",
+  "tag",
+  "task",
+  "note",
+  "session",
+  "pomodoroCycle",
+  "plan",
+  "event",
+];
+
+export function recordSyncDeletion(type: SyncEntityType, id: string): void {
   if (!hasBrowserStorage()) {
     return;
   }
@@ -266,6 +287,7 @@ export function mergeWorkspaces(local: Workspace, remote: Workspace, remoteRevis
     sessions: mergeById(local.sessions, remote.sessions, (item) => item.endedAt),
     pomodoroCycles: mergeById(local.pomodoroCycles, remote.pomodoroCycles, (item) => item.startedAt),
     plans: mergeById(local.plans, remote.plans, (item) => item.createdAt),
+    events: mergeById(local.events ?? [], remote.events ?? [], (item) => item.updatedAt),
     settings: remoteRevision > lastRevision ? remote.settings : local.settings,
   });
 }
@@ -339,7 +361,7 @@ function writeMeta(meta: { lastSyncedAt: string; serverRevision: number }): void
   localStorage.setItem(META_KEY, JSON.stringify(meta));
 }
 
-function readTombstones(): Array<{ type: "project"; id: string; deletedAt: string }> {
+function readTombstones(): Array<{ type: SyncEntityType; id: string; deletedAt: string }> {
   if (!hasBrowserStorage()) {
     return [];
   }
@@ -350,8 +372,8 @@ function readTombstones(): Array<{ type: "project"; id: string; deletedAt: strin
       return [];
     }
     return parsed.filter(
-      (item): item is { type: "project"; id: string; deletedAt: string } =>
-        item?.type === "project" && typeof item.id === "string" && typeof item.deletedAt === "string",
+      (item): item is { type: SyncEntityType; id: string; deletedAt: string } =>
+        SYNC_ENTITY_TYPES.includes(item?.type) && typeof item.id === "string" && typeof item.deletedAt === "string",
     );
   } catch {
     return [];
