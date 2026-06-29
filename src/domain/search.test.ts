@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createCalendarEvent, createNote, createTask } from "./defaults";
-import { searchAll, searchNotes } from "./search";
+import { findBacklinks, searchAll, searchNotes } from "./search";
 
 const notes = [
   createNote({ title: "TypeScript narrowing", markdown: "discriminated unions" }),
@@ -33,5 +33,16 @@ describe("searchAll", () => {
 
   it("returns nothing for an empty query", () => {
     expect(searchAll("", { tasks: [], notes, events: [] })).toHaveLength(0);
+  });
+});
+
+describe("findBacklinks", () => {
+  it("finds notes that wiki-link to the target", () => {
+    const target = createNote({ title: "Architecture", markdown: "root" });
+    const linker = createNote({ title: "Plan", markdown: "see [[Architecture]] for details" });
+    const other = createNote({ title: "Misc", markdown: "nothing here" });
+
+    const links = findBacklinks([target, linker, other], target);
+    expect(links.map((n) => n.title)).toEqual(["Plan"]);
   });
 });

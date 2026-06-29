@@ -22,6 +22,10 @@ function sanitizeUrl(url: string): string {
 function renderInline(value: string): string {
   return escapeHtml(value)
     .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(
+      /\[\[([^\]]+)\]\]/g,
+      (_match, title: string) => `<a class="wikilink" data-wikilink="${title.trim()}">${title.trim()}</a>`,
+    )
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/\*([^*]+)\*/g, "<em>$1</em>")
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label: string, url: string) => {

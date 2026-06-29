@@ -10,6 +10,12 @@ function matchesAll(haystack: string, queryTerms: string[]): boolean {
   return queryTerms.every((term) => text.includes(term));
 }
 
+/** Notes that link to `target` via a [[Title]] wiki-link. */
+export function findBacklinks(notes: Note[], target: Note): Note[] {
+  const needle = `[[${target.title.toLowerCase()}]]`;
+  return notes.filter((note) => note.id !== target.id && note.markdown.toLowerCase().includes(needle));
+}
+
 export function searchNotes(notes: Note[], query: string): Note[] {
   const queryTerms = terms(query);
   if (!queryTerms.length) {

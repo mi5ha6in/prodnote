@@ -1,6 +1,6 @@
 import { escapeHtml, renderMarkdown } from "../domain/markdown";
 import { applyMarkdownSnippetToText, MARKDOWN_SNIPPETS, type MarkdownSnippet } from "../domain/markdown-snippets";
-import { searchNotes } from "../domain/search";
+import { findBacklinks, searchNotes } from "../domain/search";
 import type { Note, Workspace } from "../domain/types";
 import { appStore } from "../state";
 import { badgeHtml, buttonAttrs, emptyStateHtml, fieldHtml, metricBarHtml, modalHtml, viewHeaderHtml } from "../ui/html";
@@ -127,6 +127,17 @@ export class NotesView extends HTMLElement {
           -webkit-box-orient: vertical;
           -webkit-line-clamp: 5;
           overflow: hidden;
+        }
+
+        .markdown-preview .wikilink {
+          cursor: pointer;
+          text-decoration: underline;
+          text-decoration-style: dotted;
+        }
+
+        .backlink {
+          cursor: pointer;
+          text-align: left;
         }
 
         .editor-grid {
@@ -451,6 +462,8 @@ export class NotesView extends HTMLElement {
             ${renderTagPills(workspace.tags, note.tagIds)}
           </div>
 
+          ${this.renderBacklinks(workspace, note)}
+
           <article class="card subtle">
             <div class="card-header" style="margin-bottom: var(--space-3);">
               <div>
@@ -463,6 +476,35 @@ export class NotesView extends HTMLElement {
         </article>
       `,
     });
+  }
+
+  private renderBacklinks(workspace: Workspace, note: Note): string {
+    const backlinks = findBacklinks(workspace.notes, note);
+    if (!backlinks.length) {
+      return "";
+    }
+
+    return `
+      <article class="card subtle">
+        <div class="card-header" style="margin-bottom: var(--space-3);">
+          <div>
+            <p class="eyebrow">Связи</p>
+            <h3>Упоминается в</h3>
+          </div>
+        </div>
+        <div class="item-list">
+          ${backlinks
+            .map(
+              (link) => `
+                <button class="list-item backlink" data-open-note="${escapeHtml(link.id)}">
+                  <strong>${escapeHtml(link.title)}</strong>
+                </button>
+              `,
+            )
+            .join("")}
+        </div>
+      </article>
+    `;
   }
 
   private renderEditHistory(note: Note): string {
@@ -522,6 +564,20 @@ export class NotesView extends HTMLElement {
         this.openedNoteId = noteId;
         this.openedNoteMode = "preview";
         this.render();
+      });
+    });
+
+    root.querySelectorAll<HTMLElement>("[data-wikilink]").forEach((link) => {
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        const title = link.dataset.wikilink?.toLowerCase();
+        const target = appStore.getWorkspace().notes.find((note) => note.title.toLowerCase() === title);
+        if (target) {
+          this.creating = false;
+          this.openedNoteId = target.id;
+          this.openedNoteMode = "preview";
+          this.render();
+        }
       });
     });
 

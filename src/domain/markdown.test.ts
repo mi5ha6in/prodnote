@@ -10,4 +10,10 @@ describe("markdown renderer", () => {
     expect(html).toContain("&lt;script&gt;");
     expect(html).not.toContain("<script>");
   });
+
+  it("renders [[wiki-links]] as data-wikilink anchors", () => {
+    const html = renderMarkdown("see [[Other Note]] here");
+    expect(html).toContain('data-wikilink="Other Note"');
+    expect(html).toContain('class="wikilink"');
+  });
 });
