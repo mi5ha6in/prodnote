@@ -1,4 +1,5 @@
 import "./styles/global.css";
+import { initTheme } from "./storage/theme";
 import "./components/mini-timer";
 import "./components/phase-alert";
 import "./components/event-reminder";
@@ -10,6 +11,8 @@ import "./components/focus-view";
 import "./components/stats-view";
 import "./components/settings-view";
 import "./components/app-root";
+
+initTheme();
 
 function openAppUrlFromServiceWorker(url: string, hash?: string | null): void {
   try {
