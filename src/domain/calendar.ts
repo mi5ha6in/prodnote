@@ -184,6 +184,71 @@ export function isMultiDay(item: CalendarItem): boolean {
   return dayKey(new Date(item.startsAt)) !== dayKey(new Date(item.endsAt));
 }
 
+export interface WeekSegment {
+  item: CalendarItem;
+  startCol: number;
+  span: number;
+  continuesLeft: boolean;
+  continuesRight: boolean;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Lay out events as horizontal bars across one week row (7 cells), Google-style.
+ * Each returned lane holds non-overlapping segments; multi-day events span
+ * multiple columns and flag continuation past the week edges.
+ */
+export function layoutWeekSegments(weekCells: MonthCell[], items: CalendarItem[]): WeekSegment[][] {
+  const weekStart = startOfDay(weekCells[0].date).getTime();
+  const weekEnd = startOfDay(weekCells[6].date).getTime();
+
+  const segments = items
+    .map((item) => {
+      const start = startOfDay(new Date(item.startsAt)).getTime();
+      const end = Math.max(start, startOfDay(new Date(item.endsAt)).getTime());
+      return { item, start, end };
+    })
+    .filter(({ start, end }) => start <= weekEnd && end >= weekStart)
+    .sort((a, b) => a.start - b.start || b.end - b.start - (a.end - a.start) || a.item.title.localeCompare(b.item.title))
+    .map(({ item, start, end }) => {
+      const startIdx = Math.round((start - weekStart) / DAY_MS);
+      const endIdx = Math.round((end - weekStart) / DAY_MS);
+      const startCol = Math.max(0, startIdx);
+      const endCol = Math.min(6, endIdx);
+      return {
+        item,
+        startCol,
+        span: endCol - startCol + 1,
+        continuesLeft: startIdx < 0,
+        continuesRight: endIdx > 6,
+      } satisfies WeekSegment;
+    });
+
+  const lanes: WeekSegment[][] = [];
+  for (const segment of segments) {
+    const segEnd = segment.startCol + segment.span - 1;
+    const lane = lanes.find((existing) =>
+      existing.every((other) => segEnd < other.startCol || segment.startCol > other.startCol + other.span - 1),
+    );
+    if (lane) {
+      lane.push(segment);
+    } else {
+      lanes.push([segment]);
+    }
+  }
+
+  return lanes;
+}
+
+/** Count of segments covering a given column across lanes beyond `visibleLanes`. */
+export function overflowForColumn(lanes: WeekSegment[][], col: number, visibleLanes: number): number {
+  return lanes
+    .slice(visibleLanes)
+    .flat()
+    .filter((segment) => col >= segment.startCol && col <= segment.startCol + segment.span - 1).length;
+}
+
 export function weekdayLabels(weekStartsOn: 1 | 7): string[] {
   const base = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
   return weekStartsOn === 7 ? [base[6], ...base.slice(0, 6)] : base;
