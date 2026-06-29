@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   buildMonthMatrix,
+  buildWeekDays,
   dayKey,
   groupByHorizon,
   itemsForDay,
   layoutWeekSegments,
+  minutesIntoDay,
   type CalendarItem,
 } from "./calendar";
 
@@ -108,6 +110,29 @@ describe("layoutWeekSegments", () => {
     const lanes = layoutWeekSegments(week, [spanItem("a", 15, 16), spanItem("b", 18, 19)]);
     expect(lanes).toHaveLength(1);
     expect(lanes[0]).toHaveLength(2);
+  });
+});
+
+describe("buildWeekDays", () => {
+  it("returns Mon..Sun for a mid-week date", () => {
+    const days = buildWeekDays(new Date(2026, 5, 17), 1); // Wed 17 Jun 2026
+    expect(days).toHaveLength(7);
+    expect(days[0].day).toBe(15); // Monday
+    expect(days[6].day).toBe(21); // Sunday
+    expect(days.find((day) => day.day === 17)?.isToday).toBe(dayKey(new Date()) === dayKey(new Date(2026, 5, 17)));
+  });
+
+  it("starts on Sunday when configured", () => {
+    const days = buildWeekDays(new Date(2026, 5, 17), 7);
+    expect(days[0].day).toBe(14); // Sunday
+    expect(days[6].day).toBe(20); // Saturday
+  });
+});
+
+describe("minutesIntoDay", () => {
+  it("returns local minutes since midnight", () => {
+    expect(minutesIntoDay(new Date(2026, 5, 17, 9, 30, 0).toISOString())).toBe(570);
+    expect(minutesIntoDay(new Date(2026, 5, 17, 0, 0, 0).toISOString())).toBe(0);
   });
 });
 

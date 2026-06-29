@@ -1,8 +1,11 @@
 import {
   buildMonthMatrix,
+  buildWeekDays,
+  dayKey,
   groupByHorizon,
   isMultiDay,
   layoutWeekSegments,
+  minutesIntoDay,
   overflowForColumn,
   toCalendarItems,
   weekdayLabels,
@@ -50,12 +53,13 @@ const MONTH_LABELS = [
 
 export class CalendarView extends HTMLElement {
   private unsubscribe: (() => void) | null = null;
-  private viewMode: "agenda" | "month" = "agenda";
+  private viewMode: "agenda" | "month" | "week" = "agenda";
   private modal: "event" | "manual" | null = null;
   private editingEventId: string | null = null;
   private draftAllDay = false;
   private draftStart: string | null = null;
   private monthCursor = { year: new Date().getFullYear(), month: new Date().getMonth() };
+  private weekAnchor = new Date();
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
@@ -83,6 +87,7 @@ export class CalendarView extends HTMLElement {
             actions: `
               <div class="segmented" role="group" aria-label="Вид календаря">
                 <button type="button" data-view="agenda" aria-pressed="${this.viewMode === "agenda"}">Повестка</button>
+                <button type="button" data-view="week" aria-pressed="${this.viewMode === "week"}">Неделя</button>
                 <button type="button" data-view="month" aria-pressed="${this.viewMode === "month"}">Месяц</button>
               </div>
               <button ${buttonAttrs({ tone: "ghost", data: { action: "import-ics" } })}>Импорт .ics</button>
@@ -98,7 +103,13 @@ export class CalendarView extends HTMLElement {
             { label: "Сессий", value: workspace.sessions.length, hint: "Фактический журнал" },
           ])}
 
-          ${this.viewMode === "agenda" ? this.renderAgenda(items, workspace, now) : this.renderMonth(items, workspace)}
+          ${
+            this.viewMode === "agenda"
+              ? this.renderAgenda(items, workspace, now)
+              : this.viewMode === "week"
+                ? this.renderWeek(items, workspace)
+                : this.renderMonth(items, workspace)
+          }
 
           <article class="card">
             <div class="card-header">
@@ -276,6 +287,107 @@ export class CalendarView extends HTMLElement {
     `;
   }
 
+  private renderWeek(items: CalendarItem[], workspace: Workspace): string {
+    const days = buildWeekDays(this.weekAnchor, workspace.settings.weekStartsOn);
+    const labels = weekdayLabels(workspace.settings.weekStartsOn);
+    const allDayItems = items.filter((item) => item.allDay || isMultiDay(item));
+    const timed = items.filter((item) => !item.allDay && !isMultiDay(item));
+    const allDayLanes = layoutWeekSegments(days, allDayItems).slice(0, MONTH_LANE_CAP);
+    const hours = Array.from({ length: 24 }, (_, hour) => hour);
+    const rangeLabel = `${formatDate(days[0].date.toISOString())} – ${formatDate(days[6].date.toISOString())}`;
+
+    return `
+      <article class="card week-card">
+        <div class="card-header month-nav">
+          <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "prev-week" } })}>‹</button>
+          <h2>${escapeHtml(rangeLabel)}</h2>
+          <div class="row-actions">
+            <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "today-week" } })}>Сегодня</button>
+            <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "next-week" } })}>›</button>
+          </div>
+        </div>
+
+        <div class="week-head">
+          <div class="week-gutter-spacer"></div>
+          ${days
+            .map(
+              (day, index) => `
+                <div class="week-day-head ${day.isToday ? "is-today" : ""}" data-new-event-date="${day.dateKey}" tabindex="0">
+                  <span class="week-day-label">${escapeHtml(labels[index])}</span>
+                  <span class="week-day-num">${day.day}</span>
+                </div>
+              `,
+            )
+            .join("")}
+        </div>
+
+        ${
+          allDayLanes.length
+            ? `<div class="week-allday">
+                <div class="week-gutter-spacer">весь день</div>
+                <div class="week-allday-bars">
+                  ${allDayLanes
+                    .map((lane, laneIndex) =>
+                      lane
+                        .map(
+                          (segment) => `
+                            <button
+                              class="month-bar ${segment.continuesLeft ? "cont-left" : ""} ${segment.continuesRight ? "cont-right" : ""}"
+                              style="grid-column: ${segment.startCol + 1} / span ${segment.span}; grid-row: ${laneIndex + 1};"
+                              ${segment.item.source === "event" ? `data-edit-event="${escapeHtml(segment.item.id)}"` : "disabled"}
+                              title="${escapeHtml(segment.item.title)}"
+                            >${escapeHtml(segment.item.title)}</button>
+                          `,
+                        )
+                        .join(""),
+                    )
+                    .join("")}
+                </div>
+              </div>`
+            : ""
+        }
+
+        <div class="week-grid">
+          <div class="week-gutter">
+            ${hours.map((hour) => `<div class="week-hour-label">${hour.toString().padStart(2, "0")}:00</div>`).join("")}
+          </div>
+          ${days
+            .map((day) => {
+              const dayEvents = timed.filter((item) => dayKey(new Date(item.startsAt)) === day.dateKey);
+              return `
+                <div class="week-col ${day.isToday ? "is-today" : ""}" data-new-event-date="${day.dateKey}">
+                  ${hours.map(() => `<div class="week-hour-line"></div>`).join("")}
+                  ${dayEvents.map((item) => this.renderWeekEvent(item, workspace)).join("")}
+                </div>
+              `;
+            })
+            .join("")}
+        </div>
+      </article>
+    `;
+  }
+
+  private renderWeekEvent(item: CalendarItem, workspace: Workspace): string {
+    const startMin = minutesIntoDay(item.startsAt);
+    const endMin = Math.max(startMin + 30, minutesIntoDay(item.endsAt));
+    const topPct = (startMin / 1440) * 100;
+    const heightPct = (Math.min(1440, endMin - startMin)) / 1440 * 100;
+    const time = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" }).format(new Date(item.startsAt));
+    const taskName = item.taskId ? getTaskName(workspace.tasks, item.taskId) : "";
+
+    return `
+      <button
+        class="week-event"
+        style="top: ${topPct}%; height: ${heightPct}%;"
+        ${item.source === "event" ? `data-edit-event="${escapeHtml(item.id)}"` : "disabled"}
+        title="${escapeHtml(item.title)}${taskName ? ` · ${escapeHtml(taskName)}` : ""}"
+      >
+        <strong>${escapeHtml(item.title)}</strong>
+        <span>${escapeHtml(time)}</span>
+      </button>
+    `;
+  }
+
   private renderModal(workspace: Workspace): string {
     if (this.modal === "event") {
       return this.renderEventModal(workspace);
@@ -413,9 +525,17 @@ export class CalendarView extends HTMLElement {
   private bindActions(root: ShadowRoot): void {
     root.querySelectorAll<HTMLButtonElement>("[data-view]").forEach((button) => {
       button.addEventListener("click", () => {
-        this.viewMode = button.dataset.view === "month" ? "month" : "agenda";
+        const view = button.dataset.view;
+        this.viewMode = view === "month" ? "month" : view === "week" ? "week" : "agenda";
         this.render();
       });
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="prev-week"]')?.addEventListener("click", () => this.shiftWeek(-7));
+    root.querySelector<HTMLButtonElement>('[data-action="next-week"]')?.addEventListener("click", () => this.shiftWeek(7));
+    root.querySelector<HTMLButtonElement>('[data-action="today-week"]')?.addEventListener("click", () => {
+      this.weekAnchor = new Date();
+      this.render();
     });
 
     root.querySelector<HTMLButtonElement>('[data-action="open-event"]')?.addEventListener("click", () => {
@@ -628,6 +748,15 @@ export class CalendarView extends HTMLElement {
     this.render();
   }
 
+  private shiftWeek(deltaDays: number): void {
+    this.weekAnchor = new Date(
+      this.weekAnchor.getFullYear(),
+      this.weekAnchor.getMonth(),
+      this.weekAnchor.getDate() + deltaDays,
+    );
+    this.render();
+  }
+
   private styles(): string {
     return `
       .agenda {
@@ -791,6 +920,133 @@ export class CalendarView extends HTMLElement {
       .month-bar.cont-right {
         border-bottom-right-radius: 0;
         border-top-right-radius: 0;
+      }
+
+      .week-card {
+        overflow-x: auto;
+      }
+
+      .week-head,
+      .week-allday,
+      .week-grid {
+        grid-template-columns: 3.5rem repeat(7, minmax(5rem, 1fr));
+        min-width: 38rem;
+      }
+
+      .week-head {
+        display: grid;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+      }
+
+      .week-day-head {
+        border-bottom: 1px solid var(--line);
+        cursor: pointer;
+        display: grid;
+        gap: 0.1rem;
+        justify-items: center;
+        padding: var(--space-2);
+      }
+
+      .week-day-head.is-today {
+        color: var(--accent-strong);
+      }
+
+      .week-day-label {
+        color: var(--muted);
+        font-size: var(--text-xs);
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .week-day-num {
+        font-size: var(--text-base);
+        font-weight: 650;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .week-gutter-spacer {
+        align-self: center;
+        color: var(--muted);
+        font-size: var(--text-xs);
+        padding: var(--space-1);
+        text-align: center;
+      }
+
+      .week-allday {
+        border-bottom: 1px solid var(--line);
+        display: grid;
+      }
+
+      .week-allday-bars {
+        display: grid;
+        gap: 0.15rem;
+        grid-auto-rows: 1.25rem;
+        grid-column: 2 / -1;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        padding: var(--space-1) 0;
+      }
+
+      .week-grid {
+        display: grid;
+      }
+
+      .week-gutter {
+        display: grid;
+        grid-auto-rows: 2.6rem;
+      }
+
+      .week-hour-label {
+        color: var(--muted);
+        font-size: var(--text-xs);
+        padding-right: var(--space-1);
+        text-align: right;
+        transform: translateY(-0.5rem);
+      }
+
+      .week-col {
+        border-left: 1px solid var(--line);
+        display: grid;
+        grid-auto-rows: 2.6rem;
+        position: relative;
+      }
+
+      .week-col.is-today {
+        background: var(--accent-soft);
+      }
+
+      .week-hour-line {
+        border-bottom: 1px solid var(--line);
+      }
+
+      .week-event {
+        background: var(--accent);
+        border: 1px solid var(--paper);
+        border-radius: var(--radius-sm);
+        color: white;
+        cursor: pointer;
+        display: grid;
+        gap: 0;
+        left: 2px;
+        min-height: auto;
+        overflow: hidden;
+        padding: 0.1rem 0.3rem;
+        position: absolute;
+        right: 2px;
+        text-align: left;
+      }
+
+      .week-event strong {
+        font-size: var(--text-xs);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .week-event span {
+        font-size: 0.65rem;
+        opacity: 0.85;
       }
 
       .check-row {
