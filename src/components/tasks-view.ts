@@ -22,6 +22,7 @@ export class TasksView extends HTMLElement {
   private unsubscribe: (() => void) | null = null;
   private mode: "kanban" | "list" = "kanban";
   private openedTaskId: string | null = null;
+  private detailsMode: "view" | "edit" = "view";
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
@@ -168,15 +169,46 @@ export class TasksView extends HTMLElement {
           outline: none;
         }
 
+        .task-modal {
+          background: transparent;
+          border: none;
+          margin: auto;
+          max-height: calc(100dvh - 2rem);
+          max-width: 64rem;
+          overflow: visible;
+          padding: 0;
+          width: min(64rem, 100%);
+        }
+
+        .task-modal::backdrop {
+          backdrop-filter: blur(2px);
+          background: rgba(15, 23, 42, 0.55);
+        }
+
+        .task-modal[open] {
+          animation: task-modal-in 160ms ease;
+        }
+
         .task-details {
-          border-radius: 0;
+          border-radius: 1.1rem;
+          box-shadow: 0 24px 60px rgba(15, 23, 42, 0.35);
           display: grid;
-          inset: 0;
-          max-height: 100vh;
+          max-height: calc(100dvh - 2rem);
           overflow: auto;
           padding: clamp(1rem, 3vw, 2rem);
-          position: fixed;
-          z-index: 60;
+          width: 100%;
+        }
+
+        @keyframes task-modal-in {
+          from {
+            opacity: 0;
+            transform: translateY(8px);
+          }
+
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
 
         .task-details-grid {
@@ -336,6 +368,7 @@ export class TasksView extends HTMLElement {
         }
 
         this.openedTaskId = taskId;
+        this.detailsMode = "view";
         this.render();
       });
 
@@ -351,13 +384,84 @@ export class TasksView extends HTMLElement {
         }
 
         this.openedTaskId = taskId;
+        this.detailsMode = "view";
         this.render();
       });
     });
 
     root.querySelector<HTMLButtonElement>('[data-action="close-task-details"]')?.addEventListener("click", () => {
       this.openedTaskId = null;
+      this.detailsMode = "view";
       this.render();
+    });
+
+    const dialog = root.querySelector<HTMLDialogElement>("[data-task-modal]");
+    if (dialog) {
+      if (!dialog.open) {
+        dialog.showModal();
+      }
+
+      dialog.addEventListener("click", (event) => {
+        if (event.target !== dialog) {
+          return;
+        }
+
+        this.openedTaskId = null;
+        this.detailsMode = "view";
+        this.render();
+      });
+
+      dialog.addEventListener("cancel", (event) => {
+        event.preventDefault();
+        if (this.detailsMode === "edit") {
+          this.detailsMode = "view";
+        } else {
+          this.openedTaskId = null;
+        }
+        this.render();
+      });
+    }
+
+    root.querySelector<HTMLButtonElement>('[data-action="edit-task"]')?.addEventListener("click", () => {
+      if (!this.openedTaskId) {
+        return;
+      }
+
+      this.detailsMode = "edit";
+      this.render();
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="cancel-task-edit"]')?.addEventListener("click", () => {
+      this.detailsMode = "view";
+      this.render();
+    });
+
+    root.querySelector<HTMLFormElement>('[data-form="edit-task"]')?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!(form instanceof HTMLFormElement) || !this.openedTaskId) {
+        return;
+      }
+
+      const tagIds = [...form.querySelectorAll<HTMLInputElement>('input[name="tagIds"]:checked')].map(
+        (input) => input.value,
+      );
+      const taskId = this.openedTaskId;
+      void appStore
+        .updateTask({
+          taskId,
+          title: requireInput(form, "title").value,
+          description: requireTextArea(form, "description").value,
+          projectId: requireSelect(form, "projectId").value || null,
+          dueDate: requireInput(form, "dueDate").value || null,
+          priority: requireSelect(form, "priority").value as Task["priority"],
+          tagIds,
+        })
+        .then(() => {
+          this.openedTaskId = taskId;
+          this.detailsMode = "view";
+          this.render();
+        });
     });
 
     root.querySelector<HTMLButtonElement>('[data-action="start-task-timer"]')?.addEventListener("click", () => {
@@ -409,12 +513,6 @@ export class TasksView extends HTMLElement {
       });
     });
 
-    root.addEventListener("keydown", (event) => {
-      if (event instanceof KeyboardEvent && event.key === "Escape" && this.openedTaskId) {
-        this.openedTaskId = null;
-        this.render();
-      }
-    });
   }
 
   private renderTaskDetails(totalMinutesByTask: Map<string, number>): string {
@@ -431,6 +529,20 @@ export class TasksView extends HTMLElement {
       return "";
     }
 
+    const content =
+      this.detailsMode === "edit"
+        ? this.renderTaskEditor(task, workspace)
+        : this.renderTaskView(task, workspace, totalMinutesByTask, hasActiveTimer);
+
+    return `<dialog class="task-modal" data-task-modal>${content}</dialog>`;
+  }
+
+  private renderTaskView(
+    task: Task,
+    workspace: ReturnType<typeof appStore.getWorkspace>,
+    totalMinutesByTask: Map<string, number>,
+    hasActiveTimer: boolean,
+  ): string {
     return `
       <article class="card task-details" role="dialog" aria-modal="true" aria-label="Подробности задачи">
         <div class="card-header">
@@ -440,6 +552,7 @@ export class TasksView extends HTMLElement {
           </div>
           <div class="row-actions">
             <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-task-details" } })}>Закрыть</button>
+            <button ${buttonAttrs({ size: "small", data: { action: "edit-task" } })}>Редактировать</button>
           </div>
         </div>
 
@@ -560,6 +673,81 @@ export class TasksView extends HTMLElement {
           </aside>
         </div>
       </article>
+    `;
+  }
+
+  private renderTaskEditor(task: Task, workspace: ReturnType<typeof appStore.getWorkspace>): string {
+    const priorities: Array<{ value: Task["priority"]; label: string }> = [
+      { value: "medium", label: "Средний" },
+      { value: "high", label: "Высокий" },
+      { value: "low", label: "Низкий" },
+    ];
+
+    return `
+      <form class="card task-details form-grid" data-form="edit-task" role="dialog" aria-modal="true" aria-label="Редактирование задачи">
+        <div class="card-header">
+          <div>
+            <p class="eyebrow">Редактирование</p>
+            <h2>${escapeHtml(task.title)}</h2>
+          </div>
+          <div class="row-actions">
+            <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "cancel-task-edit" } })}>Отмена</button>
+            <button ${buttonAttrs({ type: "submit", size: "small" })}>Сохранить</button>
+          </div>
+        </div>
+
+        ${fieldHtml({
+          label: "Название",
+          control: `<input name="title" required value="${escapeHtml(task.title)}" />`,
+        })}
+        ${fieldHtml({
+          label: "Описание",
+          control: `<textarea name="description" placeholder="Контекст, критерии готовности, ссылки">${escapeHtml(task.description)}</textarea>`,
+        })}
+        <div class="inline-grid">
+          ${fieldHtml({
+            label: "Проект",
+            control: `<select name="projectId">${renderProjectOptions(workspace.projects, task.projectId)}</select>`,
+          })}
+          ${fieldHtml({
+            label: "Приоритет",
+            control: `<select name="priority">
+              ${priorities
+                .map(
+                  (priority) =>
+                    `<option value="${priority.value}" ${task.priority === priority.value ? "selected" : ""}>${priority.label}</option>`,
+                )
+                .join("")}
+            </select>`,
+          })}
+        </div>
+        ${fieldHtml({
+          label: "Дедлайн",
+          control: `<input name="dueDate" type="date" value="${escapeHtml(task.dueDate ?? "")}" />`,
+        })}
+        <fieldset class="tag-fieldset">
+          <legend>Теги</legend>
+          ${
+            workspace.tags.length
+              ? workspace.tags
+                  .map(
+                    (tag) => `
+                      <label class="check-row">
+                        <input
+                          type="checkbox"
+                          name="tagIds"
+                          value="${escapeHtml(tag.id)}"
+                          ${task.tagIds.includes(tag.id) ? "checked" : ""}
+                        />
+                        <span style="--tag-color: ${escapeHtml(tag.color)}">${escapeHtml(tag.name)}</span>
+                      </label>
+                    `,
+                  )
+                  .join("")
+              : `<p class="muted">Теги можно добавить в настройках.</p>`
+          }
+        </fieldset>
+      </form>
     `;
   }
 
