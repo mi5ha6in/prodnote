@@ -203,6 +203,31 @@ export class ProdNoteStore {
     return plan;
   }
 
+  async updateTask(input: {
+    taskId: EntityId;
+    title: string;
+    description: string;
+    projectId?: EntityId | null;
+    dueDate?: string | null;
+    priority: TaskPriority;
+    tagIds?: EntityId[];
+  }): Promise<void> {
+    await this.commit((workspace) => {
+      const task = workspace.tasks.find((item) => item.id === input.taskId);
+      if (!task) {
+        return;
+      }
+
+      task.title = input.title.trim();
+      task.description = input.description.trim();
+      task.projectId = input.projectId ?? null;
+      task.dueDate = input.dueDate ?? null;
+      task.priority = input.priority;
+      task.tagIds = input.tagIds ?? [];
+      task.updatedAt = nowIso();
+    });
+  }
+
   async updateTaskStatus(taskId: EntityId, status: TaskStatus): Promise<void> {
     await this.commit((workspace) => {
       const task = workspace.tasks.find((item) => item.id === taskId);
