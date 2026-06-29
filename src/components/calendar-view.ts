@@ -16,7 +16,7 @@ import { EVENT_KIND_LABELS, SESSION_MODE_LABELS } from "../domain/defaults";
 import { buildIcs, parseIcs } from "../domain/ics";
 import { escapeHtml } from "../domain/markdown";
 import { formatDuration } from "../domain/stats";
-import type { CalendarEventKind, Workspace } from "../domain/types";
+import type { CalendarEvent, CalendarEventKind, Workspace } from "../domain/types";
 import { appStore } from "../state";
 import { confirmDestructive } from "../ui/actions";
 import { buttonAttrs, fieldHtml, metricBarHtml, modalHtml, viewHeaderHtml } from "../ui/html";
@@ -60,6 +60,7 @@ export class CalendarView extends HTMLElement {
   private draftStart: string | null = null;
   private monthCursor = { year: new Date().getFullYear(), month: new Date().getMonth() };
   private weekAnchor = new Date();
+  private draggingEventId: string | null = null;
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
@@ -265,7 +266,11 @@ export class CalendarView extends HTMLElement {
                     <button
                       class="month-bar ${segment.continuesLeft ? "cont-left" : ""} ${segment.continuesRight ? "cont-right" : ""}"
                       style="grid-column: ${segment.startCol + 1} / span ${segment.span}; grid-row: ${laneIndex + 1};"
-                      ${segment.item.source === "event" ? `data-edit-event="${escapeHtml(segment.item.id)}"` : "disabled"}
+                      ${
+                        segment.item.source === "event"
+                          ? `data-edit-event="${escapeHtml(segment.item.id)}" draggable="true" data-drag-event="${escapeHtml(segment.item.id)}"`
+                          : "disabled"
+                      }
                       title="${escapeHtml(segment.item.title)}"
                     >${escapeHtml(segment.item.title)}</button>
                   `,
@@ -379,7 +384,7 @@ export class CalendarView extends HTMLElement {
       <button
         class="week-event"
         style="top: ${topPct}%; height: ${heightPct}%;"
-        ${item.source === "event" ? `data-edit-event="${escapeHtml(item.id)}"` : "disabled"}
+        ${item.source === "event" ? `data-edit-event="${escapeHtml(item.id)}" draggable="true" data-drag-event="${escapeHtml(item.id)}"` : "disabled"}
         title="${escapeHtml(item.title)}${taskName ? ` · ${escapeHtml(taskName)}` : ""}"
       >
         <strong>${escapeHtml(item.title)}</strong>
@@ -604,6 +609,42 @@ export class CalendarView extends HTMLElement {
       });
     });
 
+    root.querySelectorAll<HTMLElement>("[data-drag-event]").forEach((element) => {
+      element.addEventListener("dragstart", (event) => {
+        this.draggingEventId = element.dataset.dragEvent ?? null;
+        if (event instanceof DragEvent && event.dataTransfer) {
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", this.draggingEventId ?? "");
+        }
+      });
+    });
+
+    root.querySelectorAll<HTMLElement>("[data-new-event-date]").forEach((cell) => {
+      cell.addEventListener("dragover", (event) => event.preventDefault());
+      cell.addEventListener("drop", (event) => {
+        event.preventDefault();
+        const date = cell.dataset.newEventDate;
+        if (date) {
+          this.moveEventToDay(date);
+        }
+      });
+    });
+
+    root.querySelectorAll<HTMLElement>("[data-week-col]").forEach((column) => {
+      column.addEventListener("dragover", (event) => event.preventDefault());
+      column.addEventListener("drop", (event) => {
+        event.preventDefault();
+        const date = column.dataset.weekCol;
+        if (!date) {
+          return;
+        }
+        const rect = column.getBoundingClientRect();
+        const fraction = rect.height > 0 ? (event.clientY - rect.top) / rect.height : 0;
+        const hour = Math.max(0, Math.min(23, Math.floor(fraction * 24)));
+        this.moveEventToDayTime(date, hour);
+      });
+    });
+
     root.querySelectorAll<HTMLButtonElement>("[data-delete-event]").forEach((button) => {
       button.addEventListener("click", () => {
         const id = button.dataset.deleteEvent;
@@ -729,6 +770,77 @@ export class CalendarView extends HTMLElement {
         note: requireTextArea(form, "note").value,
       });
       this.closeModal();
+    });
+  }
+
+  private moveEventToDay(dateKey: string): void {
+    const event = this.takeDraggedEvent();
+    if (!event) {
+      return;
+    }
+
+    const [year, month, day] = dateKey.split("-").map(Number);
+    const start = new Date(event.startsAt);
+    const droppedMidnight = new Date(year, month - 1, day).getTime();
+    const originMidnight = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
+    const dayDelta = Math.round((droppedMidnight - originMidnight) / 86_400_000);
+    if (dayDelta === 0) {
+      return;
+    }
+
+    const end = new Date(event.endsAt);
+    const newStart = new Date(
+      start.getFullYear(),
+      start.getMonth(),
+      start.getDate() + dayDelta,
+      start.getHours(),
+      start.getMinutes(),
+      start.getSeconds(),
+    );
+    const newEnd = new Date(
+      end.getFullYear(),
+      end.getMonth(),
+      end.getDate() + dayDelta,
+      end.getHours(),
+      end.getMinutes(),
+      end.getSeconds(),
+    );
+    this.commitEventMove(event, newStart.toISOString(), newEnd.toISOString());
+  }
+
+  private moveEventToDayTime(dateKey: string, hour: number): void {
+    const event = this.takeDraggedEvent();
+    if (!event || event.allDay) {
+      return;
+    }
+
+    const [year, month, day] = dateKey.split("-").map(Number);
+    const newStart = new Date(year, month - 1, day, hour, 0, 0);
+    const durationMs = Math.max(0, Date.parse(event.endsAt) - Date.parse(event.startsAt));
+    const newEnd = new Date(newStart.getTime() + durationMs);
+    this.commitEventMove(event, newStart.toISOString(), newEnd.toISOString());
+  }
+
+  private takeDraggedEvent(): CalendarEvent | null {
+    const id = this.draggingEventId;
+    this.draggingEventId = null;
+    if (!id) {
+      return null;
+    }
+    return appStore.getWorkspace().events.find((event) => event.id === id) ?? null;
+  }
+
+  private commitEventMove(event: CalendarEvent, startsAt: string, endsAt: string): void {
+    void appStore.updateEvent({
+      eventId: event.id,
+      title: event.title,
+      startsAt,
+      endsAt,
+      allDay: event.allDay,
+      kind: event.kind,
+      taskId: event.taskId,
+      description: event.description,
+      location: event.location,
     });
   }
 
@@ -917,6 +1029,11 @@ export class CalendarView extends HTMLElement {
       .month-bar:disabled {
         cursor: default;
         opacity: 1;
+      }
+
+      .month-bar[draggable="true"],
+      .week-event[draggable="true"] {
+        cursor: grab;
       }
 
       .month-bar.cont-left {
