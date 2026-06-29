@@ -3,11 +3,11 @@ import { migrateWorkspace } from "../domain/migrations";
 import type { Workspace } from "../domain/types";
 
 const DB_NAME = "prodnote-db";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const META_KEY = "workspace";
 const SETTINGS_KEY = "settings";
 
-const ENTITY_STORES = ["projects", "tasks", "notes", "tags", "sessions", "pomodoroCycles", "plans"] as const;
+const ENTITY_STORES = ["projects", "tasks", "notes", "tags", "sessions", "pomodoroCycles", "plans", "events"] as const;
 
 type EntityStoreName = (typeof ENTITY_STORES)[number];
 
@@ -83,7 +83,7 @@ export async function loadWorkspace(): Promise<Workspace> {
     return workspace;
   }
 
-  const [projects, tasks, notes, tags, sessions, pomodoroCycles, plans] = await Promise.all([
+  const [projects, tasks, notes, tags, sessions, pomodoroCycles, plans, events] = await Promise.all([
     readStore<Workspace["projects"][number]>(db, "projects"),
     readStore<Workspace["tasks"][number]>(db, "tasks"),
     readStore<Workspace["notes"][number]>(db, "notes"),
@@ -91,6 +91,7 @@ export async function loadWorkspace(): Promise<Workspace> {
     readStore<Workspace["sessions"][number]>(db, "sessions"),
     readStore<Workspace["pomodoroCycles"][number]>(db, "pomodoroCycles"),
     readStore<Workspace["plans"][number]>(db, "plans"),
+    readStore<Workspace["events"][number]>(db, "events"),
   ]);
 
   const workspace = migrateWorkspace({
@@ -103,6 +104,7 @@ export async function loadWorkspace(): Promise<Workspace> {
     sessions,
     pomodoroCycles,
     plans,
+    events,
     settings: settings ?? createStarterWorkspace().settings,
   });
 
