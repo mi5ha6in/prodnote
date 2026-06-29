@@ -16,8 +16,12 @@ export function wireModal(root: ParentNode, options: { onClose: () => void }): v
     return;
   }
 
-  if (!dialog.open) {
-    dialog.showModal();
+  if (!dialog.open && typeof dialog.showModal === "function") {
+    try {
+      dialog.showModal();
+    } catch {
+      // jsdom and older engines may not implement showModal; the dialog still renders.
+    }
   }
 
   dialog.addEventListener("click", (event) => {
