@@ -608,10 +608,8 @@ export class CalendarView extends HTMLElement {
         if (!date) {
           return;
         }
-        const rect = column.getBoundingClientRect();
-        const fraction = rect.height > 0 ? (event.clientY - rect.top) / rect.height : 0;
-        const hour = Math.max(0, Math.min(23, Math.floor(fraction * 24)));
-        this.openEventModal(null, `${date}T${hour.toString().padStart(2, "0")}:00:00`);
+        const minutes = snapMinutes(column, event.clientY);
+        this.openEventModal(null, `${date}T${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}:00`);
       });
     });
 
@@ -626,9 +624,14 @@ export class CalendarView extends HTMLElement {
     });
 
     root.querySelectorAll<HTMLElement>("[data-new-event-date]").forEach((cell) => {
-      cell.addEventListener("dragover", (event) => event.preventDefault());
+      cell.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        cell.classList.add("is-drop-target");
+      });
+      cell.addEventListener("dragleave", () => cell.classList.remove("is-drop-target"));
       cell.addEventListener("drop", (event) => {
         event.preventDefault();
+        cell.classList.remove("is-drop-target");
         const date = cell.dataset.newEventDate;
         if (date) {
           this.moveEventToDay(date);
@@ -637,17 +640,18 @@ export class CalendarView extends HTMLElement {
     });
 
     root.querySelectorAll<HTMLElement>("[data-week-col]").forEach((column) => {
-      column.addEventListener("dragover", (event) => event.preventDefault());
+      column.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        column.classList.add("is-drop-target");
+      });
+      column.addEventListener("dragleave", () => column.classList.remove("is-drop-target"));
       column.addEventListener("drop", (event) => {
         event.preventDefault();
+        column.classList.remove("is-drop-target");
         const date = column.dataset.weekCol;
-        if (!date) {
-          return;
+        if (date) {
+          this.moveEventToDayTime(date, snapMinutes(column, event.clientY));
         }
-        const rect = column.getBoundingClientRect();
-        const fraction = rect.height > 0 ? (event.clientY - rect.top) / rect.height : 0;
-        const hour = Math.max(0, Math.min(23, Math.floor(fraction * 24)));
-        this.moveEventToDayTime(date, hour);
       });
     });
 
@@ -814,14 +818,14 @@ export class CalendarView extends HTMLElement {
     this.commitEventMove(event, newStart.toISOString(), newEnd.toISOString());
   }
 
-  private moveEventToDayTime(dateKey: string, hour: number): void {
+  private moveEventToDayTime(dateKey: string, minutes: number): void {
     const event = this.takeDraggedEvent();
     if (!event || event.allDay) {
       return;
     }
 
     const [year, month, day] = dateKey.split("-").map(Number);
-    const newStart = new Date(year, month - 1, day, hour, 0, 0);
+    const newStart = new Date(year, month - 1, day, 0, minutes, 0);
     const durationMs = Math.max(0, Date.parse(event.endsAt) - Date.parse(event.startsAt));
     const newEnd = new Date(newStart.getTime() + durationMs);
     this.commitEventMove(event, newStart.toISOString(), newEnd.toISOString());
@@ -986,6 +990,11 @@ export class CalendarView extends HTMLElement {
 
       .month-cell.is-today {
         border-color: var(--accent);
+      }
+
+      .month-cell.is-drop-target,
+      .week-col.is-drop-target {
+        box-shadow: inset 0 0 0 2px var(--accent);
       }
 
       .month-day {
@@ -1249,6 +1258,14 @@ function fromDateInputValue(value: string): string {
 
 function pad(value: number): string {
   return value.toString().padStart(2, "0");
+}
+
+/** Vertical click/drop position within a day column → minutes-of-day snapped to 30. */
+function snapMinutes(column: HTMLElement, clientY: number): number {
+  const rect = column.getBoundingClientRect();
+  const fraction = rect.height > 0 ? (clientY - rect.top) / rect.height : 0;
+  const minutes = Math.round((Math.max(0, Math.min(1, fraction)) * 1440) / 30) * 30;
+  return Math.max(0, Math.min(1410, minutes));
 }
 
 customElements.define("pn-calendar-view", CalendarView);
