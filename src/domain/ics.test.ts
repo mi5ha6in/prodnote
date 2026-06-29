@@ -26,7 +26,7 @@ describe("parseIcs", () => {
     expect(event.endsAt).toBe("2026-07-01T09:30:00.000Z");
   });
 
-  it("parses an all-day event (VALUE=DATE)", () => {
+  it("parses a single-day all-day event with exclusive DTEND", () => {
     const ics = [
       "BEGIN:VEVENT",
       "UID:holiday-1",
@@ -39,9 +39,25 @@ describe("parseIcs", () => {
     const [event] = parseIcs(ics);
 
     expect(event.allDay).toBe(true);
-    expect(new Date(event.startsAt).getFullYear()).toBe(2026);
-    expect(new Date(event.startsAt).getMonth()).toBe(6);
+    // Exclusive DTEND 20260705 -> inclusive last day is July 4 (single day).
     expect(new Date(event.startsAt).getDate()).toBe(4);
+    expect(new Date(event.endsAt).getDate()).toBe(4);
+  });
+
+  it("parses a multi-day all-day event (inclusive last day)", () => {
+    const ics = [
+      "BEGIN:VEVENT",
+      "UID:trip-1",
+      "SUMMARY:Trip",
+      "DTSTART;VALUE=DATE:20260615",
+      "DTEND;VALUE=DATE:20260622",
+      "END:VEVENT",
+    ].join("\r\n");
+
+    const [event] = parseIcs(ics);
+
+    expect(new Date(event.startsAt).getDate()).toBe(15);
+    expect(new Date(event.endsAt).getDate()).toBe(21); // 22 exclusive -> 21 inclusive
   });
 
   it("unfolds wrapped lines and unescapes text", () => {
