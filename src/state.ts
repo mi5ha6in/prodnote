@@ -207,6 +207,28 @@ export class ProdNoteStore {
     return event;
   }
 
+  async addEvents(
+    inputs: Array<{
+      title: string;
+      startsAt: string;
+      endsAt: string;
+      allDay?: boolean;
+      kind?: CalendarEventKind;
+      taskId?: string | null;
+      description?: string;
+      location?: string;
+    }>,
+  ): Promise<void> {
+    if (!inputs.length) {
+      return;
+    }
+    await this.commit((workspace) => {
+      for (const input of inputs) {
+        workspace.events.unshift(createCalendarEvent(input));
+      }
+    });
+  }
+
   async updateEvent(input: {
     eventId: EntityId;
     title: string;
