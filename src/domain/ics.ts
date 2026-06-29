@@ -66,7 +66,8 @@ export function buildIcs(events: CalendarEvent[]): string {
     lines.push(`DTSTAMP:${formatUtcStamp(event.createdAt)}`);
     if (event.allDay) {
       lines.push(`DTSTART;VALUE=DATE:${formatDateValue(event.startsAt)}`);
-      lines.push(`DTEND;VALUE=DATE:${formatDateValue(event.endsAt)}`);
+      // iCal all-day DTEND is exclusive: the day after the inclusive last day.
+      lines.push(`DTEND;VALUE=DATE:${formatDateValue(shiftDays(event.endsAt, 1))}`);
     } else {
       lines.push(`DTSTART:${formatUtcStamp(event.startsAt)}`);
       lines.push(`DTEND:${formatUtcStamp(event.endsAt)}`);
@@ -104,7 +105,13 @@ function buildEventFromProperties(properties: IcsProperty[]): ParsedIcsEvent | n
 
   const allDay = start.allDay && (end?.allDay ?? true);
   const startsAt = start.iso;
-  const endsAt = end?.iso ?? defaultEnd(start.iso, allDay);
+  // iCal all-day DTEND is exclusive (the day after the last day); store the
+  // inclusive last day internally. A single-day all-day event has no real end.
+  const endsAt = allDay
+    ? end
+      ? shiftDays(end.iso, -1)
+      : start.iso
+    : end?.iso ?? defaultEnd(start.iso);
 
   return {
     title: unescapeText(byName.get("SUMMARY")?.value ?? "").trim() || "Без названия",
@@ -117,10 +124,13 @@ function buildEventFromProperties(properties: IcsProperty[]): ParsedIcsEvent | n
   };
 }
 
-function defaultEnd(startIso: string, allDay: boolean): string {
-  const startMs = Date.parse(startIso);
-  const durationMs = allDay ? 24 * 60 * 60 * 1000 : 60 * 60 * 1000;
-  return new Date(startMs + durationMs).toISOString();
+function defaultEnd(startIso: string): string {
+  return new Date(Date.parse(startIso) + 60 * 60 * 1000).toISOString();
+}
+
+function shiftDays(iso: string, days: number): string {
+  const date = new Date(iso);
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days).toISOString();
 }
 
 interface ParsedIcsDate {

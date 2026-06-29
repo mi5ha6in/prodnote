@@ -1,6 +1,7 @@
 import {
   buildMonthMatrix,
   groupByHorizon,
+  isMultiDay,
   itemsForDay,
   toCalendarItems,
   weekdayLabels,
@@ -17,6 +18,7 @@ import { buttonAttrs, fieldHtml, metricBarHtml, modalHtml, viewHeaderHtml } from
 import { setBodyScrollLock, wireModal } from "./modal";
 import { renderShadow } from "./shadow";
 import {
+  formatDate,
   formatDateTime,
   fromDateTimeLocalValue,
   getTaskName,
@@ -166,7 +168,13 @@ export class CalendarView extends HTMLElement {
   }
 
   private renderAgendaItem(item: CalendarItem, workspace: Workspace): string {
-    const when = item.allDay ? "Весь день" : formatDateTime(item.startsAt);
+    const when = item.allDay
+      ? isMultiDay(item)
+        ? `${formatDate(item.startsAt)} – ${formatDate(item.endsAt)}`
+        : "Весь день"
+      : isMultiDay(item)
+        ? `${formatDateTime(item.startsAt)} – ${formatDateTime(item.endsAt)}`
+        : formatDateTime(item.startsAt);
     const taskName = item.taskId ? getTaskName(workspace.tasks, item.taskId) : "";
     const kindLabel = EVENT_KIND_LABELS[item.kind as CalendarEventKind] ?? item.kind;
     const editable = item.source === "event";

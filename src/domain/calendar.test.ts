@@ -70,4 +70,24 @@ describe("itemsForDay", () => {
     const key = dayKey(new Date(2026, 5, 15));
     expect(itemsForDay(items, key).map((entry) => entry.id)).toEqual(["a"]);
   });
+
+  it("includes multi-day events on every covered day", () => {
+    const week: CalendarItem = {
+      id: "week",
+      source: "event",
+      title: "week",
+      startsAt: new Date(2026, 5, 15, 0, 0, 0).toISOString(),
+      endsAt: new Date(2026, 5, 21, 0, 0, 0).toISOString(),
+      allDay: true,
+      kind: "event",
+      taskId: null,
+    };
+
+    for (let day = 15; day <= 21; day += 1) {
+      const key = dayKey(new Date(2026, 5, day));
+      expect(itemsForDay([week], key).map((entry) => entry.id)).toEqual(["week"]);
+    }
+    expect(itemsForDay([week], dayKey(new Date(2026, 5, 22)))).toHaveLength(0);
+    expect(itemsForDay([week], dayKey(new Date(2026, 5, 14)))).toHaveLength(0);
+  });
 });

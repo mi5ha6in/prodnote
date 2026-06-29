@@ -164,8 +164,24 @@ export function buildMonthMatrix(year: number, month: number, weekStartsOn: 1 | 
   return weeks;
 }
 
+/** Items whose date range (start..end inclusive, by local day) covers the given day. */
 export function itemsForDay(items: CalendarItem[], dateKey: string): CalendarItem[] {
-  return items.filter((item) => dayKey(new Date(item.startsAt)) === dateKey);
+  const target = startOfDay(parseDateKey(dateKey)).getTime();
+  return items.filter((item) => {
+    const start = startOfDay(new Date(item.startsAt)).getTime();
+    const end = startOfDay(new Date(item.endsAt)).getTime();
+    return target >= start && target <= Math.max(start, end);
+  });
+}
+
+function parseDateKey(dateKey: string): Date {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+/** Whether an item spans more than one calendar day. */
+export function isMultiDay(item: CalendarItem): boolean {
+  return dayKey(new Date(item.startsAt)) !== dayKey(new Date(item.endsAt));
 }
 
 export function weekdayLabels(weekStartsOn: 1 | 7): string[] {
