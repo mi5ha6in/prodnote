@@ -3,7 +3,7 @@ import { applyMarkdownSnippetToText, MARKDOWN_SNIPPETS, type MarkdownSnippet } f
 import type { Note, Workspace } from "../domain/types";
 import { appStore } from "../state";
 import { badgeHtml, buttonAttrs, emptyStateHtml, fieldHtml, metricBarHtml, modalHtml, viewHeaderHtml } from "../ui/html";
-import { wireModal } from "./modal";
+import { setBodyScrollLock, wireModal } from "./modal";
 import { renderShadow } from "./shadow";
 import {
   formatDate,
@@ -33,6 +33,7 @@ export class NotesView extends HTMLElement {
 
   disconnectedCallback(): void {
     this.unsubscribe?.();
+    setBodyScrollLock(false);
   }
 
   private get modalOpen(): boolean {
@@ -124,6 +125,7 @@ export class NotesView extends HTMLElement {
         }
 
         .editor-grid {
+          align-items: start;
           display: grid;
           gap: var(--space-3);
           grid-template-columns: minmax(0, 1.1fr) minmax(16rem, 0.9fr);
@@ -136,7 +138,8 @@ export class NotesView extends HTMLElement {
             "Consolas",
             "Liberation Mono",
             monospace;
-          min-height: min(48vh, 30rem);
+          height: min(48vh, 26rem);
+          min-height: 12rem;
         }
 
         .markdown-tools {
@@ -155,6 +158,7 @@ export class NotesView extends HTMLElement {
           background: var(--surface);
           border: 1px solid var(--line);
           border-radius: var(--radius-md);
+          max-height: min(48vh, 26rem);
           min-width: 0;
           overflow: auto;
           padding: var(--space-3);
@@ -255,6 +259,7 @@ export class NotesView extends HTMLElement {
       `,
     );
 
+    setBodyScrollLock(this.modalOpen);
     this.bindModalActions(root);
   }
 

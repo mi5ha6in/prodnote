@@ -14,7 +14,7 @@ import {
 } from "../sync/client";
 import { confirmDestructive } from "../ui/actions";
 import { badgeHtml, buttonAttrs, fieldHtml, modalHtml } from "../ui/html";
-import { wireModal } from "./modal";
+import { setBodyScrollLock, wireModal } from "./modal";
 import { renderShadow } from "./shadow";
 import { requireInput, requireSelect, requireTextArea } from "./view-utils";
 
@@ -33,6 +33,7 @@ export class SettingsView extends HTMLElement {
   disconnectedCallback(): void {
     this.unsubscribe?.();
     this.syncUnsubscribe?.();
+    setBodyScrollLock(false);
   }
 
   private renderCreateModal(): string {
@@ -387,6 +388,8 @@ export class SettingsView extends HTMLElement {
       this.creating = null;
       this.render();
     });
+
+    setBodyScrollLock(this.creating !== null);
 
     if (this.creating) {
       wireModal(root, {

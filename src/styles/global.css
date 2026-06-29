@@ -11,3 +11,7 @@ body {
   margin: 0;
   min-width: 320px;
 }
+
+body.pn-modal-open {
+  overflow: hidden;
+}
