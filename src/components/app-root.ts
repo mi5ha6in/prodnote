@@ -109,8 +109,9 @@ export class AppRoot extends HTMLElement {
           z-index: 100;
         }
 
+        .app-shell > pn-event-reminder,
         .app-shell > pn-command-palette {
-          display: contents;
+          position: fixed;
         }
 
         .sidebar {
