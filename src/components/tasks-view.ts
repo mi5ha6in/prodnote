@@ -25,6 +25,7 @@ export class TasksView extends HTMLElement {
   private openedTaskId: string | null = null;
   private detailsMode: "view" | "edit" = "view";
   private creating = false;
+  private draggingTaskId: string | null = null;
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
@@ -153,9 +154,15 @@ export class TasksView extends HTMLElement {
           padding: var(--space-3);
         }
 
+        .kanban-column.is-drop-target {
+          border-color: var(--accent);
+          box-shadow: inset 0 0 0 2px var(--accent-soft);
+        }
+
         .kanban .task-card {
           background: var(--paper);
           box-shadow: var(--shadow-sm);
+          cursor: grab;
         }
 
         .kanban .task-card:hover {
@@ -415,6 +422,37 @@ export class TasksView extends HTMLElement {
         const taskId = select.dataset.taskId;
         if (taskId) {
           void appStore.updateTaskStatus(taskId, select.value as TaskStatus);
+        }
+      });
+    });
+
+    root.querySelectorAll<HTMLElement>("[data-drag-task]").forEach((card) => {
+      card.addEventListener("dragstart", (event) => {
+        this.draggingTaskId = card.dataset.dragTask ?? null;
+        if (event instanceof DragEvent && event.dataTransfer) {
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", this.draggingTaskId ?? "");
+        }
+      });
+      card.addEventListener("dragend", () => {
+        this.draggingTaskId = null;
+      });
+    });
+
+    root.querySelectorAll<HTMLElement>("[data-drop-status]").forEach((column) => {
+      column.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        column.classList.add("is-drop-target");
+      });
+      column.addEventListener("dragleave", () => column.classList.remove("is-drop-target"));
+      column.addEventListener("drop", (event) => {
+        event.preventDefault();
+        column.classList.remove("is-drop-target");
+        const status = column.dataset.dropStatus as TaskStatus | undefined;
+        const taskId = this.draggingTaskId;
+        this.draggingTaskId = null;
+        if (status && taskId) {
+          void appStore.updateTaskStatus(taskId, status);
         }
       });
     });
@@ -741,7 +779,7 @@ export class TasksView extends HTMLElement {
       <section class="kanban" aria-label="Канбан задач">
         ${STATUS_ORDER.map(
           (status) => `
-            <div class="kanban-column">
+            <div class="kanban-column" data-drop-status="${status}">
               <div class="card-header">
                 <h3>${TASK_STATUS_LABELS[status]}</h3>
                 ${badgeHtml(tasks.filter((task) => task.status === status).length)}
@@ -781,8 +819,10 @@ export class TasksView extends HTMLElement {
     const workspace = appStore.getWorkspace();
     const recentHistory = task.history.slice(0, 2);
 
+    const dragAttrs = variant === "kanban" ? `draggable="true" data-drag-task="${escapeHtml(task.id)}"` : "";
+
     return `
-      <article class="list-item task-card" data-open-task="${escapeHtml(task.id)}" tabindex="0">
+      <article class="list-item task-card" data-open-task="${escapeHtml(task.id)}" ${dragAttrs} tabindex="0">
         <div class="card-header">
           <div>
             <h3>${escapeHtml(task.title)}</h3>
