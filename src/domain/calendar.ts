@@ -249,6 +249,29 @@ export function overflowForColumn(lanes: WeekSegment[][], col: number, visibleLa
     .filter((segment) => col >= segment.startCol && col <= segment.startCol + segment.span - 1).length;
 }
 
+/** The 7 days of the week containing `ref`, honoring the configured first day. */
+export function buildWeekDays(ref: Date, weekStartsOn: 1 | 7): MonthCell[] {
+  const start = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() - weekStartOffset(ref, weekStartsOn));
+  const todayKey = dayKey(new Date());
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + index);
+    return {
+      date,
+      dateKey: dayKey(date),
+      day: date.getDate(),
+      inMonth: true,
+      isToday: dayKey(date) === todayKey,
+    };
+  });
+}
+
+/** Local minutes since midnight for an ISO timestamp (0..1439). */
+export function minutesIntoDay(iso: string): number {
+  const date = new Date(iso);
+  return date.getHours() * 60 + date.getMinutes();
+}
+
 export function weekdayLabels(weekStartsOn: 1 | 7): string[] {
   const base = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
   return weekStartsOn === 7 ? [base[6], ...base.slice(0, 6)] : base;
