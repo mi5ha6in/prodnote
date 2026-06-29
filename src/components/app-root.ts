@@ -109,6 +109,10 @@ export class AppRoot extends HTMLElement {
           z-index: 100;
         }
 
+        .app-shell > pn-command-palette {
+          display: contents;
+        }
+
         .sidebar {
           background: var(--paper);
           border-right: 1px solid var(--line);
