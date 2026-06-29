@@ -7,6 +7,7 @@ import {
   type Note,
   type NoteEditEntry,
   type PomodoroCycle,
+  type Task,
   type TimeSession,
   type Workspace,
 } from "./types";
@@ -27,8 +28,11 @@ type LegacyNote = Omit<Note, "editHistory"> & {
 type LegacyPomodoroCycle = Omit<PomodoroCycle, "completedShortBreakCount" | "completedLongBreakCount"> &
   Partial<Pick<PomodoroCycle, "completedShortBreakCount" | "completedLongBreakCount">>;
 
-type LegacyWorkspace = Omit<Workspace, "notes" | "pomodoroCycles" | "events" | "schemaVersion"> & {
+type LegacyTask = Omit<Task, "subtasks"> & { subtasks?: Task["subtasks"] };
+
+type LegacyWorkspace = Omit<Workspace, "notes" | "tasks" | "pomodoroCycles" | "events" | "schemaVersion"> & {
   schemaVersion: number;
+  tasks: LegacyTask[];
   notes: LegacyNote[];
   pomodoroCycles?: LegacyPomodoroCycle[];
   events?: Workspace["events"];
@@ -50,6 +54,7 @@ export function migrateWorkspace(workspace: LegacyWorkspace): Workspace {
     ...workspace,
     schemaVersion: SCHEMA_VERSION,
     exportedAt: workspace.exportedAt ?? null,
+    tasks: workspace.tasks.map(normalizeTask),
     notes: workspace.notes.map(normalizeNote),
     pomodoroCycles: Array.isArray(workspace.pomodoroCycles) ? workspace.pomodoroCycles.map(normalizePomodoroCycle) : [],
     events: mergePlansIntoEvents(existingEvents, plans),
@@ -95,6 +100,13 @@ function mergePlansIntoEvents(events: CalendarEvent[], plans: CalendarPlan[]): C
   }
 
   return [...converted, ...events];
+}
+
+function normalizeTask(task: LegacyTask): Task {
+  return {
+    ...task,
+    subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
+  };
 }
 
 function normalizeNote(note: LegacyNote): Note {

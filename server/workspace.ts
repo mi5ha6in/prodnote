@@ -38,6 +38,7 @@ export async function getSyncedWorkspace(userId: string): Promise<SyncedWorkspac
     tasks,
     taskTags,
     taskHistory,
+    taskSubtasks,
     notes,
     noteTaskLinks,
     noteTags,
@@ -53,6 +54,7 @@ export async function getSyncedWorkspace(userId: string): Promise<SyncedWorkspac
     sqlClient<Row[]>`select * from tasks where workspace_id = ${workspaceId} and deleted_at is null order by created_at desc`,
     sqlClient<Row[]>`select * from task_tags where workspace_id = ${workspaceId}`,
     sqlClient<Row[]>`select * from task_history_entries where workspace_id = ${workspaceId} order by at desc`,
+    sqlClient<Row[]>`select * from task_subtasks where workspace_id = ${workspaceId} order by position asc`,
     sqlClient<Row[]>`select * from notes where workspace_id = ${workspaceId} and deleted_at is null order by created_at desc`,
     sqlClient<Row[]>`select * from note_task_links where workspace_id = ${workspaceId}`,
     sqlClient<Row[]>`select * from note_tags where workspace_id = ${workspaceId}`,
@@ -66,6 +68,7 @@ export async function getSyncedWorkspace(userId: string): Promise<SyncedWorkspac
 
   const taskTagsByTask = groupValues(taskTags, "task_id", "tag_id");
   const taskHistoryByTask = groupRows(taskHistory, "task_id");
+  const taskSubtasksByTask = groupRows(taskSubtasks, "task_id");
   const noteTasksByNote = groupValues(noteTaskLinks, "note_id", "task_id");
   const noteTagsByNote = groupValues(noteTags, "note_id", "tag_id");
   const noteEditsByNote = groupRows(noteEdits, "note_id");
@@ -102,6 +105,11 @@ export async function getSyncedWorkspace(userId: string): Promise<SyncedWorkspac
         dueDate: asNullableString(task.due_date),
         plannedAt: asNullableString(task.planned_at),
         estimateMinutes: asNullableNumber(task.estimate_minutes),
+        subtasks: (taskSubtasksByTask.get(asString(task.entity_id)) ?? []).map((sub) => ({
+          id: asString(sub.entity_id),
+          title: asString(sub.title),
+          done: Boolean(sub.done),
+        })),
         history: (taskHistoryByTask.get(asString(task.entity_id)) ?? []).map((entry) => ({
           id: asString(entry.entity_id),
           at: toIso(entry.at),
@@ -263,6 +271,14 @@ export async function putSyncedWorkspace(
         await transaction`
           insert into task_history_entries (workspace_id, task_id, entity_id, at, kind, markdown)
           values (${workspaceId}, ${task.id}, ${entry.id}, ${toSqlTimestamp(entry.at)}, ${entry.kind}, ${entry.markdown})
+          on conflict do nothing
+        `;
+      }
+      await transaction`delete from task_subtasks where workspace_id = ${workspaceId} and task_id = ${task.id}`;
+      for (const [position, sub] of task.subtasks.entries()) {
+        await transaction`
+          insert into task_subtasks (workspace_id, task_id, entity_id, title, done, position)
+          values (${workspaceId}, ${task.id}, ${sub.id}, ${sub.title}, ${sub.done}, ${position})
           on conflict do nothing
         `;
       }

@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 export type EntityId = string;
 
@@ -33,6 +33,12 @@ export interface TaskHistoryEntry {
   markdown: string;
 }
 
+export interface Subtask {
+  id: EntityId;
+  title: string;
+  done: boolean;
+}
+
 export interface Task {
   id: EntityId;
   title: string;
@@ -44,6 +50,7 @@ export interface Task {
   dueDate: string | null;
   plannedAt: string | null;
   estimateMinutes: number | null;
+  subtasks: Subtask[];
   history: TaskHistoryEntry[];
   createdAt: string;
   updatedAt: string;
