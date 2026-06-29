@@ -395,6 +395,7 @@ export class CalendarView extends HTMLElement {
       >
         <strong>${escapeHtml(item.title)}</strong>
         <span>${escapeHtml(time)}</span>
+        ${item.source === "event" ? `<span class="week-event-resize" data-resize-event="${escapeHtml(item.id)}" aria-hidden="true"></span>` : ""}
       </button>
     `;
   }
@@ -652,6 +653,44 @@ export class CalendarView extends HTMLElement {
         if (date) {
           this.moveEventToDayTime(date, snapMinutes(column, event.clientY));
         }
+      });
+    });
+
+    root.querySelectorAll<HTMLElement>("[data-resize-event]").forEach((handle) => {
+      handle.addEventListener("pointerdown", (event) => {
+        if (!(event instanceof PointerEvent)) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+
+        const id = handle.dataset.resizeEvent;
+        const eventEl = handle.closest<HTMLElement>(".week-event");
+        const column = handle.closest<HTMLElement>("[data-week-col]");
+        const calendarEvent = id ? appStore.getWorkspace().events.find((item) => item.id === id) : null;
+        if (!id || !eventEl || !column || !calendarEvent) {
+          return;
+        }
+
+        const startMin = minutesIntoDay(calendarEvent.startsAt);
+        handle.setPointerCapture(event.pointerId);
+
+        const onMove = (move: PointerEvent) => {
+          const endMin = Math.max(startMin + 30, snapMinutes(column, move.clientY));
+          eventEl.style.height = `${((endMin - startMin) / 1440) * 100}%`;
+        };
+        const onUp = (up: PointerEvent) => {
+          handle.releasePointerCapture(event.pointerId);
+          handle.removeEventListener("pointermove", onMove);
+          handle.removeEventListener("pointerup", onUp);
+          const endMin = Math.max(startMin + 30, snapMinutes(column, up.clientY));
+          const start = new Date(calendarEvent.startsAt);
+          const newEnd = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, endMin, 0);
+          this.commitEventMove(calendarEvent, calendarEvent.startsAt, newEnd.toISOString());
+        };
+
+        handle.addEventListener("pointermove", onMove);
+        handle.addEventListener("pointerup", onUp);
       });
     });
 
@@ -1198,6 +1237,16 @@ export class CalendarView extends HTMLElement {
       .week-event span {
         font-size: 0.65rem;
         opacity: 0.85;
+      }
+
+      .week-event-resize {
+        bottom: 0;
+        cursor: ns-resize;
+        height: 0.45rem;
+        left: 0;
+        position: absolute;
+        right: 0;
+        touch-action: none;
       }
 
       .check-row {
