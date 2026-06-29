@@ -4,6 +4,7 @@ import { getTimerNotificationStatus, requestTimerNotificationPermission } from "
 import { appStore } from "../state";
 import { parseWorkspaceExport, stringifyExport, validateImportSnapshot } from "../storage/export";
 import { getEventReminderMinutes, REMINDER_OPTIONS, setEventReminderMinutes } from "../storage/reminder-prefs";
+import { getThemePreference, setThemePreference, type ThemePreference } from "../storage/theme";
 import {
   getSyncState,
   loginPasskey,
@@ -102,6 +103,7 @@ export class SettingsView extends HTMLElement {
     const settings = workspace.settings;
     const notificationStatus = getTimerNotificationStatus();
     const reminderMinutes = getEventReminderMinutes();
+    const themePreference = getThemePreference();
     const syncState = getSyncState();
     const isSyncing = syncState.status === "syncing";
     const root = renderShadow(
@@ -109,6 +111,27 @@ export class SettingsView extends HTMLElement {
       `
         <section class="view-grid">
           ${this.renderCreateModal()}
+
+          <article class="card form-grid">
+            <div>
+              <p class="eyebrow">Оформление</p>
+              <h2>Тема интерфейса</h2>
+            </div>
+            ${fieldHtml({
+              label: "Тема",
+              control: `<select data-theme-select>
+                ${(
+                  [
+                    ["system", "Системная"],
+                    ["light", "Светлая"],
+                    ["dark", "Тёмная"],
+                  ] as Array<[ThemePreference, string]>
+                )
+                  .map(([value, label]) => `<option value="${value}" ${value === themePreference ? "selected" : ""}>${label}</option>`)
+                  .join("")}
+              </select>`,
+            })}
+          </article>
 
           <div class="split-grid">
             <form class="card form-grid" data-form="settings">
@@ -451,6 +474,12 @@ export class SettingsView extends HTMLElement {
     root.querySelector<HTMLSelectElement>("[data-reminder-minutes]")?.addEventListener("change", (event) => {
       if (event.currentTarget instanceof HTMLSelectElement) {
         setEventReminderMinutes(Number(event.currentTarget.value));
+      }
+    });
+
+    root.querySelector<HTMLSelectElement>("[data-theme-select]")?.addEventListener("change", (event) => {
+      if (event.currentTarget instanceof HTMLSelectElement) {
+        setThemePreference(event.currentTarget.value as ThemePreference);
       }
     });
 

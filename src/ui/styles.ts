@@ -1,24 +1,7 @@
 export const sharedStyles = `
   :host {
-    /* Neutral surfaces + single green accent */
-    --bg: #f6f7f6;
-    --paper: #ffffff;
-    --surface: #f3f4f3;
-    --paper-strong: #eceeec;
-
-    --ink: #1a1c1b;
-    --ink-soft: #414643;
-    --muted: #767b78;
-
-    --line: #e6e8e6;
-    --line-strong: #d3d6d3;
-
-    --accent: #2f7d5c;
-    --accent-strong: #21664a;
-    --accent-soft: #e7f1ec;
-
-    --danger: #b84b4b;
-    --danger-soft: #f7eaea;
+    /* Palette tokens are defined on :root (global.css) and inherit through the
+       shadow boundary, so the theme switch reaches every component. */
 
     /* Spacing scale */
     --space-1: 0.25rem;
@@ -42,9 +25,6 @@ export const sharedStyles = `
     --text-lg: 1.25rem;
     --text-xl: 1.5rem;
     --text-2xl: 2rem;
-
-    --shadow-sm: 0 1px 2px rgba(20, 28, 24, 0.05), 0 1px 1px rgba(20, 28, 24, 0.03);
-    --shadow-md: 0 12px 32px rgba(20, 28, 24, 0.1);
 
     color: var(--ink);
     display: block;
@@ -142,11 +122,12 @@ export const sharedStyles = `
   button.secondary,
   .button.secondary {
     background: var(--ink);
+    color: var(--paper);
   }
 
   button.secondary:hover,
   .button.secondary:hover {
-    background: #000;
+    background: var(--ink-soft);
   }
 
   button.ghost,
@@ -165,13 +146,13 @@ export const sharedStyles = `
   button.danger,
   .button.danger {
     background: var(--danger-soft);
-    border-color: #eed2d2;
+    border-color: color-mix(in srgb, var(--danger) 28%, var(--paper));
     color: var(--danger);
   }
 
   button.danger:hover,
   .button.danger:hover {
-    background: #f1dada;
+    background: color-mix(in srgb, var(--danger) 16%, var(--paper));
   }
 
   button.small,
