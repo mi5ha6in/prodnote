@@ -1,6 +1,7 @@
 import { dayKey, isMultiDay, itemsForDay, taskDeadlineItems, toCalendarItems, type CalendarItem } from "../domain/calendar";
 import { EVENT_KIND_LABELS, TASK_STATUS_LABELS } from "../domain/defaults";
 import { escapeHtml } from "../domain/markdown";
+import { buildWeeklyReview, weekStartKey } from "../domain/review";
 import { formatDuration, getTotalMinutes, groupSessionsByDay, groupSessionsByProject } from "../domain/stats";
 import type { CalendarEventKind, Workspace } from "../domain/types";
 import { appStore } from "../state";
@@ -49,6 +50,10 @@ export class DashboardView extends HTMLElement {
     const activeTasks = workspace.tasks.filter((task) => task.status !== "done");
     const todayChecklist = workspace.checklist.filter((item) => item.day === today);
     const todayChecklistDone = todayChecklist.filter((item) => item.done).length;
+    const weekReview =
+      workspace.settings.weeklyTimeGoalMinutes > 0
+        ? buildWeeklyReview(workspace, weekStartKey(new Date(), workspace.settings.weekStartsOn))
+        : null;
     const dayStats = groupSessionsByDay(workspace.sessions);
     const projectStats = groupSessionsByProject(workspace.sessions, workspace.tasks, workspace.projects).slice(0, 4);
     const recentSessions = workspace.sessions.slice(0, 5);
@@ -66,6 +71,15 @@ export class DashboardView extends HTMLElement {
         <section class="view-grid">
           ${metricBarHtml([
             { label: "Время сегодня", value: formatDuration(todayMinutes), hint: "Завершённые сессии" },
+            ...(weekReview
+              ? [
+                  {
+                    label: "Цель недели",
+                    value: `${formatDuration(weekReview.totalMinutes)} / ${formatDuration(weekReview.goalMinutes)}`,
+                    hint: `${Math.round((weekReview.totalMinutes / weekReview.goalMinutes) * 100)}% за неделю`,
+                  },
+                ]
+              : []),
             { label: "Чек-лист дня", value: `${todayChecklistDone}/${todayChecklist.length}`, hint: "Выполнено за сегодня" },
             { label: "Активные задачи", value: activeTasks.length, hint: "В работе и бэклоге" },
             {

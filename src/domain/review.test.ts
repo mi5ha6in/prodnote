@@ -56,4 +56,19 @@ describe("weekly review", () => {
     expect(review.perDay).toHaveLength(7);
     expect(review.score).toBe(61);
   });
+
+  it("factors a weekly time goal into the score", () => {
+    const base = createStarterWorkspace();
+    const withGoal = (goalMinutes: number): Workspace => ({
+      ...base,
+      settings: { ...base.settings, weeklyTimeGoalMinutes: goalMinutes },
+      sessions: [session("2026-06-29T10:00:00.000Z", 60)],
+    });
+
+    const met = buildWeeklyReview(withGoal(60), WEEK_START);
+    const missed = buildWeeklyReview(withGoal(600), WEEK_START);
+
+    expect(met.goalMinutes).toBe(60);
+    expect(met.score).toBeGreaterThan(missed.score);
+  });
 });

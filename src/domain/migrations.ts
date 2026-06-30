@@ -74,7 +74,7 @@ export function migrateWorkspace(workspace: LegacyWorkspace): Workspace {
       workspace.sessions,
       Array.isArray(workspace.pomodoroCycles) ? workspace.pomodoroCycles.map(normalizePomodoroCycle) : [],
     ),
-    settings: workspace.settings ?? createDefaultSettings(),
+    settings: { ...createDefaultSettings(), ...workspace.settings },
   };
 }
 
