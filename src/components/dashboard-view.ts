@@ -47,6 +47,8 @@ export class DashboardView extends HTMLElement {
       .filter((session) => session.startedAt.slice(0, 10) === today)
       .reduce((sum, session) => sum + session.durationMinutes, 0);
     const activeTasks = workspace.tasks.filter((task) => task.status !== "done");
+    const todayChecklist = workspace.checklist.filter((item) => item.day === today);
+    const todayChecklistDone = todayChecklist.filter((item) => item.done).length;
     const dayStats = groupSessionsByDay(workspace.sessions);
     const projectStats = groupSessionsByProject(workspace.sessions, workspace.tasks, workspace.projects).slice(0, 4);
     const recentSessions = workspace.sessions.slice(0, 5);
@@ -64,6 +66,7 @@ export class DashboardView extends HTMLElement {
         <section class="view-grid">
           ${metricBarHtml([
             { label: "Время сегодня", value: formatDuration(todayMinutes), hint: "Завершённые сессии" },
+            { label: "Чек-лист дня", value: `${todayChecklistDone}/${todayChecklist.length}`, hint: "Выполнено за сегодня" },
             { label: "Активные задачи", value: activeTasks.length, hint: "В работе и бэклоге" },
             {
               label: "Всего времени",

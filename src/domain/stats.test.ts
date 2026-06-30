@@ -6,12 +6,13 @@ import {
   getPomodoroStats,
   getProductiveHours,
   getTotalMinutes,
+  groupChecklistByDay,
   groupSessionsByDay,
   groupSessionsByProject,
   groupSessionsByTag,
   groupSessionsByTask,
 } from "./stats";
-import type { PomodoroCycle, TimeSession } from "./types";
+import type { ChecklistItem, PomodoroCycle, TimeSession } from "./types";
 
 describe("statistics", () => {
   const project = createProject({ name: "Проект" });
@@ -139,5 +140,30 @@ describe("getPlanVsActualByTask", () => {
     });
 
     expect(getPlanVsActualByTask([allDay], [], [task])).toHaveLength(0);
+  });
+
+  it("groups checklist completion by day, oldest first", () => {
+    const make = (day: string, done: boolean): ChecklistItem => ({
+      id: `c-${day}-${done}`,
+      day,
+      title: "Пункт",
+      done,
+      doneAt: done ? `${day}T09:00:00.000Z` : null,
+      order: 0,
+      taskId: null,
+      rolledFrom: null,
+      createdAt: `${day}T08:00:00.000Z`,
+      updatedAt: `${day}T08:00:00.000Z`,
+    });
+
+    const stats = groupChecklistByDay([
+      make("2026-06-02", true),
+      make("2026-06-01", true),
+      make("2026-06-01", false),
+    ]);
+
+    expect(stats.map((stat) => stat.date)).toEqual(["2026-06-01", "2026-06-02"]);
+    expect(stats[0]).toMatchObject({ total: 2, done: 1 });
+    expect(stats[1]).toMatchObject({ total: 1, done: 1 });
   });
 });

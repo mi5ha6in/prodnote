@@ -1,4 +1,4 @@
-import type { CalendarEvent, PomodoroCycle, Project, Tag, Task, TimeSession } from "./types";
+import type { CalendarEvent, ChecklistItem, PomodoroCycle, Project, Tag, Task, TimeSession } from "./types";
 
 export interface NamedStat {
   id: string;
@@ -186,6 +186,28 @@ export function getPomodoroStats(sessions: TimeSession[], pomodoroCycles: Pomodo
     breakMinutes,
     totalMinutes: focusMinutes + breakMinutes,
   };
+}
+
+export interface ChecklistDayStat {
+  date: string;
+  total: number;
+  done: number;
+}
+
+/** Completed-vs-planned checklist counts per day, oldest first. */
+export function groupChecklistByDay(items: ChecklistItem[]): ChecklistDayStat[] {
+  const map = new Map<string, ChecklistDayStat>();
+
+  for (const item of items) {
+    const current = map.get(item.day) ?? { date: item.day, total: 0, done: 0 };
+    current.total += 1;
+    if (item.done) {
+      current.done += 1;
+    }
+    map.set(item.day, current);
+  }
+
+  return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
 export function formatDuration(minutes: number): string {

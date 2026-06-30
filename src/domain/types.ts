@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 export type EntityId = string;
 
@@ -55,6 +55,24 @@ export interface Task {
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
+}
+
+export interface ChecklistItem {
+  id: EntityId;
+  /** Local day this item belongs to, formatted YYYY-MM-DD. */
+  day: string;
+  title: string;
+  done: boolean;
+  /** When the item was checked off — the timeline of "what got done and when". */
+  doneAt: string | null;
+  /** Stable ordering within a day. */
+  order: number;
+  /** Optional link to a real task (promote to focus/kanban without coupling). */
+  taskId: EntityId | null;
+  /** Day key this item was carried over from, when rolled forward. */
+  rolledFrom: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface NoteEditEntry {
@@ -140,6 +158,7 @@ export interface WorkspaceExport {
   tasks: Task[];
   notes: Note[];
   tags: Tag[];
+  checklist: ChecklistItem[];
   sessions: TimeSession[];
   pomodoroCycles: PomodoroCycle[];
   plans: CalendarPlan[];

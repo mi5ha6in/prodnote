@@ -1,5 +1,6 @@
 import {
   createCalendarEvent,
+  createChecklistItem,
   createId,
   createNote,
   createProject,
@@ -26,6 +27,7 @@ import type {
   ActiveTimer,
   CalendarEvent,
   CalendarEventKind,
+  ChecklistItem,
   EntityId,
   Note,
   Project,
@@ -142,6 +144,111 @@ export class ProdNoteStore {
     const task = createTask(input);
     await this.commit((workspace) => {
       workspace.tasks.unshift(task);
+    });
+    return task;
+  }
+
+  async addChecklistItem(input: { title: string; day: string; taskId?: string | null }): Promise<ChecklistItem | null> {
+    const trimmed = input.title.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const nextOrder =
+      this.workspace.checklist
+        .filter((item) => item.day === input.day)
+        .reduce((max, item) => Math.max(max, item.order), -1) + 1;
+    const item = createChecklistItem({
+      title: trimmed,
+      day: input.day,
+      order: nextOrder,
+      taskId: input.taskId ?? null,
+    });
+
+    await this.commit((workspace) => {
+      workspace.checklist.push(item);
+    });
+    return item;
+  }
+
+  async toggleChecklistItem(itemId: EntityId): Promise<void> {
+    await this.commit((workspace) => {
+      const item = workspace.checklist.find((entry) => entry.id === itemId);
+      if (!item) {
+        return;
+      }
+      item.done = !item.done;
+      item.doneAt = item.done ? nowIso() : null;
+      item.updatedAt = nowIso();
+    });
+  }
+
+  async removeChecklistItem(itemId: EntityId): Promise<void> {
+    await this.commit((workspace) => {
+      workspace.checklist = workspace.checklist.filter((entry) => entry.id !== itemId);
+    });
+    recordSyncDeletion("checklistItem", itemId);
+  }
+
+  /** Copy unfinished items from one day forward, skipping ones already carried over. */
+  async rolloverChecklist(fromDay: string, toDay: string): Promise<number> {
+    let carried = 0;
+
+    await this.commit((workspace) => {
+      const existingKeys = new Set(
+        workspace.checklist
+          .filter((item) => item.day === toDay)
+          .map((item) => `${item.taskId ?? ""}::${item.title.toLowerCase()}`),
+      );
+      let nextOrder =
+        workspace.checklist
+          .filter((item) => item.day === toDay)
+          .reduce((max, item) => Math.max(max, item.order), -1) + 1;
+
+      for (const item of workspace.checklist) {
+        if (item.day !== fromDay || item.done) {
+          continue;
+        }
+        const key = `${item.taskId ?? ""}::${item.title.toLowerCase()}`;
+        if (existingKeys.has(key)) {
+          continue;
+        }
+        existingKeys.add(key);
+        workspace.checklist.push(
+          createChecklistItem({
+            title: item.title,
+            day: toDay,
+            order: nextOrder,
+            taskId: item.taskId,
+            rolledFrom: fromDay,
+          }),
+        );
+        nextOrder += 1;
+        carried += 1;
+      }
+    });
+
+    return carried;
+  }
+
+  /** Promote a checklist item to a real task and link them, so it can join focus/kanban. */
+  async promoteChecklistItemToTask(itemId: EntityId): Promise<Task | null> {
+    const existing = this.workspace.checklist.find((entry) => entry.id === itemId);
+    if (!existing) {
+      return null;
+    }
+    if (existing.taskId) {
+      return this.workspace.tasks.find((task) => task.id === existing.taskId) ?? null;
+    }
+
+    const task = createTask({ title: existing.title });
+    await this.commit((workspace) => {
+      workspace.tasks.unshift(task);
+      const item = workspace.checklist.find((entry) => entry.id === itemId);
+      if (item) {
+        item.taskId = task.id;
+        item.updatedAt = nowIso();
+      }
     });
     return task;
   }

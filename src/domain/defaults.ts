@@ -3,6 +3,7 @@ import {
   type CalendarEvent,
   type CalendarEventKind,
   type CalendarPlan,
+  type ChecklistItem,
   type EntityId,
   type Note,
   type Project,
@@ -96,6 +97,7 @@ export function createStarterWorkspace(): Workspace {
     tasks: [],
     notes: [],
     tags: [focusTag, researchTag],
+    checklist: [],
     sessions: [],
     pomodoroCycles: [],
     plans: [],
@@ -130,6 +132,29 @@ export function createTask(input: {
     createdAt,
     updatedAt: createdAt,
     completedAt: null,
+  };
+}
+
+export function createChecklistItem(input: {
+  title: string;
+  day: string;
+  order?: number;
+  taskId?: string | null;
+  rolledFrom?: string | null;
+}): ChecklistItem {
+  const createdAt = nowIso();
+
+  return {
+    id: createId("checklist"),
+    day: input.day,
+    title: input.title.trim(),
+    done: false,
+    doneAt: null,
+    order: input.order ?? 0,
+    taskId: input.taskId ?? null,
+    rolledFrom: input.rolledFrom ?? null,
+    createdAt,
+    updatedAt: createdAt,
   };
 }
 

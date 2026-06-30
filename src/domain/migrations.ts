@@ -4,6 +4,7 @@ import {
   SCHEMA_VERSION,
   type CalendarEvent,
   type CalendarPlan,
+  type ChecklistItem,
   type Note,
   type NoteEditEntry,
   type PomodoroCycle,
@@ -30,12 +31,13 @@ type LegacyPomodoroCycle = Omit<PomodoroCycle, "completedShortBreakCount" | "com
 
 type LegacyTask = Omit<Task, "subtasks"> & { subtasks?: Task["subtasks"] };
 
-type LegacyWorkspace = Omit<Workspace, "notes" | "tasks" | "pomodoroCycles" | "events" | "schemaVersion"> & {
+type LegacyWorkspace = Omit<Workspace, "notes" | "tasks" | "pomodoroCycles" | "events" | "checklist" | "schemaVersion"> & {
   schemaVersion: number;
   tasks: LegacyTask[];
   notes: LegacyNote[];
   pomodoroCycles?: LegacyPomodoroCycle[];
   events?: Workspace["events"];
+  checklist?: ChecklistItem[];
 };
 
 export function migrateWorkspace(workspace: LegacyWorkspace): Workspace {
@@ -54,6 +56,7 @@ export function migrateWorkspace(workspace: LegacyWorkspace): Workspace {
     ...workspace,
     schemaVersion: SCHEMA_VERSION,
     exportedAt: workspace.exportedAt ?? null,
+    checklist: Array.isArray(workspace.checklist) ? workspace.checklist : [],
     tasks: workspace.tasks.map(normalizeTask),
     notes: workspace.notes.map(normalizeNote),
     pomodoroCycles: Array.isArray(workspace.pomodoroCycles) ? workspace.pomodoroCycles.map(normalizePomodoroCycle) : [],
