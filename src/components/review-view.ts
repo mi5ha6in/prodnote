@@ -128,6 +128,7 @@ const styles = `
   .week-nav {
     align-items: center;
     display: flex;
+    flex-wrap: wrap;
     gap: var(--space-2);
   }
 
