@@ -15,6 +15,7 @@ interface PaletteItem {
 const NAV_ITEMS: PaletteItem[] = [
   { label: "Перейти: Обзор", sub: "Навигация", hash: "#/dashboard" },
   { label: "Перейти: Сегодня", sub: "Навигация", hash: "#/today" },
+  { label: "Перейти: Привычки", sub: "Навигация", hash: "#/habits" },
   { label: "Перейти: Задачи", sub: "Навигация", hash: "#/tasks" },
   { label: "Перейти: Заметки", sub: "Навигация", hash: "#/notes" },
   { label: "Перейти: Календарь", sub: "Навигация", hash: "#/calendar" },

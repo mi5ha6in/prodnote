@@ -6,6 +6,7 @@ import "./components/event-reminder";
 import "./components/command-palette";
 import "./components/dashboard-view";
 import "./components/today-view";
+import "./components/habits-view";
 import "./components/tasks-view";
 import "./components/notes-view";
 import "./components/calendar-view";

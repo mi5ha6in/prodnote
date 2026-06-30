@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { materializeTemplates, shiftDayKey, templateAppliesToDay, weekdayOf } from "./checklist";
+import { habitStreak, lastNDays, materializeTemplates, shiftDayKey, templateAppliesToDay, weekdayOf } from "./checklist";
 import { createChecklistItem, createChecklistTemplate } from "./defaults";
-import type { ChecklistTemplate } from "./types";
+import type { ChecklistItem, ChecklistTemplate } from "./types";
 
 const MONDAY = "2026-06-29";
 const SATURDAY = "2026-06-27";
@@ -41,5 +41,32 @@ describe("checklist recurrence", () => {
 
     expect(created.map((item) => item.title)).toEqual(["Ревью"]);
     expect(created[0]).toMatchObject({ day: MONDAY, order: 1, templateId: weekdays.id });
+  });
+
+  it("lists the trailing window of days oldest first", () => {
+    expect(lastNDays(MONDAY, 3)).toEqual(["2026-06-27", "2026-06-28", MONDAY]);
+  });
+
+  it("counts a habit streak, tolerating a pending most-recent day", () => {
+    const habit = createChecklistTemplate({ title: "Английский", cadence: "daily", isHabit: true });
+    const doneOn = (day: string, done: boolean): ChecklistItem => ({
+      ...createChecklistItem({ title: habit.title, day, templateId: habit.id }),
+      done,
+      doneAt: done ? `${day}T09:00:00.000Z` : null,
+    });
+
+    // Yesterday and the day before are done; today is still pending.
+    const items = [
+      doneOn(MONDAY, false),
+      doneOn("2026-06-28", true),
+      doneOn("2026-06-27", true),
+      doneOn("2026-06-26", false),
+    ];
+
+    expect(habitStreak(habit, items, MONDAY)).toBe(2);
+
+    // Completing today extends the streak.
+    const withToday = items.map((item) => (item.day === MONDAY ? { ...item, done: true } : item));
+    expect(habitStreak(habit, withToday, MONDAY)).toBe(3);
   });
 });
