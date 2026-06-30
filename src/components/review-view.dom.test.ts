@@ -1,0 +1,40 @@
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it } from "vitest";
+import { appStore } from "../state";
+import "./review-view";
+
+function mount(): HTMLElement {
+  const element = document.createElement("pn-review-view");
+  document.body.appendChild(element);
+  return element;
+}
+
+function shadow(element: HTMLElement): ShadowRoot {
+  if (!element.shadowRoot) {
+    throw new Error("shadow root not attached");
+  }
+  return element.shadowRoot;
+}
+
+afterEach(() => {
+  document.body.innerHTML = "";
+});
+
+describe("review-view (DOM)", () => {
+  it("renders the score card, week navigation and a 7-day chart", () => {
+    const root = shadow(mount());
+    expect(root.querySelector(".score-value")).toBeTruthy();
+    expect(root.querySelectorAll("[data-week-shift]")).toHaveLength(2);
+    expect(root.querySelectorAll(".week-col")).toHaveLength(7);
+  });
+
+  it("reflects a completed checklist item in the score", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const item = await appStore.addChecklistItem({ title: "Ревью-пункт", day: today });
+    await appStore.toggleChecklistItem(item!.id);
+
+    const root = shadow(mount());
+    const score = Number(root.querySelector(".score-value")?.firstChild?.textContent ?? "0");
+    expect(score).toBeGreaterThan(0);
+  });
+});

@@ -1,7 +1,7 @@
 import { appStore } from "../state";
 import { renderShadow } from "./shadow";
 
-type Route = "dashboard" | "today" | "habits" | "tasks" | "notes" | "calendar" | "focus" | "stats" | "settings";
+type Route = "dashboard" | "today" | "habits" | "tasks" | "notes" | "calendar" | "focus" | "stats" | "review" | "settings";
 
 const ICONS = {
   dashboard: `<svg viewBox="0 0 24 24"><path d="M4 13h6V4H4v9Zm10 7h6V11h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z"/></svg>`,
@@ -12,6 +12,7 @@ const ICONS = {
   calendar: `<svg viewBox="0 0 24 24"><path d="M5 5h14v15H5V5Zm0 5h14M8 3v4M16 3v4M8 14h3M13 14h3M8 17h3"/></svg>`,
   focus: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>`,
   stats: `<svg viewBox="0 0 24 24"><path d="M5 20V10h4v10H5Zm5 0V4h4v16h-4Zm5 0v-7h4v7h-4Z"/></svg>`,
+  review: `<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9h-9V3Z"/><path d="M14 3.5a8 8 0 0 1 6.5 6.5H14V3.5Z"/></svg>`,
   settings: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>`,
 } satisfies Record<Route, string>;
 
@@ -24,6 +25,7 @@ const ROUTES: Array<{ id: Route; label: string; description: string; tag: string
   { id: "calendar", label: "Календарь", description: "План и история времени", tag: "pn-calendar-view" },
   { id: "focus", label: "Фокус", description: "Таймер и помодоро", tag: "pn-focus-view" },
   { id: "stats", label: "Статистика", description: "Ритм и распределение времени", tag: "pn-stats-view" },
+  { id: "review", label: "Ревью", description: "Итоги недели и продуктивность", tag: "pn-review-view" },
   { id: "settings", label: "Настройки", description: "Данные, синхронизация и проекты", tag: "pn-settings-view" },
 ];
 

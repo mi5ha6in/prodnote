@@ -12,6 +12,7 @@ import "./components/notes-view";
 import "./components/calendar-view";
 import "./components/focus-view";
 import "./components/stats-view";
+import "./components/review-view";
 import "./components/settings-view";
 import "./components/app-root";
 
