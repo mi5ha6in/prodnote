@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 
 export type EntityId = string;
 
@@ -164,6 +164,8 @@ export interface Settings {
   pomodoroLongBreakMinutes: number;
   pomodoroLongBreakEvery: number;
   weekStartsOn: 1 | 7;
+  /** Weekly tracked-time target in minutes; 0 disables the goal. */
+  weeklyTimeGoalMinutes: number;
 }
 
 export interface WorkspaceExport {

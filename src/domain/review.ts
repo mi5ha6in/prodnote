@@ -19,8 +19,9 @@ export interface WeeklyReview {
   habitsDone: number;
   habitsScheduled: number;
   activeDays: number;
+  goalMinutes: number;
   perDay: ReviewDay[];
-  /** 0–100 composite of consistency, checklist and habit completion. */
+  /** 0–100 composite of consistency, checklist, habit and (if set) time-goal completion. */
   score: number;
 }
 
@@ -87,12 +88,16 @@ export function buildWeeklyReview(workspace: Workspace, weekStart: string): Week
     }
   }
 
+  const goalMinutes = workspace.settings.weeklyTimeGoalMinutes;
   const terms: Array<{ weight: number; value: number }> = [{ weight: 0.4, value: activeDays.size / 7 }];
   if (checklistPlanned > 0) {
     terms.push({ weight: 0.3, value: checklistDone / checklistPlanned });
   }
   if (habitsScheduled > 0) {
     terms.push({ weight: 0.3, value: habitsDone / habitsScheduled });
+  }
+  if (goalMinutes > 0) {
+    terms.push({ weight: 0.3, value: Math.min(1, totalMinutes / goalMinutes) });
   }
   const weightSum = terms.reduce((sum, term) => sum + term.weight, 0);
   const score = weightSum > 0 ? Math.round((100 * terms.reduce((sum, term) => sum + term.weight * term.value, 0)) / weightSum) : 0;
@@ -108,6 +113,7 @@ export function buildWeeklyReview(workspace: Workspace, weekStart: string): Week
     habitsDone,
     habitsScheduled,
     activeDays: activeDays.size,
+    goalMinutes,
     perDay: days.map((day) => ({ date: day, minutes: perDayMinutes.get(day) ?? 0 })),
     score,
   };

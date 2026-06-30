@@ -68,7 +68,13 @@ export class ReviewView extends HTMLElement {
           </article>
 
           ${metricBarHtml([
-            { label: "Время за неделю", value: formatDuration(review.totalMinutes), hint: `${review.sessionCount} сессий` },
+            review.goalMinutes > 0
+              ? {
+                  label: "Время за неделю",
+                  value: `${formatDuration(review.totalMinutes)} / ${formatDuration(review.goalMinutes)}`,
+                  hint: `${Math.round((review.totalMinutes / review.goalMinutes) * 100)}% цели`,
+                }
+              : { label: "Время за неделю", value: formatDuration(review.totalMinutes), hint: `${review.sessionCount} сессий` },
             { label: "Задачи закрыты", value: review.tasksCompleted, hint: "Завершено за неделю" },
             { label: "Чек-лист", value: `${review.checklistDone}/${review.checklistPlanned}`, hint: "Выполнено из запланированных" },
             { label: "Активных дней", value: `${review.activeDays}/7`, hint: "С работой или отметками" },

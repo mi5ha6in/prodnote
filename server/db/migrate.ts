@@ -279,5 +279,8 @@ export async function runMigrations(): Promise<void> {
 
     alter table if exists checklist_items
       add column if not exists template_id text;
+
+    alter table if exists settings
+      add column if not exists weekly_time_goal_minutes integer not null default 0;
   `);
 }

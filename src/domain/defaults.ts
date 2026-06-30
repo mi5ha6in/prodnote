@@ -73,6 +73,7 @@ export function createDefaultSettings(): Settings {
     pomodoroLongBreakMinutes: 15,
     pomodoroLongBreakEvery: 4,
     weekStartsOn: 1,
+    weeklyTimeGoalMinutes: 0,
   };
 }
 

@@ -216,6 +216,7 @@ export async function getSyncedWorkspace(userId: string): Promise<SyncedWorkspac
             pomodoroLongBreakMinutes: Number(settings.pomodoro_long_break_minutes),
             pomodoroLongBreakEvery: Number(settings.pomodoro_long_break_every),
             weekStartsOn: Number(settings.week_starts_on) === 7 ? 7 : 1,
+            weeklyTimeGoalMinutes: Number(settings.weekly_time_goal_minutes ?? 0),
           }
         : createDefaultSettings(),
     },
@@ -470,12 +471,12 @@ export async function putSyncedWorkspace(
     await transaction`
       insert into settings (
         workspace_id, pomodoro_focus_minutes, pomodoro_short_break_minutes, pomodoro_long_break_minutes,
-        pomodoro_long_break_every, week_starts_on, client_updated_at, server_revision
+        pomodoro_long_break_every, week_starts_on, weekly_time_goal_minutes, client_updated_at, server_revision
       )
       values (
         ${workspaceId}, ${workspace.settings.pomodoroFocusMinutes}, ${workspace.settings.pomodoroShortBreakMinutes},
         ${workspace.settings.pomodoroLongBreakMinutes}, ${workspace.settings.pomodoroLongBreakEvery},
-        ${workspace.settings.weekStartsOn}, ${now}, ${nextRevision}
+        ${workspace.settings.weekStartsOn}, ${workspace.settings.weeklyTimeGoalMinutes}, ${now}, ${nextRevision}
       )
       on conflict (workspace_id) do update
       set pomodoro_focus_minutes = excluded.pomodoro_focus_minutes,
@@ -483,6 +484,7 @@ export async function putSyncedWorkspace(
         pomodoro_long_break_minutes = excluded.pomodoro_long_break_minutes,
         pomodoro_long_break_every = excluded.pomodoro_long_break_every,
         week_starts_on = excluded.week_starts_on,
+        weekly_time_goal_minutes = excluded.weekly_time_goal_minutes,
         client_updated_at = excluded.client_updated_at,
         server_revision = excluded.server_revision
     `;
