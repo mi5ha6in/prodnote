@@ -1,10 +1,11 @@
 import { appStore } from "../state";
 import { renderShadow } from "./shadow";
 
-type Route = "dashboard" | "tasks" | "notes" | "calendar" | "focus" | "stats" | "settings";
+type Route = "dashboard" | "today" | "tasks" | "notes" | "calendar" | "focus" | "stats" | "settings";
 
 const ICONS = {
   dashboard: `<svg viewBox="0 0 24 24"><path d="M4 13h6V4H4v9Zm10 7h6V11h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z"/></svg>`,
+  today: `<svg viewBox="0 0 24 24"><path d="M5 5h14v15H5V5Zm0 5h14M8 3v4M16 3v4m-7 9 2 2 4-4"/></svg>`,
   tasks: `<svg viewBox="0 0 24 24"><path d="m5 12 2.2 2.2L11 10.4M5 6l2.2 2.2L11 4.4M5 18l2.2 2.2 3.8-3.8M14 6h5M14 12h5M14 18h5"/></svg>`,
   notes: `<svg viewBox="0 0 24 24"><path d="M6 3.5h9l3 3V20.5H6v-17Zm8.5 0v4h4M9 11h6M9 15h6"/></svg>`,
   calendar: `<svg viewBox="0 0 24 24"><path d="M5 5h14v15H5V5Zm0 5h14M8 3v4M16 3v4M8 14h3M13 14h3M8 17h3"/></svg>`,
@@ -15,6 +16,7 @@ const ICONS = {
 
 const ROUTES: Array<{ id: Route; label: string; description: string; tag: string }> = [
   { id: "dashboard", label: "Обзор", description: "Главное на сегодня", tag: "pn-dashboard-view" },
+  { id: "today", label: "Сегодня", description: "Чек-лист дня и история", tag: "pn-today-view" },
   { id: "tasks", label: "Задачи", description: "Планы и текущая работа", tag: "pn-tasks-view" },
   { id: "notes", label: "Заметки", description: "Конспекты и база знаний", tag: "pn-notes-view" },
   { id: "calendar", label: "Календарь", description: "План и история времени", tag: "pn-calendar-view" },

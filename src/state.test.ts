@@ -90,6 +90,46 @@ describe("ProdNoteStore", () => {
     });
   });
 
+  it("manages the daily checklist: add, toggle, rollover and promote", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+
+    const first = await store.addChecklistItem({ title: "Полить цветы", day: "2026-06-28" });
+    await store.addChecklistItem({ title: "Прочитать главу", day: "2026-06-28" });
+    expect(store.getWorkspace().checklist).toHaveLength(2);
+    expect(first?.order).toBe(0);
+
+    // Empty titles are ignored.
+    expect(await store.addChecklistItem({ title: "   ", day: "2026-06-28" })).toBeNull();
+
+    await store.toggleChecklistItem(first!.id);
+    const toggled = store.getWorkspace().checklist.find((item) => item.id === first!.id);
+    expect(toggled?.done).toBe(true);
+    expect(toggled?.doneAt).not.toBeNull();
+
+    // Only the unfinished item carries over to the next day.
+    const carried = await store.rolloverChecklist("2026-06-28", "2026-06-29");
+    expect(carried).toBe(1);
+    const nextDay = store.getWorkspace().checklist.filter((item) => item.day === "2026-06-29");
+    expect(nextDay).toHaveLength(1);
+    expect(nextDay[0]).toMatchObject({ title: "Прочитать главу", rolledFrom: "2026-06-28" });
+
+    // Rollover is idempotent — re-running does not duplicate.
+    expect(await store.rolloverChecklist("2026-06-28", "2026-06-29")).toBe(0);
+
+    const task = await store.promoteChecklistItemToTask(nextDay[0]!.id);
+    expect(task).not.toBeNull();
+    expect(store.getWorkspace().tasks.find((item) => item.id === task!.id)?.title).toBe("Прочитать главу");
+    expect(store.getWorkspace().checklist.find((item) => item.id === nextDay[0]!.id)?.taskId).toBe(task!.id);
+
+    // Promoting again returns the same linked task instead of creating a new one.
+    expect(await store.promoteChecklistItemToTask(nextDay[0]!.id)).toMatchObject({ id: task!.id });
+    expect(store.getWorkspace().tasks).toHaveLength(1);
+
+    await store.removeChecklistItem(first!.id);
+    expect(store.getWorkspace().checklist.some((item) => item.id === first!.id)).toBe(false);
+  });
+
   it("deletes projects without deleting linked tasks and notes", async () => {
     const store = new ProdNoteStore();
     await store.init();

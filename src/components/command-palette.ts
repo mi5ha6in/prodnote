@@ -12,12 +12,14 @@ interface PaletteItem {
 
 const NAV_ITEMS: PaletteItem[] = [
   { label: "Перейти: Обзор", sub: "Навигация", hash: "#/dashboard" },
+  { label: "Перейти: Сегодня", sub: "Навигация", hash: "#/today" },
   { label: "Перейти: Задачи", sub: "Навигация", hash: "#/tasks" },
   { label: "Перейти: Заметки", sub: "Навигация", hash: "#/notes" },
   { label: "Перейти: Календарь", sub: "Навигация", hash: "#/calendar" },
   { label: "Перейти: Фокус", sub: "Навигация", hash: "#/focus" },
   { label: "Перейти: Статистика", sub: "Навигация", hash: "#/stats" },
   { label: "Перейти: Настройки", sub: "Навигация", hash: "#/settings" },
+  { label: "Создать: Пункт дня", sub: "Действие", hash: "#/today" },
   { label: "Создать: Задача", sub: "Действие", hash: "#/tasks" },
   { label: "Создать: Заметка", sub: "Действие", hash: "#/notes" },
   { label: "Создать: Событие", sub: "Действие", hash: "#/calendar" },
