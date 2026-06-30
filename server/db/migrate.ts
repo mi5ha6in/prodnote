@@ -244,6 +244,7 @@ export async function runMigrations(): Promise<void> {
       workspace_id uuid not null references workspaces(id) on delete cascade,
       entity_id text not null,
       task_id text,
+      project_id text,
       title text not null,
       description text not null default '',
       location text not null default '',
@@ -282,5 +283,8 @@ export async function runMigrations(): Promise<void> {
 
     alter table if exists settings
       add column if not exists weekly_time_goal_minutes integer not null default 0;
+
+    alter table if exists calendar_events
+      add column if not exists project_id text;
   `);
 }

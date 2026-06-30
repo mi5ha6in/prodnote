@@ -405,6 +405,7 @@ export class ProdNoteStore {
     allDay?: boolean;
     kind?: CalendarEventKind;
     taskId?: string | null;
+    projectId?: string | null;
     description?: string;
     location?: string;
   }): Promise<CalendarEvent> {
@@ -423,6 +424,7 @@ export class ProdNoteStore {
       allDay?: boolean;
       kind?: CalendarEventKind;
       taskId?: string | null;
+      projectId?: string | null;
       description?: string;
       location?: string;
     }>,
@@ -445,6 +447,7 @@ export class ProdNoteStore {
     allDay: boolean;
     kind: CalendarEventKind;
     taskId: string | null;
+    projectId?: string | null;
     description?: string;
     location?: string;
   }): Promise<void> {
@@ -460,6 +463,7 @@ export class ProdNoteStore {
       event.allDay = input.allDay;
       event.kind = input.kind;
       event.taskId = input.taskId;
+      event.projectId = input.projectId ?? null;
       event.description = input.description?.trim() ?? "";
       event.location = input.location?.trim() ?? "";
       event.updatedAt = nowIso();
