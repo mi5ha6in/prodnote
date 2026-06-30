@@ -131,6 +131,28 @@ describe("ProdNoteStore", () => {
     expect(store.getWorkspace().checklist.some((item) => item.id === first!.id)).toBe(false);
   });
 
+  it("renames and reorders checklist items", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+    const day = "2026-06-29";
+
+    const a = await store.addChecklistItem({ title: "A", day });
+    const b = await store.addChecklistItem({ title: "B", day });
+    const c = await store.addChecklistItem({ title: "C", day });
+    const find = (id: string) => store.getWorkspace().checklist.find((item) => item.id === id);
+
+    await store.reorderChecklist(day, [c!.id, a!.id, b!.id]);
+    expect(find(c!.id)?.order).toBe(0);
+    expect(find(a!.id)?.order).toBe(1);
+    expect(find(b!.id)?.order).toBe(2);
+
+    await store.renameChecklistItem(a!.id, "A-renamed");
+    expect(find(a!.id)?.title).toBe("A-renamed");
+
+    await store.renameChecklistItem(a!.id, "   ");
+    expect(find(a!.id)?.title).toBe("A-renamed");
+  });
+
   it("materializes recurring templates into the current day without duplicates", async () => {
     const store = new ProdNoteStore();
     await store.init();
