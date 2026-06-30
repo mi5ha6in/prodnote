@@ -1,3 +1,4 @@
+import { dayKey } from "../domain/calendar";
 import { escapeHtml } from "../domain/markdown";
 import { searchAll } from "../domain/search";
 import { appStore } from "../state";
@@ -7,7 +8,8 @@ import { renderShadow } from "./shadow";
 interface PaletteItem {
   label: string;
   sub: string;
-  hash: string;
+  hash?: string;
+  run?: () => void | Promise<void>;
 }
 
 const NAV_ITEMS: PaletteItem[] = [
@@ -19,9 +21,6 @@ const NAV_ITEMS: PaletteItem[] = [
   { label: "Перейти: Фокус", sub: "Навигация", hash: "#/focus" },
   { label: "Перейти: Статистика", sub: "Навигация", hash: "#/stats" },
   { label: "Перейти: Настройки", sub: "Навигация", hash: "#/settings" },
-  { label: "Создать: Пункт дня", sub: "Действие", hash: "#/today" },
-  { label: "Создать: Задача", sub: "Действие", hash: "#/tasks" },
-  { label: "Создать: Заметка", sub: "Действие", hash: "#/notes" },
   { label: "Создать: Событие", sub: "Действие", hash: "#/calendar" },
   { label: "Начать фокус", sub: "Действие", hash: "#/focus" },
 ];
@@ -76,9 +75,50 @@ export class CommandPalette extends HTMLElement {
       tasks: workspace.tasks,
       notes: workspace.notes,
       events: workspace.events,
-    }).map((hit) => ({ label: hit.title, sub: hit.subtitle, hash: hit.hash }));
+    }).map((hit): PaletteItem => ({ label: hit.title, sub: hit.subtitle, hash: hit.hash }));
 
-    return [...nav, ...hits];
+    return [...nav, ...this.createActions(), ...hits];
+  }
+
+  /** Query-driven quick creation: turn whatever was typed into a new entity. */
+  private createActions(): PaletteItem[] {
+    const title = this.query.trim();
+    if (!title) {
+      return [];
+    }
+
+    return [
+      {
+        label: `Создать задачу: «${title}»`,
+        sub: "Создание",
+        run: async () => {
+          await appStore.addTask({ title });
+          this.go("#/tasks");
+        },
+      },
+      {
+        label: `Создать пункт дня: «${title}»`,
+        sub: "Создание",
+        run: async () => {
+          await appStore.addChecklistItem({ title, day: dayKey(new Date()) });
+          this.go("#/today");
+        },
+      },
+      {
+        label: `Создать заметку: «${title}»`,
+        sub: "Создание",
+        run: async () => {
+          await appStore.addNote({ title, markdown: "" });
+          this.go("#/notes");
+        },
+      },
+    ];
+  }
+
+  private go(hash: string): void {
+    if (window.location.hash !== hash) {
+      window.location.hash = hash;
+    }
   }
 
   private render(): void {
@@ -174,8 +214,12 @@ export class CommandPalette extends HTMLElement {
       return;
     }
     this.close();
-    if (window.location.hash !== item.hash) {
-      window.location.hash = item.hash;
+    if (item.run) {
+      void item.run();
+      return;
+    }
+    if (item.hash) {
+      this.go(item.hash);
     }
   }
 }
