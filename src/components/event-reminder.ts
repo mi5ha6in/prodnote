@@ -1,4 +1,4 @@
-import { taskDeadlineItems } from "../domain/calendar";
+import { dayKey, taskDeadlineItems } from "../domain/calendar";
 import { EVENT_KIND_LABELS } from "../domain/defaults";
 import {
   getDueAllDayReminders,
@@ -20,7 +20,7 @@ export class EventReminderToast extends HTMLElement {
   private unsubscribe: (() => void) | null = null;
   private intervalId: number | null = null;
   private dismissId: number | null = null;
-  private active: { title: string; body: string } | null = null;
+  private active: { title: string; body: string; hash: string } | null = null;
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.tick());
@@ -45,7 +45,7 @@ export class EventReminderToast extends HTMLElement {
     const dueTimed = getDueEventReminders(workspace.events, now, getEventReminderMinutes());
     for (const reminder of dueTimed) {
       if (shouldNotifyEventReminder(reminder.key)) {
-        this.fire(`Скоро: ${reminder.event.title}`, reminderBody(reminder));
+        this.fire(`Скоро: ${reminder.event.title}`, reminderBody(reminder), "#/calendar");
         return;
       }
     }
@@ -65,15 +65,31 @@ export class EventReminderToast extends HTMLElement {
     for (const reminder of dueAllDay) {
       if (shouldNotifyEventReminder(reminder.key)) {
         const kindLabel = EVENT_KIND_LABELS[reminder.kind as CalendarEventKind] ?? reminder.kind;
-        this.fire(reminder.title, `Сегодня · ${kindLabel}`);
+        this.fire(reminder.title, `Сегодня · ${kindLabel}`, "#/calendar");
         return;
+      }
+    }
+
+    const today = dayKey(new Date());
+    const pendingToday = workspace.checklist.filter((item) => item.day === today && !item.done).length;
+    if (pendingToday > 0) {
+      const dueChecklist = getDueAllDayReminders(
+        [{ id: "checklist", title: "Чек-лист на сегодня", kind: "checklist", startsAt: new Date(now).toISOString() }],
+        now,
+        getAllDayReminderHour(),
+      );
+      for (const reminder of dueChecklist) {
+        if (shouldNotifyEventReminder(reminder.key)) {
+          this.fire("Чек-лист на сегодня", `${pendingToday} ${pluralItems(pendingToday)} ждут выполнения`, "#/today");
+          return;
+        }
       }
     }
   }
 
-  private fire(title: string, body: string): void {
-    this.active = { title, body };
-    void showTimerNotification({ title, body, tag: "prodnote-event", url: calendarUrl() });
+  private fire(title: string, body: string, hash: string): void {
+    this.active = { title, body, hash };
+    void showTimerNotification({ title, body, tag: "prodnote-event", url: hashUrl(hash) });
     this.scheduleDismiss();
     this.render();
   }
@@ -106,7 +122,7 @@ export class EventReminderToast extends HTMLElement {
             <p class="muted">${escapeHtml(reminder.body)}</p>
           </div>
           <div class="row-actions">
-            <a class="button ghost small" href="#/calendar">Открыть</a>
+            <a class="button ghost small" href="${escapeHtml(reminder.hash)}">Открыть</a>
             <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "dismiss" } })}>Скрыть</button>
           </div>
         </aside>
@@ -198,8 +214,20 @@ function reminderBody(reminder: EventReminder): string {
   return `${kind} в ${time} · ${lead}`;
 }
 
-function calendarUrl(): string {
+function hashUrl(hash: string): string {
   const url = new URL(import.meta.env.BASE_URL, window.location.origin);
-  url.hash = "/calendar";
+  url.hash = hash.replace(/^#/, "");
   return url.toString();
+}
+
+function pluralItems(count: number): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) {
+    return "пункт";
+  }
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) {
+    return "пункта";
+  }
+  return "пунктов";
 }

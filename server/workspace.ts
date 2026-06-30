@@ -11,6 +11,7 @@ export type DeletedEntityType =
   | "task"
   | "note"
   | "checklistItem"
+  | "checklistTemplate"
   | "session"
   | "pomodoroCycle"
   | "plan"
@@ -41,6 +42,7 @@ export async function getSyncedWorkspace(userId: string): Promise<SyncedWorkspac
     taskHistory,
     taskSubtasks,
     checklist,
+    checklistTemplates,
     notes,
     noteTaskLinks,
     noteTags,
@@ -58,6 +60,7 @@ export async function getSyncedWorkspace(userId: string): Promise<SyncedWorkspac
     sqlClient<Row[]>`select * from task_history_entries where workspace_id = ${workspaceId} order by at desc`,
     sqlClient<Row[]>`select * from task_subtasks where workspace_id = ${workspaceId} order by position asc`,
     sqlClient<Row[]>`select * from checklist_items where workspace_id = ${workspaceId} and deleted_at is null order by day asc, position asc`,
+    sqlClient<Row[]>`select * from checklist_templates where workspace_id = ${workspaceId} and deleted_at is null order by created_at asc`,
     sqlClient<Row[]>`select * from notes where workspace_id = ${workspaceId} and deleted_at is null order by created_at desc`,
     sqlClient<Row[]>`select * from note_task_links where workspace_id = ${workspaceId}`,
     sqlClient<Row[]>`select * from note_tags where workspace_id = ${workspaceId}`,
@@ -145,9 +148,19 @@ export async function getSyncedWorkspace(userId: string): Promise<SyncedWorkspac
         doneAt: item.done_at ? toIso(item.done_at) : null,
         order: Number(item.position ?? 0),
         taskId: asNullableString(item.task_id),
+        templateId: asNullableString(item.template_id),
         rolledFrom: asNullableString(item.rolled_from),
         createdAt: toIso(item.created_at),
         updatedAt: toIso(item.updated_at),
+      })),
+      checklistTemplates: checklistTemplates.map((template) => ({
+        id: asString(template.entity_id),
+        title: asString(template.title),
+        cadence: asString(template.cadence) as Workspace["checklistTemplates"][number]["cadence"],
+        isHabit: Boolean(template.is_habit),
+        archived: Boolean(template.archived),
+        createdAt: toIso(template.created_at),
+        updatedAt: toIso(template.updated_at),
       })),
       sessions: sessions.map((session) => ({
         id: asString(session.entity_id),
@@ -302,20 +315,39 @@ export async function putSyncedWorkspace(
     for (const item of workspace.checklist) {
       await transaction`
         insert into checklist_items (
-          workspace_id, entity_id, day, title, done, done_at, position, task_id, rolled_from,
+          workspace_id, entity_id, day, title, done, done_at, position, task_id, template_id, rolled_from,
           created_at, updated_at, client_updated_at, server_revision, deleted_at
         )
         values (
           ${workspaceId}, ${item.id}, ${item.day}, ${item.title}, ${item.done}, ${toSqlTimestamp(item.doneAt)},
-          ${item.order}, ${item.taskId}, ${item.rolledFrom}, ${toSqlTimestamp(item.createdAt)}, ${toSqlTimestamp(item.updatedAt)},
+          ${item.order}, ${item.taskId}, ${item.templateId}, ${item.rolledFrom}, ${toSqlTimestamp(item.createdAt)}, ${toSqlTimestamp(item.updatedAt)},
           ${toSqlTimestamp(item.updatedAt)}, ${nextRevision}, null
         )
         on conflict (workspace_id, entity_id) do update
         set day = excluded.day, title = excluded.title, done = excluded.done, done_at = excluded.done_at,
-          position = excluded.position, task_id = excluded.task_id, rolled_from = excluded.rolled_from,
+          position = excluded.position, task_id = excluded.task_id, template_id = excluded.template_id, rolled_from = excluded.rolled_from,
           created_at = excluded.created_at, updated_at = excluded.updated_at,
           client_updated_at = excluded.client_updated_at, server_revision = excluded.server_revision, deleted_at = null
         where checklist_items.client_updated_at < excluded.client_updated_at or checklist_items.deleted_at is not null
+      `;
+    }
+
+    for (const template of workspace.checklistTemplates) {
+      await transaction`
+        insert into checklist_templates (
+          workspace_id, entity_id, title, cadence, is_habit, archived,
+          created_at, updated_at, client_updated_at, server_revision, deleted_at
+        )
+        values (
+          ${workspaceId}, ${template.id}, ${template.title}, ${template.cadence}, ${template.isHabit}, ${template.archived},
+          ${toSqlTimestamp(template.createdAt)}, ${toSqlTimestamp(template.updatedAt)}, ${toSqlTimestamp(template.updatedAt)},
+          ${nextRevision}, null
+        )
+        on conflict (workspace_id, entity_id) do update
+        set title = excluded.title, cadence = excluded.cadence, is_habit = excluded.is_habit, archived = excluded.archived,
+          created_at = excluded.created_at, updated_at = excluded.updated_at,
+          client_updated_at = excluded.client_updated_at, server_revision = excluded.server_revision, deleted_at = null
+        where checklist_templates.client_updated_at < excluded.client_updated_at or checklist_templates.deleted_at is not null
       `;
     }
 
@@ -497,6 +529,8 @@ async function markDeleted(
     await transaction`update notes set deleted_at = ${deletedAt}, server_revision = ${revision} where workspace_id = ${workspaceId} and entity_id = ${entity.id}`;
   } else if (entity.type === "checklistItem") {
     await transaction`update checklist_items set deleted_at = ${deletedAt}, server_revision = ${revision} where workspace_id = ${workspaceId} and entity_id = ${entity.id}`;
+  } else if (entity.type === "checklistTemplate") {
+    await transaction`update checklist_templates set deleted_at = ${deletedAt}, server_revision = ${revision} where workspace_id = ${workspaceId} and entity_id = ${entity.id}`;
   } else if (entity.type === "session") {
     await transaction`update time_sessions set deleted_at = ${deletedAt}, server_revision = ${revision} where workspace_id = ${workspaceId} and entity_id = ${entity.id}`;
   } else if (entity.type === "pomodoroCycle") {

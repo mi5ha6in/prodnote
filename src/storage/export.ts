@@ -8,6 +8,7 @@ export interface ImportPreview {
   notes: number;
   tags: number;
   checklist: number;
+  checklistTemplates: number;
   sessions: number;
   plans: number;
   events: number;
@@ -54,6 +55,7 @@ export function validateImportSnapshot(value: unknown): ImportPreview {
     notes: (snapshot.notes ?? []).length,
     tags: (snapshot.tags ?? []).length,
     checklist: (snapshot.checklist ?? []).length,
+    checklistTemplates: (snapshot.checklistTemplates ?? []).length,
     sessions: (snapshot.sessions ?? []).length,
     plans: (snapshot.plans ?? []).length,
     events: (snapshot.events ?? []).length,

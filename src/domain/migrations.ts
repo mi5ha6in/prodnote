@@ -5,6 +5,7 @@ import {
   type CalendarEvent,
   type CalendarPlan,
   type ChecklistItem,
+  type ChecklistTemplate,
   type Note,
   type NoteEditEntry,
   type PomodoroCycle,
@@ -31,13 +32,19 @@ type LegacyPomodoroCycle = Omit<PomodoroCycle, "completedShortBreakCount" | "com
 
 type LegacyTask = Omit<Task, "subtasks"> & { subtasks?: Task["subtasks"] };
 
-type LegacyWorkspace = Omit<Workspace, "notes" | "tasks" | "pomodoroCycles" | "events" | "checklist" | "schemaVersion"> & {
+type LegacyChecklistItem = Omit<ChecklistItem, "templateId"> & { templateId?: string | null };
+
+type LegacyWorkspace = Omit<
+  Workspace,
+  "notes" | "tasks" | "pomodoroCycles" | "events" | "checklist" | "checklistTemplates" | "schemaVersion"
+> & {
   schemaVersion: number;
   tasks: LegacyTask[];
   notes: LegacyNote[];
   pomodoroCycles?: LegacyPomodoroCycle[];
   events?: Workspace["events"];
-  checklist?: ChecklistItem[];
+  checklist?: LegacyChecklistItem[];
+  checklistTemplates?: ChecklistTemplate[];
 };
 
 export function migrateWorkspace(workspace: LegacyWorkspace): Workspace {
@@ -56,7 +63,8 @@ export function migrateWorkspace(workspace: LegacyWorkspace): Workspace {
     ...workspace,
     schemaVersion: SCHEMA_VERSION,
     exportedAt: workspace.exportedAt ?? null,
-    checklist: Array.isArray(workspace.checklist) ? workspace.checklist : [],
+    checklist: Array.isArray(workspace.checklist) ? workspace.checklist.map(normalizeChecklistItem) : [],
+    checklistTemplates: Array.isArray(workspace.checklistTemplates) ? workspace.checklistTemplates : [],
     tasks: workspace.tasks.map(normalizeTask),
     notes: workspace.notes.map(normalizeNote),
     pomodoroCycles: Array.isArray(workspace.pomodoroCycles) ? workspace.pomodoroCycles.map(normalizePomodoroCycle) : [],
@@ -109,6 +117,13 @@ function normalizeTask(task: LegacyTask): Task {
   return {
     ...task,
     subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
+  };
+}
+
+function normalizeChecklistItem(item: LegacyChecklistItem): ChecklistItem {
+  return {
+    ...item,
+    templateId: item.templateId ?? null,
   };
 }
 
