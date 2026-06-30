@@ -139,6 +139,21 @@ export async function runMigrations(): Promise<void> {
       primary key (workspace_id, entity_id)
     );
 
+    create table if not exists checklist_templates (
+      workspace_id uuid not null references workspaces(id) on delete cascade,
+      entity_id text not null,
+      title text not null,
+      cadence text not null default 'daily',
+      is_habit boolean not null default false,
+      archived boolean not null default false,
+      created_at timestamptz not null,
+      updated_at timestamptz not null,
+      client_updated_at timestamptz not null,
+      server_revision bigint not null,
+      deleted_at timestamptz,
+      primary key (workspace_id, entity_id)
+    );
+
     create table if not exists notes (
       workspace_id uuid not null references workspaces(id) on delete cascade,
       entity_id text not null,
@@ -261,5 +276,8 @@ export async function runMigrations(): Promise<void> {
 
     alter table if exists pomodoro_cycles
       add column if not exists completed_long_break_count integer not null default 0;
+
+    alter table if exists checklist_items
+      add column if not exists template_id text;
   `);
 }

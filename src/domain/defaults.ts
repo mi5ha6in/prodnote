@@ -3,7 +3,9 @@ import {
   type CalendarEvent,
   type CalendarEventKind,
   type CalendarPlan,
+  type ChecklistCadence,
   type ChecklistItem,
+  type ChecklistTemplate,
   type EntityId,
   type Note,
   type Project,
@@ -98,6 +100,7 @@ export function createStarterWorkspace(): Workspace {
     notes: [],
     tags: [focusTag, researchTag],
     checklist: [],
+    checklistTemplates: [],
     sessions: [],
     pomodoroCycles: [],
     plans: [],
@@ -140,6 +143,7 @@ export function createChecklistItem(input: {
   day: string;
   order?: number;
   taskId?: string | null;
+  templateId?: string | null;
   rolledFrom?: string | null;
 }): ChecklistItem {
   const createdAt = nowIso();
@@ -152,7 +156,26 @@ export function createChecklistItem(input: {
     doneAt: null,
     order: input.order ?? 0,
     taskId: input.taskId ?? null,
+    templateId: input.templateId ?? null,
     rolledFrom: input.rolledFrom ?? null,
+    createdAt,
+    updatedAt: createdAt,
+  };
+}
+
+export function createChecklistTemplate(input: {
+  title: string;
+  cadence?: ChecklistCadence;
+  isHabit?: boolean;
+}): ChecklistTemplate {
+  const createdAt = nowIso();
+
+  return {
+    id: createId("checklist_tpl"),
+    title: input.title.trim(),
+    cadence: input.cadence ?? "daily",
+    isHabit: input.isHabit ?? false,
+    archived: false,
     createdAt,
     updatedAt: createdAt,
   };

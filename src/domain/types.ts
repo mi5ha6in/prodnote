@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 
 export type EntityId = string;
 
@@ -69,8 +69,23 @@ export interface ChecklistItem {
   order: number;
   /** Optional link to a real task (promote to focus/kanban without coupling). */
   taskId: EntityId | null;
+  /** Recurring template this item was materialized from, if any. */
+  templateId: EntityId | null;
   /** Day key this item was carried over from, when rolled forward. */
   rolledFrom: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ChecklistCadence = "daily" | "weekdays" | "weekends";
+
+export interface ChecklistTemplate {
+  id: EntityId;
+  title: string;
+  cadence: ChecklistCadence;
+  /** Track this template as a habit in the habit tracker. */
+  isHabit: boolean;
+  archived: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -159,6 +174,7 @@ export interface WorkspaceExport {
   notes: Note[];
   tags: Tag[];
   checklist: ChecklistItem[];
+  checklistTemplates: ChecklistTemplate[];
   sessions: TimeSession[];
   pomodoroCycles: PomodoroCycle[];
   plans: CalendarPlan[];

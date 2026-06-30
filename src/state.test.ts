@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { dayKey } from "./domain/calendar";
 import { ProdNoteStore } from "./state";
 
 describe("ProdNoteStore", () => {
@@ -128,6 +129,25 @@ describe("ProdNoteStore", () => {
 
     await store.removeChecklistItem(first!.id);
     expect(store.getWorkspace().checklist.some((item) => item.id === first!.id)).toBe(false);
+  });
+
+  it("materializes recurring templates into the current day without duplicates", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+    const today = dayKey(new Date());
+
+    const template = await store.addChecklistTemplate({ title: "Зарядка", cadence: "daily", isHabit: true });
+    expect(template).not.toBeNull();
+
+    const todays = store.getWorkspace().checklist.filter((item) => item.day === today);
+    expect(todays.some((item) => item.templateId === template!.id && item.title === "Зарядка")).toBe(true);
+
+    const before = store.getWorkspace().checklist.length;
+    await store.ensureChecklistForDay(today);
+    expect(store.getWorkspace().checklist.length).toBe(before);
+
+    await store.removeChecklistTemplate(template!.id);
+    expect(store.getWorkspace().checklistTemplates).toHaveLength(0);
   });
 
   it("deletes projects without deleting linked tasks and notes", async () => {

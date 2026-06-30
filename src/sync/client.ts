@@ -216,6 +216,7 @@ export type SyncEntityType =
   | "task"
   | "note"
   | "checklistItem"
+  | "checklistTemplate"
   | "session"
   | "pomodoroCycle"
   | "plan"
@@ -227,6 +228,7 @@ const SYNC_ENTITY_TYPES: readonly SyncEntityType[] = [
   "task",
   "note",
   "checklistItem",
+  "checklistTemplate",
   "session",
   "pomodoroCycle",
   "plan",
@@ -287,6 +289,7 @@ export function mergeWorkspaces(local: Workspace, remote: Workspace, remoteRevis
     tasks: mergeById(local.tasks, remote.tasks, (item) => item.updatedAt),
     notes: mergeById(local.notes, remote.notes, (item) => item.updatedAt),
     checklist: mergeById(local.checklist ?? [], remote.checklist ?? [], (item) => item.updatedAt),
+    checklistTemplates: mergeById(local.checklistTemplates ?? [], remote.checklistTemplates ?? [], (item) => item.updatedAt),
     sessions: mergeById(local.sessions, remote.sessions, (item) => item.endedAt),
     pomodoroCycles: mergeById(local.pomodoroCycles, remote.pomodoroCycles, (item) => item.startedAt),
     plans: mergeById(local.plans, remote.plans, (item) => item.createdAt),

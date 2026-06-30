@@ -3,11 +3,22 @@ import { migrateWorkspace } from "../domain/migrations";
 import type { Workspace } from "../domain/types";
 
 const DB_NAME = "prodnote-db";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const META_KEY = "workspace";
 const SETTINGS_KEY = "settings";
 
-const ENTITY_STORES = ["projects", "tasks", "notes", "tags", "checklist", "sessions", "pomodoroCycles", "plans", "events"] as const;
+const ENTITY_STORES = [
+  "projects",
+  "tasks",
+  "notes",
+  "tags",
+  "checklist",
+  "checklistTemplates",
+  "sessions",
+  "pomodoroCycles",
+  "plans",
+  "events",
+] as const;
 
 type EntityStoreName = (typeof ENTITY_STORES)[number];
 
@@ -83,17 +94,19 @@ export async function loadWorkspace(): Promise<Workspace> {
     return workspace;
   }
 
-  const [projects, tasks, notes, tags, checklist, sessions, pomodoroCycles, plans, events] = await Promise.all([
-    readStore<Workspace["projects"][number]>(db, "projects"),
-    readStore<Workspace["tasks"][number]>(db, "tasks"),
-    readStore<Workspace["notes"][number]>(db, "notes"),
-    readStore<Workspace["tags"][number]>(db, "tags"),
-    readStore<Workspace["checklist"][number]>(db, "checklist"),
-    readStore<Workspace["sessions"][number]>(db, "sessions"),
-    readStore<Workspace["pomodoroCycles"][number]>(db, "pomodoroCycles"),
-    readStore<Workspace["plans"][number]>(db, "plans"),
-    readStore<Workspace["events"][number]>(db, "events"),
-  ]);
+  const [projects, tasks, notes, tags, checklist, checklistTemplates, sessions, pomodoroCycles, plans, events] =
+    await Promise.all([
+      readStore<Workspace["projects"][number]>(db, "projects"),
+      readStore<Workspace["tasks"][number]>(db, "tasks"),
+      readStore<Workspace["notes"][number]>(db, "notes"),
+      readStore<Workspace["tags"][number]>(db, "tags"),
+      readStore<Workspace["checklist"][number]>(db, "checklist"),
+      readStore<Workspace["checklistTemplates"][number]>(db, "checklistTemplates"),
+      readStore<Workspace["sessions"][number]>(db, "sessions"),
+      readStore<Workspace["pomodoroCycles"][number]>(db, "pomodoroCycles"),
+      readStore<Workspace["plans"][number]>(db, "plans"),
+      readStore<Workspace["events"][number]>(db, "events"),
+    ]);
 
   const workspace = migrateWorkspace({
     schemaVersion: meta.schemaVersion,
@@ -103,6 +116,7 @@ export async function loadWorkspace(): Promise<Workspace> {
     notes,
     tags,
     checklist,
+    checklistTemplates,
     sessions,
     pomodoroCycles,
     plans,

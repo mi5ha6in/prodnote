@@ -1,6 +1,9 @@
+import { dayKey } from "./domain/calendar";
+import { materializeTemplates, shiftDayKey } from "./domain/checklist";
 import {
   createCalendarEvent,
   createChecklistItem,
+  createChecklistTemplate,
   createId,
   createNote,
   createProject,
@@ -27,7 +30,9 @@ import type {
   ActiveTimer,
   CalendarEvent,
   CalendarEventKind,
+  ChecklistCadence,
   ChecklistItem,
+  ChecklistTemplate,
   EntityId,
   Note,
   Project,
@@ -79,8 +84,16 @@ export class ProdNoteStore {
     this.workspace = await loadWorkspace();
     this.activeTimer = loadActiveTimer(this.workspace);
     this.initialized = true;
+    await this.prepareToday();
     this.emit();
     void this.pullRemoteWorkspace();
+  }
+
+  /** Carry unfinished items from yesterday and materialize today's recurring templates. */
+  private async prepareToday(): Promise<void> {
+    const today = dayKey(new Date());
+    await this.rolloverChecklist(shiftDayKey(today, -1), today);
+    await this.ensureChecklistForDay(today);
   }
 
   subscribe(listener: Listener): () => void {
@@ -251,6 +264,65 @@ export class ProdNoteStore {
       }
     });
     return task;
+  }
+
+  /** Add any recurring template items still missing from the given day. */
+  async ensureChecklistForDay(day: string): Promise<void> {
+    const dayItems = this.workspace.checklist.filter((item) => item.day === day);
+    const startOrder = dayItems.reduce((max, item) => Math.max(max, item.order), -1) + 1;
+    const created = materializeTemplates(this.workspace.checklistTemplates, dayItems, day, startOrder);
+    if (!created.length) {
+      return;
+    }
+
+    await this.commit((workspace) => {
+      workspace.checklist.push(...created);
+    });
+  }
+
+  async addChecklistTemplate(input: { title: string; cadence?: ChecklistCadence; isHabit?: boolean }): Promise<ChecklistTemplate | null> {
+    const trimmed = input.title.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const template = createChecklistTemplate({ title: trimmed, cadence: input.cadence, isHabit: input.isHabit });
+    await this.commit((workspace) => {
+      workspace.checklistTemplates.push(template);
+    });
+    await this.ensureChecklistForDay(dayKey(new Date()));
+    return template;
+  }
+
+  async updateChecklistTemplate(input: {
+    templateId: EntityId;
+    title?: string;
+    cadence?: ChecklistCadence;
+    isHabit?: boolean;
+  }): Promise<void> {
+    await this.commit((workspace) => {
+      const template = workspace.checklistTemplates.find((entry) => entry.id === input.templateId);
+      if (!template) {
+        return;
+      }
+      if (input.title !== undefined && input.title.trim()) {
+        template.title = input.title.trim();
+      }
+      if (input.cadence !== undefined) {
+        template.cadence = input.cadence;
+      }
+      if (input.isHabit !== undefined) {
+        template.isHabit = input.isHabit;
+      }
+      template.updatedAt = nowIso();
+    });
+  }
+
+  async removeChecklistTemplate(templateId: EntityId): Promise<void> {
+    await this.commit((workspace) => {
+      workspace.checklistTemplates = workspace.checklistTemplates.filter((entry) => entry.id !== templateId);
+    });
+    recordSyncDeletion("checklistTemplate", templateId);
   }
 
   async addNote(input: {

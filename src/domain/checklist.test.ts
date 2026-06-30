@@ -1,0 +1,45 @@
+import { describe, expect, it } from "vitest";
+import { materializeTemplates, shiftDayKey, templateAppliesToDay, weekdayOf } from "./checklist";
+import { createChecklistItem, createChecklistTemplate } from "./defaults";
+import type { ChecklistTemplate } from "./types";
+
+const MONDAY = "2026-06-29";
+const SATURDAY = "2026-06-27";
+
+describe("checklist recurrence", () => {
+  it("derives weekday and shifts day keys across month boundaries", () => {
+    expect(weekdayOf(MONDAY)).toBe(1);
+    expect(weekdayOf(SATURDAY)).toBe(6);
+    expect(shiftDayKey(MONDAY, -1)).toBe("2026-06-28");
+    expect(shiftDayKey("2026-07-01", -1)).toBe("2026-06-30");
+    expect(shiftDayKey("2026-06-30", 1)).toBe("2026-07-01");
+  });
+
+  it("matches cadence to the day of week", () => {
+    const daily = createChecklistTemplate({ title: "Каждый", cadence: "daily" });
+    const weekdays = createChecklistTemplate({ title: "Будни", cadence: "weekdays" });
+    const weekends = createChecklistTemplate({ title: "Выходные", cadence: "weekends" });
+
+    expect(templateAppliesToDay(daily, MONDAY)).toBe(true);
+    expect(templateAppliesToDay(weekdays, MONDAY)).toBe(true);
+    expect(templateAppliesToDay(weekends, MONDAY)).toBe(false);
+
+    expect(templateAppliesToDay(weekdays, SATURDAY)).toBe(false);
+    expect(templateAppliesToDay(weekends, SATURDAY)).toBe(true);
+
+    const archived: ChecklistTemplate = { ...daily, archived: true };
+    expect(templateAppliesToDay(archived, MONDAY)).toBe(false);
+  });
+
+  it("materializes only missing, applicable templates", () => {
+    const daily = createChecklistTemplate({ title: "Зарядка", cadence: "daily" });
+    const weekdays = createChecklistTemplate({ title: "Ревью", cadence: "weekdays" });
+    const weekends = createChecklistTemplate({ title: "Уборка", cadence: "weekends" });
+    const existing = createChecklistItem({ title: "Зарядка", day: MONDAY, order: 0, templateId: daily.id });
+
+    const created = materializeTemplates([daily, weekdays, weekends], [existing], MONDAY, 1);
+
+    expect(created.map((item) => item.title)).toEqual(["Ревью"]);
+    expect(created[0]).toMatchObject({ day: MONDAY, order: 1, templateId: weekdays.id });
+  });
+});
