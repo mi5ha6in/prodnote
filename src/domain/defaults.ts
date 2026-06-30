@@ -48,6 +48,12 @@ export const SESSION_MODE_LABELS = {
   pomodoro: "Помодоро",
 } as const;
 
+export const CHECKLIST_CADENCE_LABELS = {
+  daily: "Каждый день",
+  weekdays: "Будни",
+  weekends: "Выходные",
+} as const;
+
 export function nowIso(): string {
   return new Date().toISOString();
 }

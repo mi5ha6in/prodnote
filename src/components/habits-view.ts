@@ -1,0 +1,160 @@
+import { dayKey } from "../domain/calendar";
+import { habitDoneDays, habitStreak, lastNDays, templateAppliesToDay } from "../domain/checklist";
+import { CHECKLIST_CADENCE_LABELS } from "../domain/defaults";
+import { escapeHtml } from "../domain/markdown";
+import type { ChecklistItem, ChecklistTemplate } from "../domain/types";
+import { appStore } from "../state";
+import { badgeHtml, emptyStateHtml, metricBarHtml, viewHeaderHtml } from "../ui/html";
+import { renderShadow } from "./shadow";
+
+const WINDOW_DAYS = 28;
+
+export class HabitsView extends HTMLElement {
+  private unsubscribe: (() => void) | null = null;
+
+  connectedCallback(): void {
+    this.unsubscribe = appStore.subscribe(() => this.render());
+    this.render();
+  }
+
+  disconnectedCallback(): void {
+    this.unsubscribe?.();
+  }
+
+  private render(): void {
+    const workspace = appStore.getWorkspace();
+    const today = dayKey(new Date());
+    const habits = workspace.checklistTemplates.filter((template) => template.isHabit && !template.archived);
+    const days = lastNDays(today, WINDOW_DAYS);
+
+    const scheduledToday = habits.filter((habit) => templateAppliesToDay(habit, today));
+    const doneToday = scheduledToday.filter((habit) => habitDoneDays(workspace.checklist, habit.id).has(today)).length;
+
+    renderShadow(
+      this,
+      `
+        <section class="view-grid">
+          ${viewHeaderHtml({ eyebrow: "Привычки", title: "Трекер привычек" })}
+
+          ${metricBarHtml([
+            { label: "Привычек", value: habits.length, hint: "Активные шаблоны-привычки" },
+            { label: "Сегодня", value: `${doneToday}/${scheduledToday.length}`, hint: "Выполнено из запланированных" },
+            {
+              label: "Лучшая серия",
+              value: habits.reduce((max, habit) => Math.max(max, habitStreak(habit, workspace.checklist, today)), 0),
+              hint: "Дней подряд",
+            },
+          ])}
+
+          ${
+            habits.length
+              ? `<div class="habit-list">${habits.map((habit) => this.renderHabit(habit, workspace.checklist, days, today)).join("")}</div>`
+              : `<article class="card">${emptyStateHtml("Отметьте пункт как «привычку» в разделе «Сегодня» — он появится здесь со статистикой и серией.")}</article>`
+          }
+        </section>
+      `,
+      `
+        .habit-list {
+          display: grid;
+          gap: var(--space-3);
+        }
+
+        .habit-head {
+          align-items: center;
+          display: flex;
+          flex-wrap: wrap;
+          gap: var(--space-2);
+          justify-content: space-between;
+          margin-bottom: var(--space-3);
+        }
+
+        .habit-title {
+          font-size: var(--text-base);
+          font-weight: 650;
+        }
+
+        .habit-grid {
+          display: grid;
+          gap: 3px;
+          grid-template-columns: repeat(${WINDOW_DAYS}, 1fr);
+        }
+
+        .habit-cell {
+          aspect-ratio: 1;
+          background: var(--surface);
+          border: 1px solid var(--line);
+          border-radius: 4px;
+        }
+
+        .habit-cell.is-done {
+          background: var(--accent);
+          border-color: var(--accent);
+        }
+
+        .habit-cell.is-missed {
+          background: transparent;
+          border-color: var(--line-strong);
+        }
+
+        .habit-cell.is-today {
+          border-color: var(--accent);
+          box-shadow: inset 0 0 0 1px var(--accent-soft);
+        }
+
+        .habit-cell.is-off {
+          background: transparent;
+          border-style: dashed;
+          opacity: 0.5;
+        }
+
+        @media (max-width: 720px) {
+          .habit-grid {
+            grid-template-columns: repeat(14, 1fr);
+            grid-auto-rows: 1fr;
+          }
+        }
+      `,
+    );
+  }
+
+  private renderHabit(
+    habit: ChecklistTemplate,
+    items: ChecklistItem[],
+    days: string[],
+    today: string,
+  ): string {
+    const done = habitDoneDays(items, habit.id);
+    const streak = habitStreak(habit, items, today);
+
+    const cells = days
+      .map((day) => {
+        const scheduled = templateAppliesToDay(habit, day);
+        let state = "is-off";
+        if (scheduled && done.has(day)) {
+          state = "is-done";
+        } else if (scheduled && day === today) {
+          state = "is-today";
+        } else if (scheduled) {
+          state = "is-missed";
+        }
+        const title = `${day}${scheduled ? (done.has(day) ? " · выполнено" : " · запланировано") : ""}`;
+        return `<span class="habit-cell ${state}" title="${escapeHtml(title)}"></span>`;
+      })
+      .join("");
+
+    return `
+      <article class="card">
+        <div class="habit-head">
+          <span class="habit-title">${escapeHtml(habit.title)}</span>
+          <div class="meta-row">
+            ${badgeHtml(CHECKLIST_CADENCE_LABELS[habit.cadence])}
+            ${badgeHtml(`серия: ${streak}`)}
+          </div>
+        </div>
+        <div class="habit-grid" aria-label="Последние ${WINDOW_DAYS} дней">${cells}</div>
+      </article>
+    `;
+  }
+}
+
+customElements.define("pn-habits-view", HabitsView);

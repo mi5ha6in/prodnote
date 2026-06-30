@@ -29,6 +29,46 @@ export function templateAppliesToDay(template: ChecklistTemplate, day: string): 
   }
 }
 
+/** Day keys for the `count` days ending at (and including) `today`, oldest first. */
+export function lastNDays(today: string, count: number): string[] {
+  const days: string[] = [];
+  for (let offset = count - 1; offset >= 0; offset -= 1) {
+    days.push(shiftDayKey(today, -offset));
+  }
+  return days;
+}
+
+/** Days on which a template's materialized item was completed. */
+export function habitDoneDays(items: ChecklistItem[], templateId: string): Set<string> {
+  return new Set(items.filter((item) => item.templateId === templateId && item.done).map((item) => item.day));
+}
+
+/**
+ * Consecutive scheduled days, counting back from today, on which the habit was
+ * done. A pending (not-yet-done) most-recent scheduled day does not break the
+ * streak; non-scheduled days are skipped.
+ */
+export function habitStreak(template: ChecklistTemplate, items: ChecklistItem[], today: string): number {
+  const done = habitDoneDays(items, template.id);
+  let streak = 0;
+  let cursor = today;
+  let sawScheduled = false;
+
+  for (let step = 0; step < 400; step += 1) {
+    if (templateAppliesToDay(template, cursor)) {
+      if (done.has(cursor)) {
+        streak += 1;
+      } else if (sawScheduled) {
+        break;
+      }
+      sawScheduled = true;
+    }
+    cursor = shiftDayKey(cursor, -1);
+  }
+
+  return streak;
+}
+
 /**
  * Build the checklist items that recurring templates should add to a day,
  * skipping templates that already have an item materialized for that day.

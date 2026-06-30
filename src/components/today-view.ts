@@ -1,5 +1,6 @@
 import { dayKey } from "../domain/calendar";
 import { shiftDayKey } from "../domain/checklist";
+import { CHECKLIST_CADENCE_LABELS } from "../domain/defaults";
 import { escapeHtml } from "../domain/markdown";
 import { groupChecklistByDay } from "../domain/stats";
 import type { ChecklistCadence, ChecklistItem, ChecklistTemplate, Task, Workspace } from "../domain/types";
@@ -10,11 +11,7 @@ import { renderShadow } from "./shadow";
 
 const HISTORY_DAYS = 14;
 
-const CADENCE_LABELS: Record<ChecklistCadence, string> = {
-  daily: "Каждый день",
-  weekdays: "Будни",
-  weekends: "Выходные",
-};
+const CADENCE_LABELS = CHECKLIST_CADENCE_LABELS;
 
 function formatDayHeading(day: string): string {
   const [year, month, date] = day.split("-").map(Number);
