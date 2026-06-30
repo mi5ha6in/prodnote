@@ -1,0 +1,59 @@
+import { describe, expect, it } from "vitest";
+import { createChecklistItem, createChecklistTemplate, createStarterWorkspace, createTask } from "./defaults";
+import { buildWeeklyReview, weekStartKey } from "./review";
+import type { TimeSession, Workspace } from "./types";
+
+const WEEK_START = "2026-06-29"; // Monday
+
+function session(startedAt: string, minutes: number): TimeSession {
+  return {
+    id: `s-${startedAt}`,
+    taskId: "t1",
+    startedAt,
+    endedAt: startedAt,
+    durationMinutes: minutes,
+    mode: "timer",
+    note: "",
+    pomodoroCycleId: null,
+  };
+}
+
+describe("weekly review", () => {
+  it("resolves the week start for both week-start settings", () => {
+    const tuesday = new Date(2026, 5, 30);
+    expect(weekStartKey(tuesday, 1)).toBe("2026-06-29");
+    expect(weekStartKey(tuesday, 7)).toBe("2026-06-28");
+  });
+
+  it("aggregates the week and computes a bounded score", () => {
+    const habit = createChecklistTemplate({ title: "Английский", cadence: "daily", isHabit: true });
+    const workspace: Workspace = {
+      ...createStarterWorkspace(),
+      checklistTemplates: [habit],
+      sessions: [session("2026-06-29T10:00:00.000Z", 45), session("2026-07-10T10:00:00.000Z", 30)],
+      tasks: [
+        { ...createTask({ title: "Готово в неделю" }), completedAt: "2026-06-30T12:00:00.000Z" },
+        { ...createTask({ title: "Готово вне недели" }), completedAt: "2026-07-20T12:00:00.000Z" },
+      ],
+      checklist: [
+        { ...createChecklistItem({ title: "A", day: "2026-06-29", templateId: habit.id }), done: true, doneAt: "2026-06-29T09:00:00.000Z" },
+        createChecklistItem({ title: "B", day: "2026-06-29" }),
+        { ...createChecklistItem({ title: "C", day: "2026-07-01" }), done: true, doneAt: "2026-07-01T09:00:00.000Z" },
+      ],
+    };
+
+    const review = buildWeeklyReview(workspace, WEEK_START);
+
+    expect(review.end).toBe("2026-07-05");
+    expect(review.totalMinutes).toBe(45);
+    expect(review.sessionCount).toBe(1);
+    expect(review.tasksCompleted).toBe(1);
+    expect(review.checklistPlanned).toBe(3);
+    expect(review.checklistDone).toBe(2);
+    expect(review.habitsScheduled).toBe(1);
+    expect(review.habitsDone).toBe(1);
+    expect(review.activeDays).toBe(2);
+    expect(review.perDay).toHaveLength(7);
+    expect(review.score).toBe(61);
+  });
+});
