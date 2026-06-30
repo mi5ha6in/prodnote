@@ -257,6 +257,7 @@ export function createCalendarEvent(input: {
   allDay?: boolean;
   kind?: CalendarEventKind;
   taskId?: string | null;
+  projectId?: string | null;
   description?: string;
   location?: string;
   source?: "manual" | "import";
@@ -274,6 +275,7 @@ export function createCalendarEvent(input: {
     allDay: input.allDay ?? false,
     kind: input.kind ?? "event",
     taskId: input.taskId ?? null,
+    projectId: input.projectId ?? null,
     source: input.source ?? "manual",
     externalUid: input.externalUid ?? null,
     createdAt,

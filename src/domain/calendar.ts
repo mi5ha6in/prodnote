@@ -11,6 +11,7 @@ export interface CalendarItem {
   allDay: boolean;
   kind: string;
   taskId: EntityId | null;
+  projectId: EntityId | null;
 }
 
 export type HorizonKey = "overdue" | "today" | "tomorrow" | "thisWeek" | "thisMonth" | "thisYear" | "later";
@@ -51,6 +52,7 @@ export function eventToItem(event: CalendarEvent): CalendarItem {
     allDay: event.allDay,
     kind: event.kind,
     taskId: event.taskId,
+    projectId: event.projectId,
   };
 }
 
@@ -74,6 +76,7 @@ export function taskDeadlineItems(tasks: Task[]): CalendarItem[] {
         allDay: true,
         kind: "deadline",
         taskId: task.id,
+        projectId: task.projectId,
       };
     });
 }

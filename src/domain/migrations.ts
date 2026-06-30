@@ -68,7 +68,7 @@ export function migrateWorkspace(workspace: LegacyWorkspace): Workspace {
     tasks: workspace.tasks.map(normalizeTask),
     notes: workspace.notes.map(normalizeNote),
     pomodoroCycles: Array.isArray(workspace.pomodoroCycles) ? workspace.pomodoroCycles.map(normalizePomodoroCycle) : [],
-    events: mergePlansIntoEvents(existingEvents, plans),
+    events: mergePlansIntoEvents(existingEvents.map(normalizeEvent), plans),
     plans: [],
     sessions: normalizeSessions(
       workspace.sessions,
@@ -103,6 +103,7 @@ function mergePlansIntoEvents(events: CalendarEvent[], plans: CalendarPlan[]): C
       allDay: false,
       kind: plan.kind,
       taskId: plan.taskId,
+      projectId: null,
       source: "manual",
       externalUid: null,
       createdAt: plan.createdAt,
@@ -111,6 +112,13 @@ function mergePlansIntoEvents(events: CalendarEvent[], plans: CalendarPlan[]): C
   }
 
   return [...converted, ...events];
+}
+
+function normalizeEvent(event: CalendarEvent): CalendarEvent {
+  return {
+    ...event,
+    projectId: event.projectId ?? null,
+  };
 }
 
 function normalizeTask(task: LegacyTask): Task {

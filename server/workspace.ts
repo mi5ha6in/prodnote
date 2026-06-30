@@ -204,6 +204,7 @@ export async function getSyncedWorkspace(userId: string): Promise<SyncedWorkspac
         allDay: Boolean(event.all_day),
         kind: asString(event.kind) as Workspace["events"][number]["kind"],
         taskId: asNullableString(event.task_id),
+        projectId: asNullableString(event.project_id),
         source: asString(event.source) as Workspace["events"][number]["source"],
         externalUid: asNullableString(event.external_uid),
         createdAt: toIso(event.created_at),
@@ -449,17 +450,17 @@ export async function putSyncedWorkspace(
     for (const event of workspace.events) {
       await transaction`
         insert into calendar_events (
-          workspace_id, entity_id, task_id, title, description, location, starts_at, ends_at, all_day,
+          workspace_id, entity_id, task_id, project_id, title, description, location, starts_at, ends_at, all_day,
           kind, source, external_uid, created_at, client_updated_at, server_revision, deleted_at
         )
         values (
-          ${workspaceId}, ${event.id}, ${event.taskId}, ${event.title}, ${event.description}, ${event.location},
+          ${workspaceId}, ${event.id}, ${event.taskId}, ${event.projectId}, ${event.title}, ${event.description}, ${event.location},
           ${toSqlTimestamp(event.startsAt)}, ${toSqlTimestamp(event.endsAt)}, ${event.allDay}, ${event.kind},
           ${event.source}, ${event.externalUid}, ${toSqlTimestamp(event.createdAt)}, ${toSqlTimestamp(event.updatedAt)},
           ${nextRevision}, null
         )
         on conflict (workspace_id, entity_id) do update
-        set task_id = excluded.task_id, title = excluded.title, description = excluded.description,
+        set task_id = excluded.task_id, project_id = excluded.project_id, title = excluded.title, description = excluded.description,
           location = excluded.location, starts_at = excluded.starts_at, ends_at = excluded.ends_at,
           all_day = excluded.all_day, kind = excluded.kind, source = excluded.source,
           external_uid = excluded.external_uid, created_at = excluded.created_at,

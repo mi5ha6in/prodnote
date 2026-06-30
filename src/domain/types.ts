@@ -152,6 +152,7 @@ export interface CalendarEvent {
   allDay: boolean;
   kind: CalendarEventKind;
   taskId: EntityId | null;
+  projectId: EntityId | null;
   source: "manual" | "import";
   externalUid: string | null;
   createdAt: string;
