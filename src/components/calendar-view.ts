@@ -29,7 +29,9 @@ import {
   formatDate,
   formatDateTime,
   fromDateTimeLocalValue,
+  getProjectName,
   getTaskName,
+  renderProjectOptions,
   renderTaskOptions,
   requireInput,
   requireSelect,
@@ -195,6 +197,7 @@ export class CalendarView extends HTMLElement {
         ? `${formatDateTime(item.startsAt)} – ${formatDateTime(item.endsAt)}`
         : formatDateTime(item.startsAt);
     const taskName = item.taskId ? getTaskName(workspace.tasks, item.taskId) : "";
+    const projectName = item.projectId ? getProjectName(workspace.projects, item.projectId) : "";
     const kindLabel = EVENT_KIND_LABELS[item.kind as CalendarEventKind] ?? item.kind;
     const editable = item.source === "event";
 
@@ -209,6 +212,7 @@ export class CalendarView extends HTMLElement {
               <span class="status-pill">${escapeHtml(kindLabel)}</span>
               <span>${escapeHtml(when)}</span>
               ${taskName && item.source !== "deadline" ? `<span>${escapeHtml(taskName)}</span>` : ""}
+              ${projectName ? `<span>${escapeHtml(projectName)}</span>` : ""}
             </div>
           </div>
           ${editable ? `<button ${buttonAttrs({ tone: "ghost", size: "small", data: { deleteEvent: item.id } })}>Удалить</button>` : ""}
@@ -389,13 +393,14 @@ export class CalendarView extends HTMLElement {
     const heightPct = (Math.min(1440, endMin - startMin)) / 1440 * 100;
     const time = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" }).format(new Date(item.startsAt));
     const taskName = item.taskId ? getTaskName(workspace.tasks, item.taskId) : "";
+    const projectName = item.projectId ? getProjectName(workspace.projects, item.projectId) : "";
 
     return `
       <button
         class="week-event"
         style="top: ${topPct}%; height: ${heightPct}%;"
         ${item.source === "event" ? `data-edit-event="${escapeHtml(item.id)}" draggable="true" data-drag-event="${escapeHtml(item.id)}"` : "disabled"}
-        title="${escapeHtml(item.title)}${taskName ? ` · ${escapeHtml(taskName)}` : ""}"
+        title="${escapeHtml(item.title)}${taskName ? ` · ${escapeHtml(taskName)}` : ""}${projectName ? ` · ${escapeHtml(projectName)}` : ""}"
       >
         <strong>${escapeHtml(item.title)}</strong>
         <span>${escapeHtml(time)}</span>
@@ -473,6 +478,12 @@ export class CalendarView extends HTMLElement {
               control: `<select name="taskId">
                 <option value="">Без задачи</option>
                 ${renderTaskOptions(workspace.tasks, event?.taskId ?? null)}
+              </select>`,
+            })}
+            ${fieldHtml({
+              label: "Связать с проектом",
+              control: `<select name="projectId">
+                ${renderProjectOptions(workspace.projects, event?.projectId ?? null)}
               </select>`,
             })}
           </div>
@@ -842,6 +853,7 @@ export class CalendarView extends HTMLElement {
         ? fromDateInputValue(requireInput(form, "endsAt").value)
         : fromDateTimeLocalValue(requireInput(form, "endsAt").value);
       const taskId = requireSelect(form, "taskId").value || null;
+      const projectId = requireSelect(form, "projectId").value || null;
       const kind = requireSelect(form, "kind").value as CalendarEventKind;
       const title = requireInput(form, "title").value;
       const description = requireTextArea(form, "description").value;
@@ -856,6 +868,7 @@ export class CalendarView extends HTMLElement {
           allDay,
           kind,
           taskId,
+          projectId,
           description,
           location,
         });
@@ -879,12 +892,13 @@ export class CalendarView extends HTMLElement {
               allDay,
               kind,
               taskId,
+              projectId,
               description,
               location,
             })),
           );
         } else {
-          void appStore.addEvent({ title, startsAt, endsAt, allDay, kind, taskId, description, location });
+          void appStore.addEvent({ title, startsAt, endsAt, allDay, kind, taskId, projectId, description, location });
         }
       }
 
@@ -974,6 +988,7 @@ export class CalendarView extends HTMLElement {
       allDay: event.allDay,
       kind: event.kind,
       taskId: event.taskId,
+      projectId: event.projectId,
       description: event.description,
       location: event.location,
     });

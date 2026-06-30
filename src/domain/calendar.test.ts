@@ -13,7 +13,7 @@ import {
 import { createTask } from "./defaults";
 
 function item(id: string, startsAt: string): CalendarItem {
-  return { id, source: "event", title: id, startsAt, endsAt: startsAt, allDay: false, kind: "event", taskId: null };
+  return { id, source: "event", title: id, startsAt, endsAt: startsAt, allDay: false, kind: "event", taskId: null, projectId: null };
 }
 
 function atLocalNoon(year: number, month: number, day: number): string {
@@ -89,6 +89,7 @@ describe("layoutWeekSegments", () => {
       allDay: true,
       kind: "event",
       taskId: null,
+      projectId: null,
     };
   }
 
@@ -168,6 +169,7 @@ describe("itemsForDay", () => {
       allDay: true,
       kind: "event",
       taskId: null,
+      projectId: null,
     };
 
     for (let day = 15; day <= 21; day += 1) {
