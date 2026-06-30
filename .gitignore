@@ -3,3 +3,5 @@ dist/
 .DS_Store
 *.log
 prodnote*.prodnote.json
+test-results/
+playwright-report/
