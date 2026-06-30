@@ -301,11 +301,11 @@ export const sharedStyles = `
     margin-left: auto;
   }
 
-  /* Metric bar: compact equal-width stats */
+  /* Metric bar: compact equal-width stats that wrap instead of squishing */
   .metric-bar {
     display: grid;
     gap: var(--space-3);
-    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
   }
 
   .metric {

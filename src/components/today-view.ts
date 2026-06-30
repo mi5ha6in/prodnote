@@ -168,7 +168,18 @@ export class TodayView extends HTMLElement {
         .day-nav {
           align-items: center;
           display: flex;
+          flex-wrap: wrap;
           gap: var(--space-2);
+        }
+
+        @media (max-width: 560px) {
+          .check-item {
+            flex-wrap: wrap;
+          }
+
+          .check-actions {
+            margin-left: auto;
+          }
         }
 
         .day-input {
