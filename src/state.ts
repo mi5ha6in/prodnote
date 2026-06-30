@@ -196,6 +196,35 @@ export class ProdNoteStore {
     });
   }
 
+  async renameChecklistItem(itemId: EntityId, title: string): Promise<void> {
+    const trimmed = title.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    await this.commit((workspace) => {
+      const item = workspace.checklist.find((entry) => entry.id === itemId);
+      if (!item || item.title === trimmed) {
+        return;
+      }
+      item.title = trimmed;
+      item.updatedAt = nowIso();
+    });
+  }
+
+  /** Persist a new manual order for a day's items from an ordered list of ids. */
+  async reorderChecklist(day: string, orderedIds: EntityId[]): Promise<void> {
+    await this.commit((workspace) => {
+      const position = new Map(orderedIds.map((id, index) => [id, index]));
+      for (const item of workspace.checklist) {
+        if (item.day === day && position.has(item.id)) {
+          item.order = position.get(item.id) ?? item.order;
+          item.updatedAt = nowIso();
+        }
+      }
+    });
+  }
+
   async removeChecklistItem(itemId: EntityId): Promise<void> {
     await this.commit((workspace) => {
       workspace.checklist = workspace.checklist.filter((entry) => entry.id !== itemId);

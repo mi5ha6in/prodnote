@@ -40,6 +40,8 @@ export class TodayView extends HTMLElement {
   private unsubscribe: (() => void) | null = null;
   private selectedDay = dayKey(new Date());
   private focusAddInput = false;
+  private editing: { kind: "item" | "template"; id: string } | null = null;
+  private draggingId: string | null = null;
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
@@ -244,6 +246,34 @@ export class TodayView extends HTMLElement {
           text-decoration: line-through;
         }
 
+        .check-edit-start {
+          background: transparent;
+          border: none;
+          color: inherit;
+          cursor: text;
+          font: inherit;
+          min-height: 0;
+          padding: 0;
+          text-align: left;
+        }
+
+        .check-item[draggable="true"] {
+          cursor: grab;
+        }
+
+        .check-item.is-drag-over {
+          border-color: var(--accent);
+          box-shadow: inset 0 0 0 1px var(--accent-soft);
+        }
+
+        .check-edit {
+          flex: 1;
+        }
+
+        .check-edit input {
+          width: 100%;
+        }
+
         .check-time {
           color: var(--muted);
           font-size: var(--text-sm);
@@ -296,10 +326,20 @@ export class TodayView extends HTMLElement {
   }
 
   private renderItem(item: ChecklistItem): string {
+    if (this.editing?.kind === "item" && this.editing.id === item.id) {
+      return `
+        <div class="check-item">
+          <form class="check-edit" data-edit-form>
+            <input name="title" value="${escapeHtml(item.title)}" aria-label="Название пункта" autocomplete="off" />
+          </form>
+        </div>
+      `;
+    }
+
     return `
-      <div class="check-item ${item.done ? "is-done" : ""}">
+      <div class="check-item ${item.done ? "is-done" : ""}" draggable="true" data-drag-item="${escapeHtml(item.id)}">
         <input type="checkbox" data-toggle="${escapeHtml(item.id)}" ${item.done ? "checked" : ""} aria-label="Отметить выполненным" />
-        <span class="check-title">${escapeHtml(item.title)}</span>
+        <button type="button" class="check-title check-edit-start" data-edit-item="${escapeHtml(item.id)}" title="Переименовать">${escapeHtml(item.title)}</button>
         ${item.rolledFrom ? badgeHtml("перенесено") : ""}
         ${item.done && item.doneAt ? `<span class="check-time">${escapeHtml(formatTime(item.doneAt))}</span>` : ""}
         <span class="check-actions">
@@ -455,6 +495,112 @@ export class TodayView extends HTMLElement {
         }
       });
     });
+
+    root.querySelectorAll<HTMLButtonElement>("[data-edit-item]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.dataset.editItem;
+        if (id) {
+          this.editing = { kind: "item", id };
+          this.render();
+        }
+      });
+    });
+
+    root.querySelectorAll<HTMLButtonElement>("[data-edit-template]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.dataset.editTemplate;
+        if (id) {
+          this.editing = { kind: "template", id };
+          this.render();
+        }
+      });
+    });
+
+    this.wireEditForm(root);
+    this.wireDrag(root);
+  }
+
+  private wireEditForm(root: ShadowRoot): void {
+    const form = root.querySelector<HTMLFormElement>("[data-edit-form]");
+    const editing = this.editing;
+    if (!form || !editing) {
+      return;
+    }
+    const input = form.elements.namedItem("title");
+    if (!(input instanceof HTMLInputElement)) {
+      return;
+    }
+
+    let done = false;
+    const commit = (): void => {
+      if (done) {
+        return;
+      }
+      done = true;
+      const value = input.value;
+      this.editing = null;
+      if (editing.kind === "item") {
+        void appStore.renameChecklistItem(editing.id, value);
+      } else {
+        void appStore.updateChecklistTemplate({ templateId: editing.id, title: value });
+      }
+      this.render();
+    };
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      commit();
+    });
+    input.addEventListener("blur", commit);
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        done = true;
+        this.editing = null;
+        this.render();
+      }
+    });
+    input.focus();
+    input.select();
+  }
+
+  private wireDrag(root: ShadowRoot): void {
+    root.querySelectorAll<HTMLElement>("[data-drag-item]").forEach((row) => {
+      row.addEventListener("dragstart", (event) => {
+        this.draggingId = row.dataset.dragItem ?? null;
+        if (event instanceof DragEvent && event.dataTransfer) {
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", this.draggingId ?? "");
+        }
+      });
+      row.addEventListener("dragend", () => {
+        this.draggingId = null;
+      });
+      row.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        row.classList.add("is-drag-over");
+      });
+      row.addEventListener("dragleave", () => row.classList.remove("is-drag-over"));
+      row.addEventListener("drop", (event) => {
+        event.preventDefault();
+        row.classList.remove("is-drag-over");
+        const targetId = row.dataset.dragItem;
+        const dragId = this.draggingId;
+        this.draggingId = null;
+        if (!targetId || !dragId || targetId === dragId) {
+          return;
+        }
+        const ids = [...root.querySelectorAll<HTMLElement>("[data-drag-item]")].map((el) => el.dataset.dragItem ?? "");
+        const from = ids.indexOf(dragId);
+        const to = ids.indexOf(targetId);
+        if (from < 0 || to < 0) {
+          return;
+        }
+        ids.splice(from, 1);
+        ids.splice(to, 0, dragId);
+        void appStore.reorderChecklist(this.selectedDay, ids);
+      });
+    });
   }
 
   private renderTemplates(templates: ChecklistTemplate[]): string {
@@ -487,7 +633,11 @@ export class TodayView extends HTMLElement {
                   .map(
                     (template) => `
                       <div class="check-item">
-                        <span class="check-title">${escapeHtml(template.title)}</span>
+                        ${
+                          this.editing?.kind === "template" && this.editing.id === template.id
+                            ? `<form class="check-edit" data-edit-form><input name="title" value="${escapeHtml(template.title)}" aria-label="Название шаблона" autocomplete="off" /></form>`
+                            : `<button type="button" class="check-title check-edit-start" data-edit-template="${escapeHtml(template.id)}" title="Переименовать">${escapeHtml(template.title)}</button>`
+                        }
                         ${template.isHabit ? badgeHtml("привычка") : ""}
                         <select data-template-cadence="${escapeHtml(template.id)}" aria-label="Периодичность">${cadenceOptions(template.cadence)}</select>
                         <label class="template-habit">

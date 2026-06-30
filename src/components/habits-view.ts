@@ -30,7 +30,7 @@ export class HabitsView extends HTMLElement {
     const scheduledToday = habits.filter((habit) => templateAppliesToDay(habit, today));
     const doneToday = scheduledToday.filter((habit) => habitDoneDays(workspace.checklist, habit.id).has(today)).length;
 
-    renderShadow(
+    const root = renderShadow(
       this,
       `
         <section class="view-grid">
@@ -107,6 +107,12 @@ export class HabitsView extends HTMLElement {
           opacity: 0.5;
         }
 
+        button.habit-cell {
+          cursor: pointer;
+          font: inherit;
+          padding: 0;
+        }
+
         @media (max-width: 720px) {
           .habit-grid {
             grid-template-columns: repeat(14, 1fr);
@@ -115,6 +121,15 @@ export class HabitsView extends HTMLElement {
         }
       `,
     );
+
+    root.querySelectorAll<HTMLButtonElement>("[data-habit-toggle]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.dataset.habitToggle;
+        if (id) {
+          void appStore.toggleChecklistItem(id);
+        }
+      });
+    });
   }
 
   private renderHabit(
@@ -125,6 +140,7 @@ export class HabitsView extends HTMLElement {
   ): string {
     const done = habitDoneDays(items, habit.id);
     const streak = habitStreak(habit, items, today);
+    const todayItem = items.find((item) => item.templateId === habit.id && item.day === today);
 
     const cells = days
       .map((day) => {
@@ -138,6 +154,9 @@ export class HabitsView extends HTMLElement {
           state = "is-missed";
         }
         const title = `${day}${scheduled ? (done.has(day) ? " · выполнено" : " · запланировано") : ""}`;
+        if (day === today && todayItem) {
+          return `<button type="button" class="habit-cell ${state}" data-habit-toggle="${escapeHtml(todayItem.id)}" title="${escapeHtml(`${title} · нажмите, чтобы отметить`)}" aria-label="${escapeHtml(`${habit.title}: отметить сегодня`)}"></button>`;
+        }
         return `<span class="habit-cell ${state}" title="${escapeHtml(title)}"></span>`;
       })
       .join("");
