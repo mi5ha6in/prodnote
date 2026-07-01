@@ -19,7 +19,7 @@ test("renders the shell without a large gap above the content", async ({ page })
 
 test("navigates hubs and sub-tabs via the sidebar", async ({ page }) => {
   // Planner hub → its sub-tabs.
-  await page.locator('a.nav-item[href="#/planner/overview"]').click();
+  await page.locator('a.nav-item[href="#/planner/today"]').click();
   for (const [hash, label] of [
     ["#/planner/today", "Сегодня"],
     ["#/planner/habits", "Привычки"],
@@ -41,7 +41,7 @@ test("normalizes a legacy hash to its canonical hub/tab route", async ({ page })
 });
 
 test("adds a daily checklist item and checks it off", async ({ page }) => {
-  await page.locator('a.nav-item[href="#/planner/overview"]').click();
+  await page.locator('a.nav-item[href="#/planner/today"]').click();
   await page.locator('a.subnav-item[href="#/planner/today"]').click();
   await page.getByPlaceholder("Добавить пункт на день…").fill("E2E пункт");
   await page.getByPlaceholder("Добавить пункт на день…").press("Enter");

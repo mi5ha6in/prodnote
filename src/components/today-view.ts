@@ -1,13 +1,21 @@
-import { dayKey } from "../domain/calendar";
+import { dayKey, isMultiDay, itemsForDay, taskDeadlineItems, toCalendarItems, type CalendarItem } from "../domain/calendar";
 import { shiftDayKey } from "../domain/checklist";
-import { CHECKLIST_CADENCE_LABELS } from "../domain/defaults";
+import { CHECKLIST_CADENCE_LABELS, EVENT_KIND_LABELS, TASK_STATUS_LABELS } from "../domain/defaults";
 import { escapeHtml } from "../domain/markdown";
-import { groupChecklistByDay } from "../domain/stats";
-import type { ChecklistCadence, ChecklistItem, ChecklistTemplate, Task, Workspace } from "../domain/types";
+import { formatDuration, groupChecklistByDay } from "../domain/stats";
+import type {
+  CalendarEventKind,
+  ChecklistCadence,
+  ChecklistItem,
+  ChecklistTemplate,
+  Task,
+  Workspace,
+} from "../domain/types";
 import { requestTimerNotificationPermission } from "../platform/notifications";
 import { appStore } from "../state";
 import { badgeHtml, buttonAttrs, emptyStateHtml, metricBarHtml, viewHeaderHtml } from "../ui/html";
 import { renderShadow } from "./shadow";
+import { formatDate, getProjectName, getTaskName } from "./view-utils";
 
 const HISTORY_DAYS = 14;
 
@@ -70,6 +78,18 @@ export class TodayView extends HTMLElement {
     const doneCount = dayItems.filter((item) => item.done).length;
     const dayTasks = this.tasksForDay(workspace, day);
     const history = groupChecklistByDay(workspace.checklist).slice(-HISTORY_DAYS);
+    const dayMinutes = workspace.sessions
+      .filter((session) => session.startedAt.slice(0, 10) === day)
+      .reduce((sum, session) => sum + session.durationMinutes, 0);
+    const dayEvents = itemsForDay(
+      [...toCalendarItems(workspace.events), ...taskDeadlineItems(workspace.tasks)],
+      day,
+    ).sort((a, b) => Number(b.allDay) - Number(a.allDay) || Date.parse(a.startsAt) - Date.parse(b.startsAt));
+    const dayTaskIds = new Set(dayTasks.map((task) => task.id));
+    const activeFlow =
+      day === today ? workspace.tasks.filter((task) => task.status === "active" && !dayTaskIds.has(task.id)).slice(0, 5) : [];
+    const isFreshWorkspace =
+      !workspace.tasks.length && !workspace.notes.length && !workspace.sessions.length && !workspace.checklist.length;
 
     const root = renderShadow(
       this,
@@ -89,10 +109,12 @@ export class TodayView extends HTMLElement {
           })}
 
           ${metricBarHtml([
-            { label: "Выполнено за день", value: `${doneCount}/${dayItems.length}`, hint: formatDayHeading(day) },
+            { label: "Чек-лист", value: `${doneCount}/${dayItems.length}`, hint: formatDayHeading(day) },
+            { label: "Время за день", value: formatDuration(dayMinutes), hint: "Завершённые сессии" },
             { label: "Серия дней", value: currentStreak(workspace.checklist, today), hint: "Дни подряд с отметками" },
-            { label: "Всего пунктов", value: workspace.checklist.length, hint: "За всё время" },
           ])}
+
+          ${isFreshWorkspace ? this.renderOnboarding() : ""}
 
           <article class="card">
             <div class="card-header">
@@ -120,10 +142,27 @@ export class TodayView extends HTMLElement {
           <article class="card">
             <div class="card-header">
               <div>
+                <p class="eyebrow">Расписание</p>
+                <h2>События дня</h2>
+              </div>
+              <a class="button ghost small" href="#/planner/calendar">Календарь</a>
+            </div>
+            <div class="item-list">
+              ${
+                dayEvents.length
+                  ? dayEvents.map((item) => this.renderEventRow(item, workspace)).join("")
+                  : emptyStateHtml("Событий нет. Добавьте их в календаре.")
+              }
+            </div>
+          </article>
+
+          <article class="card">
+            <div class="card-header">
+              <div>
                 <p class="eyebrow">Задачи</p>
                 <h2>Запланировано на день</h2>
               </div>
-              <a class="button ghost small" href="#/tasks">Все задачи</a>
+              <a class="button ghost small" href="#/work/tasks">Все задачи</a>
             </div>
             <div class="check-list">
               ${
@@ -132,6 +171,16 @@ export class TodayView extends HTMLElement {
                   : emptyStateHtml("Задач с дедлайном на этот день нет.")
               }
             </div>
+            ${
+              activeFlow.length
+                ? `
+                  <p class="eyebrow flow-heading">В работе сейчас</p>
+                  <div class="check-list">
+                    ${activeFlow.map((task) => this.renderFlowRow(task, workspace)).join("")}
+                  </div>
+                `
+                : ""
+            }
           </article>
 
           ${this.renderTemplates(workspace.checklistTemplates)}
@@ -184,6 +233,40 @@ export class TodayView extends HTMLElement {
 
         .day-input {
           width: auto;
+        }
+
+        .flow-heading {
+          margin: var(--space-3) 0 var(--space-2);
+        }
+
+        .flow-link {
+          text-decoration: none;
+        }
+
+        .flow-link:hover {
+          text-decoration: underline;
+        }
+
+        .onboarding-step {
+          text-decoration: none;
+        }
+
+        .onboarding-step:hover {
+          border-color: var(--line-strong);
+        }
+
+        .onboarding-num {
+          align-items: center;
+          background: var(--accent-soft);
+          border-radius: var(--radius-pill);
+          color: var(--accent-strong);
+          display: inline-flex;
+          flex: none;
+          font-size: var(--text-xs);
+          font-weight: 700;
+          height: 1.5rem;
+          justify-content: center;
+          width: 1.5rem;
         }
 
         .check-add {
@@ -369,6 +452,67 @@ export class TodayView extends HTMLElement {
         <span class="check-title">${escapeHtml(task.title)}</span>
         ${badgeHtml(done ? "готово" : "в работе")}
       </div>
+    `;
+  }
+
+  private renderFlowRow(task: Task, workspace: Workspace): string {
+    return `
+      <div class="check-item">
+        <input type="checkbox" data-task-toggle="${escapeHtml(task.id)}" aria-label="Отметить задачу выполненной" />
+        <a class="check-title flow-link" href="#/work/tasks/${escapeHtml(task.id)}">${escapeHtml(task.title)}</a>
+        <span class="check-time">${escapeHtml(getProjectName(workspace.projects, task.projectId))}</span>
+        ${badgeHtml(TASK_STATUS_LABELS[task.status])}
+      </div>
+    `;
+  }
+
+  private renderEventRow(item: CalendarItem, workspace: Workspace): string {
+    const when = item.allDay
+      ? "Весь день"
+      : new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" }).format(new Date(item.startsAt));
+    const kindLabel = EVENT_KIND_LABELS[item.kind as CalendarEventKind] ?? item.kind;
+    const taskName = item.taskId ? getTaskName(workspace.tasks, item.taskId) : "";
+
+    return `
+      <div class="list-item">
+        <strong>${escapeHtml(item.title)}</strong>
+        <div class="meta-row">
+          <span class="status-pill">${escapeHtml(kindLabel)}</span>
+          <span>${escapeHtml(when)}</span>
+          ${isMultiDay(item) ? `<span class="muted">до ${formatDate(item.endsAt)}</span>` : ""}
+          ${taskName ? `<span>${escapeHtml(taskName)}</span>` : ""}
+        </div>
+      </div>
+    `;
+  }
+
+  private renderOnboarding(): string {
+    return `
+      <article class="card">
+        <div class="card-header">
+          <div>
+            <p class="eyebrow">Первые шаги</p>
+            <h2>С чего начать</h2>
+          </div>
+        </div>
+        <div class="check-list">
+          <a class="check-item onboarding-step" href="#/work/tasks">
+            <span class="onboarding-num">1</span>
+            <span class="check-title">Создайте первую задачу</span>
+            <span class="check-time">Работа → Задачи</span>
+          </a>
+          <a class="check-item onboarding-step" href="#/work/focus">
+            <span class="onboarding-num">2</span>
+            <span class="check-title">Запустите фокус-таймер по задаче</span>
+            <span class="check-time">Работа → Фокус</span>
+          </a>
+          <a class="check-item onboarding-step" href="#/notes/notes">
+            <span class="onboarding-num">3</span>
+            <span class="check-title">Запишите первую заметку</span>
+            <span class="check-time">Заметки</span>
+          </a>
+        </div>
+      </article>
     `;
   }
 

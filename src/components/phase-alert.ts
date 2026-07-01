@@ -97,7 +97,7 @@ export class PhaseAlert extends HTMLElement {
           animation: pulse 900ms ease-in-out infinite;
           background: var(--accent);
           border-radius: var(--radius-pill);
-          box-shadow: 0 0 0 0 rgba(47, 125, 92, 0.42);
+          box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 42%, transparent);
           height: 1.2rem;
           width: 1.2rem;
         }
@@ -116,10 +116,10 @@ export class PhaseAlert extends HTMLElement {
         @keyframes pulse {
           0%,
           100% {
-            box-shadow: 0 0 0 0 rgba(47, 125, 92, 0.42);
+            box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 42%, transparent);
           }
           50% {
-            box-shadow: 0 0 0 0.75rem rgba(47, 125, 92, 0);
+            box-shadow: 0 0 0 0.75rem transparent;
           }
         }
 

@@ -37,4 +37,31 @@ describe("review-view (DOM)", () => {
     const score = Number(root.querySelector(".score-value")?.firstChild?.textContent ?? "0");
     expect(score).toBeGreaterThan(0);
   });
+
+  it("walks the guided review wizard: inbox step lists unsorted tasks, overdue step reschedules", async () => {
+    const overdue = await appStore.addTask({ title: "Просроченная в мастере", dueDate: "2020-01-01" });
+    await appStore.addTask({ title: "Входящая в мастере" });
+
+    const element = mount();
+    const root = shadow(element);
+
+    root.querySelector<HTMLButtonElement>('[data-action="start-wizard"]')?.click();
+    expect(shadow(element).textContent).toContain("Шаг 1 из 3");
+    expect(shadow(element).textContent).toContain("Входящая в мастере");
+
+    shadow(element).querySelector<HTMLButtonElement>('[data-action="wizard-next"]')?.click();
+    expect(shadow(element).textContent).toContain("Шаг 2 из 3");
+    expect(shadow(element).textContent).toContain("Просроченная в мастере");
+
+    shadow(element).querySelector<HTMLButtonElement>(`[data-wizard-postpone="${overdue.id}"]`)?.click();
+    await Promise.resolve();
+    const updated = appStore.getWorkspace().tasks.find((task) => task.id === overdue.id);
+    expect(updated?.dueDate && updated.dueDate > new Date().toISOString().slice(0, 10)).toBe(true);
+
+    shadow(element).querySelector<HTMLButtonElement>('[data-action="wizard-next"]')?.click();
+    expect(shadow(element).textContent).toContain("Шаг 3 из 3");
+
+    shadow(element).querySelector<HTMLButtonElement>('[data-action="close-wizard"]')?.click();
+    expect(shadow(element).querySelector("[data-modal]")).toBeFalsy();
+  });
 });

@@ -463,7 +463,7 @@ export const sharedStyles = `
 
   .modal::backdrop {
     backdrop-filter: blur(2px);
-    background: rgba(20, 28, 24, 0.45);
+    background: var(--backdrop);
   }
 
   .modal[open] {

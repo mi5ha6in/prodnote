@@ -173,6 +173,30 @@ describe("ProdNoteStore", () => {
     expect(store.getWorkspace().checklistTemplates).toHaveLength(0);
   });
 
+  it("reassigns a task's project and reschedules its due date without touching other fields", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+
+    const project = await store.addProject({ name: "Ревью", color: "#123456", description: "" });
+    const task = await store.addTask({ title: "Разобрать", description: "тело", dueDate: "2026-06-01" });
+
+    await store.assignTaskProject(task.id, project.id);
+    let updated = store.getWorkspace().tasks.find((item) => item.id === task.id);
+    expect(updated?.projectId).toBe(project.id);
+    expect(updated?.dueDate).toBe("2026-06-01");
+
+    await store.rescheduleTask(task.id, "2026-07-09");
+    updated = store.getWorkspace().tasks.find((item) => item.id === task.id);
+    expect(updated?.dueDate).toBe("2026-07-09");
+    expect(updated?.title).toBe("Разобрать");
+
+    await store.rescheduleTask(task.id, null);
+    expect(store.getWorkspace().tasks.find((item) => item.id === task.id)?.dueDate).toBeNull();
+
+    await store.assignTaskProject(task.id, null);
+    expect(store.getWorkspace().tasks.find((item) => item.id === task.id)?.projectId).toBeNull();
+  });
+
   it("deletes projects without deleting linked tasks and notes", async () => {
     const store = new ProdNoteStore();
     await store.init();
