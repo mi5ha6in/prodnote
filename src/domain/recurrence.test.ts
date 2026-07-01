@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { expandRecurrence, type RecurrenceRule } from "./recurrence";
+import {
+  expandRecurrence,
+  nextRecurrenceDate,
+  presetToRule,
+  type RecurrenceRule,
+  ruleToPreset,
+} from "./recurrence";
 
 const now = Date.parse("2026-07-01T00:00:00.000Z");
 
@@ -36,5 +42,33 @@ describe("expandRecurrence", () => {
       now,
     );
     expect(occ).toHaveLength(2); // Jul 2 and Jul 9
+  });
+});
+
+describe("nextRecurrenceDate", () => {
+  it("advances daily, weekly, weekdays, monthly and yearly rules", () => {
+    // 2026-07-01 is a Wednesday, 2026-07-03 a Friday.
+    expect(nextRecurrenceDate("2026-07-01", presetToRule("daily")!)).toBe("2026-07-02");
+    expect(nextRecurrenceDate("2026-07-01", rule({ freq: "DAILY", interval: 2 }))).toBe("2026-07-03");
+    expect(nextRecurrenceDate("2026-07-01", presetToRule("weekly")!)).toBe("2026-07-08");
+    expect(nextRecurrenceDate("2026-07-03", presetToRule("weekdays")!)).toBe("2026-07-06");
+    expect(nextRecurrenceDate("2026-07-15", presetToRule("monthly")!)).toBe("2026-08-15");
+    expect(nextRecurrenceDate("2026-07-15", presetToRule("yearly")!)).toBe("2027-07-15");
+  });
+
+  it("returns null once the rule passes its until date", () => {
+    expect(
+      nextRecurrenceDate("2026-07-01", rule({ freq: "DAILY", untilMs: Date.parse("2026-07-01T00:00:00.000Z") })),
+    ).toBeNull();
+  });
+});
+
+describe("recurrence presets", () => {
+  it("maps presets to rules and back", () => {
+    for (const preset of ["daily", "weekdays", "weekly", "monthly", "yearly"] as const) {
+      expect(ruleToPreset(presetToRule(preset))).toBe(preset);
+    }
+    expect(presetToRule("none")).toBeNull();
+    expect(ruleToPreset(null)).toBe("none");
   });
 });

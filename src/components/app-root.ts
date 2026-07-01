@@ -1,7 +1,7 @@
+import { escapeHtml } from "../domain/markdown";
 import { appStore } from "../state";
+import { HUBS, hubDefaultHash, type IconName, resolveRoute } from "./app-router";
 import { renderShadow } from "./shadow";
-
-type Route = "dashboard" | "today" | "habits" | "tasks" | "notes" | "calendar" | "focus" | "stats" | "review" | "settings";
 
 const ICONS = {
   dashboard: `<svg viewBox="0 0 24 24"><path d="M4 13h6V4H4v9Zm10 7h6V11h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z"/></svg>`,
@@ -14,25 +14,7 @@ const ICONS = {
   stats: `<svg viewBox="0 0 24 24"><path d="M5 20V10h4v10H5Zm5 0V4h4v16h-4Zm5 0v-7h4v7h-4Z"/></svg>`,
   review: `<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9h-9V3Z"/><path d="M14 3.5a8 8 0 0 1 6.5 6.5H14V3.5Z"/></svg>`,
   settings: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>`,
-} satisfies Record<Route, string>;
-
-const ROUTES: Array<{ id: Route; label: string; description: string; tag: string }> = [
-  { id: "dashboard", label: "Обзор", description: "Главное на сегодня", tag: "pn-dashboard-view" },
-  { id: "today", label: "Сегодня", description: "Чек-лист дня и история", tag: "pn-today-view" },
-  { id: "habits", label: "Привычки", description: "Трекер привычек и серии", tag: "pn-habits-view" },
-  { id: "tasks", label: "Задачи", description: "Планы и текущая работа", tag: "pn-tasks-view" },
-  { id: "notes", label: "Заметки", description: "Конспекты и база знаний", tag: "pn-notes-view" },
-  { id: "calendar", label: "Календарь", description: "План и история времени", tag: "pn-calendar-view" },
-  { id: "focus", label: "Фокус", description: "Таймер и помодоро", tag: "pn-focus-view" },
-  { id: "stats", label: "Статистика", description: "Ритм и распределение времени", tag: "pn-stats-view" },
-  { id: "review", label: "Ревью", description: "Итоги недели и продуктивность", tag: "pn-review-view" },
-  { id: "settings", label: "Настройки", description: "Данные, синхронизация и проекты", tag: "pn-settings-view" },
-];
-
-function getRoute(): Route {
-  const route = window.location.hash.replace("#/", "") as Route;
-  return ROUTES.some((item) => item.id === route) ? route : "dashboard";
-}
+} satisfies Record<IconName, string>;
 
 export class AppRoot extends HTMLElement {
   private onHashChange = () => this.render();
@@ -53,15 +35,26 @@ export class AppRoot extends HTMLElement {
   }
 
   private render(): void {
-    const route = getRoute();
-    const current = ROUTES.find((item) => item.id === route) ?? ROUTES[0];
+    const { hubId, tabId, detailId, canonical } = resolveRoute(window.location.hash);
+    // Normalize legacy/bare hashes silently (no extra history entry, no re-render loop).
+    if (window.location.hash !== canonical) {
+      history.replaceState(null, "", canonical);
+    }
+
+    const hub = HUBS.find((item) => item.id === hubId) ?? HUBS[0];
+    const tab = hub.tabs.find((item) => item.id === tabId) ?? hub.tabs[0];
+    const showSubnav = hub.tabs.length > 1;
+    const viewMarkup =
+      detailId && tab.detailTag
+        ? `<${tab.detailTag} entity-id="${escapeHtml(detailId)}"></${tab.detailTag}>`
+        : `<${tab.tag}></${tab.tag}>`;
 
     renderShadow(
       this,
       `
       <div class="app-shell">
         <aside class="sidebar">
-          <a class="brand" href="#/dashboard" aria-label="ProdNote home">
+          <a class="brand" href="#/planner/overview" aria-label="ProdNote home">
             <img class="brand-mark" src="${import.meta.env.BASE_URL}icons/icon.svg" alt="" />
             <span>
               <strong>ProdNote</strong>
@@ -69,10 +62,10 @@ export class AppRoot extends HTMLElement {
             </span>
           </a>
           <nav class="nav-list" aria-label="Главная навигация">
-            ${ROUTES.map(
+            ${HUBS.map(
               (item) => `
-                <a class="nav-item ${item.id === route ? "active" : ""}" href="#/${item.id}">
-                  <span class="nav-icon" aria-hidden="true">${ICONS[item.id]}</span>
+                <a class="nav-item ${item.id === hub.id ? "active" : ""}" href="${hubDefaultHash(item)}">
+                  <span class="nav-icon" aria-hidden="true">${ICONS[item.icon]}</span>
                   <span class="nav-label">${item.label}</span>
                 </a>
               `,
@@ -86,13 +79,29 @@ export class AppRoot extends HTMLElement {
         <main class="content-shell">
           <header class="topbar">
             <div>
-              <h1>${current.label}</h1>
-              <p>${current.description}</p>
+              <h1>${tab.label}</h1>
+              <p>${tab.description}</p>
             </div>
-            <a class="focus-link" href="#/focus">${ICONS.focus}<span>Начать фокус</span></a>
+            <a class="focus-link" href="#/work/focus">${ICONS.focus}<span>Начать фокус</span></a>
           </header>
+          ${
+            showSubnav
+              ? `<nav class="subnav" aria-label="Разделы: ${hub.label}">
+                  ${hub.tabs
+                    .map(
+                      (item) => `
+                        <a class="subnav-item ${item.id === tab.id ? "active" : ""}" href="#/${hub.id}/${item.id}">
+                          <span class="subnav-icon" aria-hidden="true">${ICONS[item.icon]}</span>
+                          <span>${item.label}</span>
+                        </a>
+                      `,
+                    )
+                    .join("")}
+                </nav>`
+              : ""
+          }
           <section class="view-host">
-            <${current.tag}></${current.tag}>
+            ${viewMarkup}
           </section>
         </main>
       </div>
@@ -197,6 +206,7 @@ export class AppRoot extends HTMLElement {
         }
 
         .nav-icon svg,
+        .subnav-icon svg,
         .focus-link svg {
           fill: none;
           height: 1.05rem;
@@ -208,8 +218,8 @@ export class AppRoot extends HTMLElement {
         }
 
         .content-shell {
-          display: grid;
-          grid-template-rows: auto 1fr;
+          display: flex;
+          flex-direction: column;
           min-width: 0;
         }
 
@@ -254,7 +264,42 @@ export class AppRoot extends HTMLElement {
           background: var(--accent-strong);
         }
 
+        .subnav {
+          border-bottom: 1px solid var(--line);
+          display: flex;
+          gap: var(--space-1);
+          overflow-x: auto;
+          padding: var(--space-2) clamp(var(--space-4), 3vw, var(--space-6));
+        }
+
+        .subnav-item {
+          align-items: center;
+          border-radius: var(--radius-md);
+          color: var(--muted);
+          display: flex;
+          font-size: var(--text-sm);
+          font-weight: 600;
+          gap: var(--space-2);
+          padding: var(--space-2) var(--space-3);
+          text-decoration: none;
+          white-space: nowrap;
+          transition:
+            background 140ms ease,
+            color 140ms ease;
+        }
+
+        .subnav-item:hover {
+          background: var(--surface);
+          color: var(--ink);
+        }
+
+        .subnav-item.active {
+          background: var(--accent-soft);
+          color: var(--accent-strong);
+        }
+
         .view-host {
+          flex: 1;
           min-width: 0;
           padding: var(--space-5) clamp(var(--space-4), 3vw, var(--space-6)) var(--space-6);
         }
@@ -324,6 +369,10 @@ export class AppRoot extends HTMLElement {
           }
 
           .nav-label {
+            display: none;
+          }
+
+          .subnav-icon {
             display: none;
           }
         }

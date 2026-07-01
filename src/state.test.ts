@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { dayKey } from "./domain/calendar";
+import { presetToRule } from "./domain/recurrence";
 import { ProdNoteStore } from "./state";
 
 describe("ProdNoteStore", () => {
@@ -212,5 +213,136 @@ describe("ProdNoteStore", () => {
     expect(updated?.markdown).toBe("Обновленный текст");
     expect(updated?.editHistory).toHaveLength(1);
     expect(updated?.editHistory[0]?.editedAt).toBeTruthy();
+  });
+
+  it("deletes a task with its sessions and cycles and unlinks checklist items and events", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+
+    const task = await store.addTask({ title: "Удаляемая задача" });
+    await store.addManualSession({
+      taskId: task.id,
+      startedAt: "2026-06-05T10:00:00.000Z",
+      endedAt: "2026-06-05T10:30:00.000Z",
+    });
+    await store.addSubtask(task.id, "Подзадача");
+    await store.addTaskHistory(task.id, "Прогресс", "progress");
+    const checklistItem = await store.addChecklistItem({
+      title: "Связанный пункт",
+      day: "2026-06-05",
+      taskId: task.id,
+    });
+    const event = await store.addEvent({
+      title: "Связанное событие",
+      startsAt: "2026-06-05T12:00:00.000Z",
+      endsAt: "2026-06-05T13:00:00.000Z",
+      taskId: task.id,
+    });
+    await store.startPomodoro(task.id);
+
+    expect(store.getWorkspace().sessions).toHaveLength(1);
+    expect(store.getWorkspace().pomodoroCycles).toHaveLength(1);
+
+    await store.deleteTask(task.id);
+
+    expect(store.getWorkspace().tasks.some((entry) => entry.id === task.id)).toBe(false);
+    expect(store.getWorkspace().sessions).toHaveLength(0);
+    expect(store.getWorkspace().pomodoroCycles).toHaveLength(0);
+    expect(store.getActiveTimer()).toBeNull();
+    expect(store.getWorkspace().checklist.find((entry) => entry.id === checklistItem!.id)?.taskId).toBeNull();
+    expect(store.getWorkspace().events.find((entry) => entry.id === event.id)?.taskId).toBeNull();
+  });
+
+  it("deletes a tag and strips it from tasks and notes", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+
+    const tag = await store.addTag({ name: "фокус" });
+    const task = await store.addTask({ title: "Задача с тегом", tagIds: [tag.id] });
+    const note = await store.addNote({ title: "Заметка с тегом", markdown: "текст", tagIds: [tag.id] });
+
+    await store.deleteTag(tag.id);
+
+    expect(store.getWorkspace().tags.some((item) => item.id === tag.id)).toBe(false);
+    expect(store.getWorkspace().tasks.find((item) => item.id === task.id)?.tagIds).toEqual([]);
+    expect(store.getWorkspace().notes.find((item) => item.id === note.id)?.tagIds).toEqual([]);
+  });
+
+  it("updates a project's name, color and description", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+
+    const project = await store.addProject({ name: "Старое имя", color: "#111111" });
+    await store.updateProject({
+      projectId: project.id,
+      name: "Новое имя",
+      color: "#222222",
+      description: "Описание",
+    });
+
+    const updated = store.getWorkspace().projects.find((item) => item.id === project.id);
+    expect(updated).toMatchObject({ name: "Новое имя", color: "#222222", description: "Описание" });
+  });
+
+  it("updates a tag's name and color", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+
+    const tag = await store.addTag({ name: "старый", color: "#111111" });
+    await store.updateTag({ tagId: tag.id, name: "новый", color: "#333333" });
+
+    const updated = store.getWorkspace().tags.find((item) => item.id === tag.id);
+    expect(updated).toMatchObject({ name: "новый", color: "#333333" });
+  });
+
+  it("deletes a note", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+
+    const note = await store.addNote({ title: "Удаляемая заметка", markdown: "текст" });
+    await store.deleteNote(note.id);
+
+    expect(store.getWorkspace().notes.some((item) => item.id === note.id)).toBe(false);
+  });
+
+  it("spawns the next occurrence when a recurring task with a deadline is completed", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+
+    const task = await store.addTask({
+      title: "Полить цветы",
+      dueDate: "2026-07-01",
+      recurrence: presetToRule("daily"),
+    });
+    await store.addSubtask(task.id, "Взять лейку");
+
+    const before = store.getWorkspace().tasks.length;
+    await store.updateTaskStatus(task.id, "done");
+
+    const next = store.getWorkspace().tasks.find((item) => item.id !== task.id && item.recurrenceParentId === task.id);
+    expect(store.getWorkspace().tasks.length).toBe(before + 1);
+    expect(next?.dueDate).toBe("2026-07-02");
+    expect(next?.status).toBe("backlog");
+    expect(next?.recurrence).not.toBeNull();
+    expect(next?.subtasks).toHaveLength(1);
+    expect(next?.subtasks[0]?.done).toBe(false);
+
+    // Completing again must not duplicate the next occurrence.
+    await store.updateTaskStatus(task.id, "done");
+    expect(store.getWorkspace().tasks.length).toBe(before + 1);
+  });
+
+  it("does not spawn a next occurrence without both recurrence and a deadline", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+
+    const noRule = await store.addTask({ title: "Обычная", dueDate: "2026-07-01" });
+    const noDue = await store.addTask({ title: "Без дедлайна", recurrence: presetToRule("daily") });
+    const before = store.getWorkspace().tasks.length;
+
+    await store.updateTaskStatus(noRule.id, "done");
+    await store.updateTaskStatus(noDue.id, "done");
+
+    expect(store.getWorkspace().tasks.length).toBe(before);
   });
 });

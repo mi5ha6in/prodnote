@@ -7,11 +7,13 @@ import {
   createId,
   createNote,
   createProject,
+  createRecurringTaskInstance,
   createStarterWorkspace,
   createTag,
   createTask,
   nowIso,
 } from "./domain/defaults";
+import { nextRecurrenceDate, type RecurrenceRule } from "./domain/recurrence";
 import {
   getActiveTimerDurationMinutes,
   getActiveTimerEndedAtIso,
@@ -117,6 +119,32 @@ export class ProdNoteStore {
     return project;
   }
 
+  async updateProject(input: {
+    projectId: EntityId;
+    name: string;
+    color?: string;
+    description?: string;
+  }): Promise<void> {
+    await this.commit((workspace) => {
+      const project = workspace.projects.find((item) => item.id === input.projectId);
+      if (!project) {
+        return;
+      }
+
+      const name = input.name.trim();
+      if (name) {
+        project.name = name;
+      }
+      if (input.color !== undefined) {
+        project.color = input.color;
+      }
+      if (input.description !== undefined) {
+        project.description = input.description.trim();
+      }
+      project.updatedAt = nowIso();
+    });
+  }
+
   async deleteProject(projectId: EntityId): Promise<void> {
     await this.commit((workspace) => {
       workspace.projects = workspace.projects.filter((project) => project.id !== projectId);
@@ -146,6 +174,45 @@ export class ProdNoteStore {
     return tag;
   }
 
+  async updateTag(input: { tagId: EntityId; name: string; color?: string }): Promise<void> {
+    await this.commit((workspace) => {
+      const tag = workspace.tags.find((item) => item.id === input.tagId);
+      if (!tag) {
+        return;
+      }
+
+      const name = input.name.trim();
+      if (name) {
+        tag.name = name;
+      }
+      if (input.color !== undefined) {
+        tag.color = input.color;
+      }
+    });
+  }
+
+  /** Delete a tag and safely strip it from every task and note that referenced it. */
+  async deleteTag(tagId: EntityId): Promise<void> {
+    await this.commit((workspace) => {
+      workspace.tags = workspace.tags.filter((tag) => tag.id !== tagId);
+
+      for (const task of workspace.tasks) {
+        if (task.tagIds.includes(tagId)) {
+          task.tagIds = task.tagIds.filter((id) => id !== tagId);
+          task.updatedAt = nowIso();
+        }
+      }
+
+      for (const note of workspace.notes) {
+        if (note.tagIds.includes(tagId)) {
+          note.tagIds = note.tagIds.filter((id) => id !== tagId);
+          note.updatedAt = nowIso();
+        }
+      }
+    });
+    recordSyncDeletion("tag", tagId);
+  }
+
   async addTask(input: {
     title: string;
     description?: string;
@@ -153,6 +220,7 @@ export class ProdNoteStore {
     dueDate?: string | null;
     priority?: TaskPriority;
     tagIds?: string[];
+    recurrence?: RecurrenceRule | null;
   }): Promise<Task> {
     const task = createTask(input);
     await this.commit((workspace) => {
@@ -398,6 +466,13 @@ export class ProdNoteStore {
     });
   }
 
+  async deleteNote(noteId: EntityId): Promise<void> {
+    await this.commit((workspace) => {
+      workspace.notes = workspace.notes.filter((note) => note.id !== noteId);
+    });
+    recordSyncDeletion("note", noteId);
+  }
+
   async addEvent(input: {
     title: string;
     startsAt: string;
@@ -523,6 +598,7 @@ export class ProdNoteStore {
     dueDate?: string | null;
     priority: TaskPriority;
     tagIds?: EntityId[];
+    recurrence?: RecurrenceRule | null;
   }): Promise<void> {
     await this.commit((workspace) => {
       const task = workspace.tasks.find((item) => item.id === input.taskId);
@@ -536,6 +612,9 @@ export class ProdNoteStore {
       task.dueDate = input.dueDate ?? null;
       task.priority = input.priority;
       task.tagIds = input.tagIds ?? [];
+      if (input.recurrence !== undefined) {
+        task.recurrence = input.recurrence;
+      }
       task.updatedAt = nowIso();
     });
   }
@@ -550,7 +629,86 @@ export class ProdNoteStore {
       task.status = status;
       task.updatedAt = nowIso();
       task.completedAt = status === "done" ? nowIso() : null;
+
+      // Completing a recurring task with a deadline spawns the next occurrence.
+      if (status === "done" && task.recurrence && task.dueDate) {
+        const nextDue = nextRecurrenceDate(task.dueDate, task.recurrence);
+        if (nextDue) {
+          const familyId = task.recurrenceParentId ?? task.id;
+          const alreadyExists = workspace.tasks.some(
+            (item) => (item.recurrenceParentId ?? item.id) === familyId && item.dueDate === nextDue,
+          );
+          if (!alreadyExists) {
+            workspace.tasks.unshift(createRecurringTaskInstance(task, nextDue));
+          }
+        }
+      }
     });
+  }
+
+  /**
+   * Delete a task and its dependent time data (sessions, pomodoro cycles, plans),
+   * unlink it from checklist items and calendar events, and stop a running timer for it.
+   * Time sessions must stay linked to a task, so they are removed with the task.
+   */
+  async deleteTask(taskId: EntityId): Promise<void> {
+    const removedSessionIds: EntityId[] = [];
+    const removedCycleIds: EntityId[] = [];
+    const removedPlanIds: EntityId[] = [];
+
+    await this.commit((workspace) => {
+      workspace.tasks = workspace.tasks.filter((task) => task.id !== taskId);
+
+      for (const session of workspace.sessions) {
+        if (session.taskId === taskId) {
+          removedSessionIds.push(session.id);
+        }
+      }
+      workspace.sessions = workspace.sessions.filter((session) => session.taskId !== taskId);
+
+      for (const cycle of workspace.pomodoroCycles) {
+        if (cycle.taskId === taskId) {
+          removedCycleIds.push(cycle.id);
+        }
+      }
+      workspace.pomodoroCycles = workspace.pomodoroCycles.filter((cycle) => cycle.taskId !== taskId);
+
+      for (const plan of workspace.plans) {
+        if (plan.taskId === taskId) {
+          removedPlanIds.push(plan.id);
+        }
+      }
+      workspace.plans = workspace.plans.filter((plan) => plan.taskId !== taskId);
+
+      for (const item of workspace.checklist) {
+        if (item.taskId === taskId) {
+          item.taskId = null;
+          item.updatedAt = nowIso();
+        }
+      }
+
+      for (const event of workspace.events) {
+        if (event.taskId === taskId) {
+          event.taskId = null;
+          event.updatedAt = nowIso();
+        }
+      }
+    });
+
+    if (this.activeTimer?.taskId === taskId) {
+      this.cancelActiveTimer();
+    }
+
+    recordSyncDeletion("task", taskId);
+    for (const id of removedSessionIds) {
+      recordSyncDeletion("session", id);
+    }
+    for (const id of removedCycleIds) {
+      recordSyncDeletion("pomodoroCycle", id);
+    }
+    for (const id of removedPlanIds) {
+      recordSyncDeletion("plan", id);
+    }
   }
 
   async addSubtask(taskId: EntityId, title: string): Promise<void> {

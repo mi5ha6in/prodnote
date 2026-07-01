@@ -75,6 +75,40 @@ export const MARKDOWN_SNIPPETS: MarkdownSnippet[] = [
     before: "> ",
     placeholder: "вывод",
   },
+  {
+    id: "task",
+    label: "Чекбокс",
+    hint: "- [ ] дело",
+    mode: "line",
+    before: "- [ ] ",
+    placeholder: "дело",
+  },
+  {
+    id: "ordered",
+    label: "Нумерация",
+    hint: "1. пункт",
+    mode: "line",
+    before: "1. ",
+    placeholder: "пункт",
+  },
+  {
+    id: "codeblock",
+    label: "Блок кода",
+    hint: "```",
+    mode: "wrap",
+    before: "```\n",
+    after: "\n```",
+    placeholder: "код",
+  },
+  {
+    id: "table",
+    label: "Таблица",
+    hint: "| A | B |",
+    mode: "wrap",
+    before: "| Колонка | Колонка |\n| --- | --- |\n| ",
+    after: " |  |",
+    placeholder: "значение",
+  },
 ];
 
 export function applyMarkdownSnippetToText(

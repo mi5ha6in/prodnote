@@ -30,7 +30,11 @@ type LegacyNote = Omit<Note, "editHistory"> & {
 type LegacyPomodoroCycle = Omit<PomodoroCycle, "completedShortBreakCount" | "completedLongBreakCount"> &
   Partial<Pick<PomodoroCycle, "completedShortBreakCount" | "completedLongBreakCount">>;
 
-type LegacyTask = Omit<Task, "subtasks"> & { subtasks?: Task["subtasks"] };
+type LegacyTask = Omit<Task, "subtasks" | "recurrence" | "recurrenceParentId"> & {
+  subtasks?: Task["subtasks"];
+  recurrence?: Task["recurrence"];
+  recurrenceParentId?: Task["recurrenceParentId"];
+};
 
 type LegacyChecklistItem = Omit<ChecklistItem, "templateId"> & { templateId?: string | null };
 
@@ -125,6 +129,8 @@ function normalizeTask(task: LegacyTask): Task {
   return {
     ...task,
     subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
+    recurrence: task.recurrence ?? null,
+    recurrenceParentId: task.recurrenceParentId ?? null,
   };
 }
 

@@ -49,17 +49,17 @@ export function searchAll(
 
   for (const task of data.tasks) {
     if (matchesAll(`${task.title} ${task.description}`, queryTerms)) {
-      hits.push({ kind: "task", id: task.id, title: task.title, subtitle: "Задача", hash: "#/tasks" });
+      hits.push({ kind: "task", id: task.id, title: task.title, subtitle: "Задача", hash: "#/work/tasks" });
     }
   }
   for (const note of data.notes) {
     if (matchesAll(`${note.title} ${note.markdown}`, queryTerms)) {
-      hits.push({ kind: "note", id: note.id, title: note.title, subtitle: "Заметка", hash: "#/notes" });
+      hits.push({ kind: "note", id: note.id, title: note.title, subtitle: "Заметка", hash: "#/notes/notes" });
     }
   }
   for (const event of data.events) {
     if (matchesAll(`${event.title} ${event.description}`, queryTerms)) {
-      hits.push({ kind: "event", id: event.id, title: event.title, subtitle: "Событие", hash: "#/calendar" });
+      hits.push({ kind: "event", id: event.id, title: event.title, subtitle: "Событие", hash: "#/planner/calendar" });
     }
   }
 
