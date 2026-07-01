@@ -31,13 +31,41 @@ export class NotesView extends HTMLElement {
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
+    document.addEventListener("keydown", this.onHotkey);
     this.render();
   }
 
   disconnectedCallback(): void {
     this.unsubscribe?.();
+    document.removeEventListener("keydown", this.onHotkey);
     setBodyScrollLock(false);
   }
+
+  /** n — новая заметка, / — поиск. Не срабатывает, когда фокус в поле ввода или открыта модалка. */
+  private onHotkey = (event: KeyboardEvent): void => {
+    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) {
+      return;
+    }
+    const target = event.composedPath()[0];
+    if (
+      target instanceof HTMLElement &&
+      (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+    ) {
+      return;
+    }
+    if (this.modalOpen) {
+      return;
+    }
+
+    if (event.key === "n" || event.key === "т") {
+      event.preventDefault();
+      this.creating = true;
+      this.render();
+    } else if (event.key === "/") {
+      event.preventDefault();
+      this.shadowRoot?.querySelector<HTMLInputElement>("[data-note-search]")?.focus();
+    }
+  };
 
   private get modalOpen(): boolean {
     return this.creating || this.openedNoteId !== null;
