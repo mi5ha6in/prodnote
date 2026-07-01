@@ -82,7 +82,7 @@ export class AppRoot extends HTMLElement {
               <h1>${tab.label}</h1>
               <p>${tab.description}</p>
             </div>
-            <a class="focus-link" href="#/work/focus">${ICONS.focus}<span>Начать фокус</span></a>
+            ${tab.tag === "pn-focus-view" ? "" : `<a class="focus-link" href="#/work/focus">${ICONS.focus}<span>Начать фокус</span></a>`}
           </header>
           ${
             showSubnav

@@ -59,14 +59,14 @@ export class NotesView extends HTMLElement {
           ${this.renderModal(workspace)}
 
           ${viewHeaderHtml({
-            actions: `<button ${buttonAttrs({ data: { action: "open-create" } })}>+ Новый конспект</button>`,
+            actions: `<button ${buttonAttrs({ data: { action: "open-create" } })}>+ Новая заметка</button>`,
           })}
 
           <article class="card">
             <div class="card-header">
               <div>
                 <p class="eyebrow">Библиотека</p>
-                <h2>Все конспекты</h2>
+                <h2>Все заметки</h2>
               </div>
               <div class="row-actions">
                 <input data-note-search type="search" placeholder="Поиск…" value="${escapeHtml(this.searchQuery)}" aria-label="Поиск заметок" />
@@ -99,13 +99,21 @@ export class NotesView extends HTMLElement {
                         `;
                       })
                       .join("")
-                  : emptyStateHtml("Пока нет заметок. Создайте первый Markdown-конспект.")
+                  : emptyStateHtml("Пока нет заметок. Создайте первую заметку в Markdown.")
               }
             </div>
           </article>
         </section>
       `,
       `
+        .card-header .row-actions {
+          flex-wrap: nowrap;
+        }
+
+        [data-note-search] {
+          width: 14rem;
+        }
+
         .notes-grid {
           column-count: 2;
           column-gap: var(--space-4);
@@ -272,6 +280,14 @@ export class NotesView extends HTMLElement {
           .editor-grid {
             grid-template-columns: 1fr;
           }
+
+          .card-header .row-actions {
+            flex-wrap: wrap;
+          }
+
+          [data-note-search] {
+            width: 100%;
+          }
         }
       `,
     );
@@ -319,13 +335,13 @@ export class NotesView extends HTMLElement {
 
     return modalHtml({
       wide: true,
-      label: isEdit ? "Редактирование заметки" : "Новый конспект",
+      label: isEdit ? "Редактирование заметки" : "Новая заметка",
       body: `
         <form class="form-grid" data-markdown-editor data-form="${isEdit ? "edit-note" : "note"}">
           <div class="card-header" style="margin-bottom: 0;">
             <div>
               <p class="eyebrow">${isEdit ? "Редактирование" : "Markdown"}</p>
-              <h2>${isEdit ? escapeHtml(note.title) : "Новый конспект"}</h2>
+              <h2>${isEdit ? escapeHtml(note.title) : "Новая заметка"}</h2>
             </div>
             <div class="row-actions">
               <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: cancelAction } })}>${isEdit ? "Отмена" : "Закрыть"}</button>

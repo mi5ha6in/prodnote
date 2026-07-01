@@ -242,7 +242,7 @@ customElements.define("pn-command-palette", CommandPalette);
 const styles = `
   .palette-overlay {
     align-items: flex-start;
-    background: rgba(20, 28, 24, 0.45);
+    background: var(--backdrop);
     display: flex;
     inset: 0;
     justify-content: center;

@@ -344,6 +344,12 @@ export class TasksView extends HTMLElement {
             grid-template-columns: 1fr;
           }
         }
+
+        @media (max-width: 680px) {
+          .task-filter select {
+            flex: 1 1 42%;
+          }
+        }
       `,
     );
 
@@ -1221,8 +1227,8 @@ export class TasksView extends HTMLElement {
             <div class="meta-row">
               ${badgeHtml(TASK_PRIORITY_LABELS[task.priority])}
               <span>${escapeHtml(getProjectName(workspace.projects, task.projectId))}</span>
-              <span>дедлайн: ${formatDate(task.dueDate)}</span>
-              <span>время: ${formatDuration(totalMinutesByTask.get(task.id) ?? 0)}</span>
+              ${task.dueDate ? `<span>дедлайн: ${formatDate(task.dueDate)}</span>` : ""}
+              ${(totalMinutesByTask.get(task.id) ?? 0) > 0 ? `<span>время: ${formatDuration(totalMinutesByTask.get(task.id) ?? 0)}</span>` : ""}
             </div>
           </div>
         </div>
@@ -1235,19 +1241,19 @@ export class TasksView extends HTMLElement {
               </div>`
             : ""
         }
-        <div class="meta-row">${renderTagPills(workspace.tags, task.tagIds)}</div>
-        ${fieldHtml({
-          label: "Статус",
-          control: `<select data-status data-task-id="${escapeHtml(task.id)}">
-            ${STATUS_ORDER.map(
-              (status) =>
-                `<option value="${status}" ${task.status === status ? "selected" : ""}>${TASK_STATUS_LABELS[status]}</option>`,
-            ).join("")}
-          </select>`,
-        })}
+        ${task.tagIds.length ? `<div class="meta-row">${renderTagPills(workspace.tags, task.tagIds)}</div>` : ""}
         ${
           variant === "list"
             ? `
+              ${fieldHtml({
+                label: "Статус",
+                control: `<select data-status data-task-id="${escapeHtml(task.id)}">
+                  ${STATUS_ORDER.map(
+                    (status) =>
+                      `<option value="${status}" ${task.status === status ? "selected" : ""}>${TASK_STATUS_LABELS[status]}</option>`,
+                  ).join("")}
+                </select>`,
+              })}
               <form class="task-history form-grid" data-history-form data-task-id="${escapeHtml(task.id)}">
                 <div class="inline-grid">
                   ${fieldHtml({
@@ -1265,12 +1271,7 @@ export class TasksView extends HTMLElement {
                 </div>
                 <button ${buttonAttrs({ type: "submit", tone: "ghost", size: "small" })}>Добавить запись</button>
               </form>
-            `
-            : `<p class="muted">Журнал задачи доступен в режиме списка.</p>`
-        }
-        ${
-          recentHistory.length
-            ? recentHistory
+              ${recentHistory
                 .map(
                   (entry) => `
                     <div class="history-entry">
@@ -1279,7 +1280,8 @@ export class TasksView extends HTMLElement {
                     </div>
                   `,
                 )
-                .join("")
+                .join("")}
+            `
             : ""
         }
       </article>

@@ -200,7 +200,7 @@ export class DashboardView extends HTMLElement {
               <div class="card-header">
                 <div>
                   <p class="eyebrow">Заметки</p>
-                  <h2>Свежие конспекты</h2>
+                  <h2>Свежие заметки</h2>
                 </div>
                 <a class="button ghost small" href="#/notes">Все заметки</a>
               </div>
@@ -220,7 +220,7 @@ export class DashboardView extends HTMLElement {
                           `,
                         )
                         .join("")
-                    : `<div class="empty">Markdown-конспекты появятся здесь.</div>`
+                    : `<div class="empty">Заметки появятся здесь.</div>`
                 }
               </div>
             </article>

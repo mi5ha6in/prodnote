@@ -323,7 +323,15 @@ export class SettingsView extends HTMLElement {
                 ? `Вход выполнен: ${escapeHtml(syncState.user?.handle ?? "passkey")}. Последняя синхронизация: ${formatNullableDate(syncState.lastSyncedAt)}.`
                 : "Локальная работа продолжит работать без сервера. Для синхронизации между устройствами войдите через passkey."
             }</p>
-            ${syncState.error ? `<p class="muted">Ошибка: ${escapeHtml(syncState.error)}</p>` : ""}
+            ${
+              syncState.error
+                ? `<p class="muted">Ошибка: ${
+                    syncState.error.includes("Failed to fetch")
+                      ? "сервер недоступен. Проверьте адрес и что сервер запущен."
+                      : escapeHtml(syncState.error)
+                  }</p>`
+                : ""
+            }
             ${fieldHtml({
               label: "Адрес сервера",
               control: `<input name="serverUrl" required value="${escapeHtml(syncState.serverUrl)}" placeholder="http://127.0.0.1:8787" />`,
