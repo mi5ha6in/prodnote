@@ -1,3 +1,4 @@
+import { escapeHtml } from "../domain/markdown";
 import { appStore } from "../state";
 import { HUBS, hubDefaultHash, type IconName, resolveRoute } from "./app-router";
 import { renderShadow } from "./shadow";
@@ -34,7 +35,7 @@ export class AppRoot extends HTMLElement {
   }
 
   private render(): void {
-    const { hubId, tabId, canonical } = resolveRoute(window.location.hash);
+    const { hubId, tabId, detailId, canonical } = resolveRoute(window.location.hash);
     // Normalize legacy/bare hashes silently (no extra history entry, no re-render loop).
     if (window.location.hash !== canonical) {
       history.replaceState(null, "", canonical);
@@ -43,6 +44,10 @@ export class AppRoot extends HTMLElement {
     const hub = HUBS.find((item) => item.id === hubId) ?? HUBS[0];
     const tab = hub.tabs.find((item) => item.id === tabId) ?? hub.tabs[0];
     const showSubnav = hub.tabs.length > 1;
+    const viewMarkup =
+      detailId && tab.detailTag
+        ? `<${tab.detailTag} entity-id="${escapeHtml(detailId)}"></${tab.detailTag}>`
+        : `<${tab.tag}></${tab.tag}>`;
 
     renderShadow(
       this,
@@ -96,7 +101,7 @@ export class AppRoot extends HTMLElement {
               : ""
           }
           <section class="view-host">
-            <${tab.tag}></${tab.tag}>
+            ${viewMarkup}
           </section>
         </main>
       </div>

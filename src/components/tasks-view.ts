@@ -1,7 +1,15 @@
 import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from "../domain/defaults";
 import { escapeHtml, renderMarkdown } from "../domain/markdown";
 import { formatDuration } from "../domain/stats";
-import type { Task, TaskStatus } from "../domain/types";
+import {
+  DEFAULT_TASK_FILTER,
+  filterAndSortTasks,
+  isTaskFilterActive,
+  TASK_SORT_LABELS,
+  type TaskFilterCriteria,
+  type TaskSort,
+} from "../domain/task-filter";
+import type { Task, TaskPriority, TaskStatus } from "../domain/types";
 import { requestTimerNotificationPermission } from "../platform/notifications";
 import { appStore } from "../state";
 import { confirmDestructive } from "../ui/actions";
@@ -27,6 +35,8 @@ export class TasksView extends HTMLElement {
   private detailsMode: "view" | "edit" = "view";
   private creating = false;
   private draggingTaskId: string | null = null;
+  private filter: TaskFilterCriteria = { ...DEFAULT_TASK_FILTER };
+  private focusSearch = false;
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
@@ -45,6 +55,10 @@ export class TasksView extends HTMLElement {
     for (const session of workspace.sessions) {
       totalMinutesByTask.set(session.taskId, (totalMinutesByTask.get(session.taskId) ?? 0) + session.durationMinutes);
     }
+
+    // Kanban already groups by status, so the status facet only applies in list mode.
+    const effectiveFilter = this.mode === "kanban" ? { ...this.filter, status: null } : this.filter;
+    const visibleTasks = filterAndSortTasks(workspace.tasks, effectiveFilter, workspace.projects);
 
     const root = renderShadow(
       this,
@@ -73,10 +87,12 @@ export class TasksView extends HTMLElement {
             },
           ])}
 
+          ${this.renderFilterBar(workspace, visibleTasks.length)}
+
           ${
             this.mode === "kanban"
-              ? this.renderKanban(workspace.tasks, totalMinutesByTask)
-              : this.renderList(workspace.tasks, totalMinutesByTask)
+              ? this.renderKanban(visibleTasks, totalMinutesByTask)
+              : this.renderList(visibleTasks, totalMinutesByTask)
           }
         </section>
       `,
@@ -271,6 +287,35 @@ export class TasksView extends HTMLElement {
           font-variant-numeric: tabular-nums;
         }
 
+        .task-filter {
+          align-items: center;
+          background: var(--surface);
+          border: 1px solid var(--line);
+          border-radius: var(--radius-md);
+          display: flex;
+          flex-wrap: wrap;
+          gap: var(--space-2);
+          padding: var(--space-3);
+        }
+
+        .task-filter select,
+        .task-filter-search {
+          min-height: 2.25rem;
+          width: auto;
+        }
+
+        .task-filter-search {
+          flex: 1 1 12rem;
+          min-width: 10rem;
+        }
+
+        .task-filter-count {
+          color: var(--muted);
+          font-size: var(--text-xs);
+          font-variant-numeric: tabular-nums;
+          margin-left: auto;
+        }
+
         @media (max-width: 1100px) {
           .kanban {
             grid-template-columns: repeat(4, 15rem);
@@ -334,6 +379,56 @@ export class TasksView extends HTMLElement {
         this.render();
       });
     });
+
+    const searchInput = root.querySelector<HTMLInputElement>("[data-filter-search]");
+    searchInput?.addEventListener("input", () => {
+      this.filter = { ...this.filter, search: searchInput.value };
+      this.focusSearch = true;
+      this.render();
+    });
+
+    const projectSelect = root.querySelector<HTMLSelectElement>("[data-filter-project]");
+    projectSelect?.addEventListener("change", () => {
+      this.filter = { ...this.filter, projectId: projectSelect.value || null };
+      this.render();
+    });
+
+    const tagSelect = root.querySelector<HTMLSelectElement>("[data-filter-tag]");
+    tagSelect?.addEventListener("change", () => {
+      this.filter = { ...this.filter, tagId: tagSelect.value || null };
+      this.render();
+    });
+
+    const prioritySelect = root.querySelector<HTMLSelectElement>("[data-filter-priority]");
+    prioritySelect?.addEventListener("change", () => {
+      this.filter = { ...this.filter, priority: (prioritySelect.value || null) as TaskPriority | null };
+      this.render();
+    });
+
+    const statusSelect = root.querySelector<HTMLSelectElement>("[data-filter-status]");
+    statusSelect?.addEventListener("change", () => {
+      this.filter = { ...this.filter, status: (statusSelect.value || null) as TaskStatus | null };
+      this.render();
+    });
+
+    const sortSelect = root.querySelector<HTMLSelectElement>("[data-filter-sort]");
+    sortSelect?.addEventListener("change", () => {
+      this.filter = { ...this.filter, sort: sortSelect.value as TaskSort };
+      this.render();
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="reset-filter"]')?.addEventListener("click", () => {
+      this.filter = { ...DEFAULT_TASK_FILTER };
+      this.render();
+    });
+
+    // Re-rendering on each keystroke recreates the input, so restore focus and caret.
+    if (this.focusSearch && searchInput) {
+      const caret = searchInput.value.length;
+      searchInput.focus();
+      searchInput.setSelectionRange(caret, caret);
+      this.focusSearch = false;
+    }
 
     root.querySelectorAll<HTMLElement>("[data-open-task]").forEach((card) => {
       card.addEventListener("click", (event) => {
@@ -646,6 +741,73 @@ export class TasksView extends HTMLElement {
     });
   }
 
+  private renderFilterBar(workspace: ReturnType<typeof appStore.getWorkspace>, shownCount: number): string {
+    const { filter } = this;
+    const priorities: TaskPriority[] = ["high", "medium", "low"];
+
+    return `
+      <div class="task-filter" role="group" aria-label="Фильтры задач">
+        <input
+          data-filter-search
+          type="search"
+          class="task-filter-search"
+          placeholder="Поиск по задачам…"
+          aria-label="Поиск по задачам"
+          value="${escapeHtml(filter.search)}"
+        />
+        <select data-filter-project aria-label="Проект">
+          <option value="" ${filter.projectId === null ? "selected" : ""}>Все проекты</option>
+          <option value="none" ${filter.projectId === "none" ? "selected" : ""}>Без проекта</option>
+          ${workspace.projects
+            .map(
+              (project) =>
+                `<option value="${escapeHtml(project.id)}" ${filter.projectId === project.id ? "selected" : ""}>${escapeHtml(project.name)}</option>`,
+            )
+            .join("")}
+        </select>
+        <select data-filter-tag aria-label="Тег">
+          <option value="" ${filter.tagId === null ? "selected" : ""}>Все теги</option>
+          ${workspace.tags
+            .map(
+              (tag) => `<option value="${escapeHtml(tag.id)}" ${filter.tagId === tag.id ? "selected" : ""}>${escapeHtml(tag.name)}</option>`,
+            )
+            .join("")}
+        </select>
+        <select data-filter-priority aria-label="Приоритет">
+          <option value="" ${filter.priority === null ? "selected" : ""}>Любой приоритет</option>
+          ${priorities
+            .map(
+              (priority) =>
+                `<option value="${priority}" ${filter.priority === priority ? "selected" : ""}>${TASK_PRIORITY_LABELS[priority]}</option>`,
+            )
+            .join("")}
+        </select>
+        ${
+          this.mode === "list"
+            ? `<select data-filter-status aria-label="Статус">
+                <option value="" ${filter.status === null ? "selected" : ""}>Любой статус</option>
+                ${STATUS_ORDER.map(
+                  (status) =>
+                    `<option value="${status}" ${filter.status === status ? "selected" : ""}>${TASK_STATUS_LABELS[status]}</option>`,
+                ).join("")}
+              </select>`
+            : ""
+        }
+        <select data-filter-sort aria-label="Сортировка">
+          ${(Object.keys(TASK_SORT_LABELS) as TaskSort[])
+            .map((sort) => `<option value="${sort}" ${filter.sort === sort ? "selected" : ""}>${TASK_SORT_LABELS[sort]}</option>`)
+            .join("")}
+        </select>
+        ${
+          isTaskFilterActive(filter)
+            ? `<span class="task-filter-count">Показано: ${shownCount} из ${workspace.tasks.length}</span>
+               <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "reset-filter" } })}>Сбросить</button>`
+            : ""
+        }
+      </div>
+    `;
+  }
+
   private renderTaskDetails(totalMinutesByTask: Map<string, number>): string {
     if (!this.openedTaskId) {
       return "";
@@ -683,6 +845,7 @@ export class TasksView extends HTMLElement {
           </div>
           <div class="row-actions">
             <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-task-details" } })}>Закрыть</button>
+            <a class="button ghost small" href="#/work/tasks/${escapeHtml(task.id)}">Открыть страницу</a>
             <button ${buttonAttrs({ size: "small", data: { action: "edit-task" } })}>Редактировать</button>
             <button ${buttonAttrs({ tone: "danger", size: "small", data: { action: "delete-task" } })}>Удалить</button>
           </div>
