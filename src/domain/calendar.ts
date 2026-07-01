@@ -280,6 +280,18 @@ export function minutesIntoDay(iso: string): number {
   return date.getHours() * 60 + date.getMinutes();
 }
 
+/** Build a start/end ISO pair for a time block on `dateKey` at `minutes` into the day. */
+export function buildTimeBlock(
+  dateKey: string,
+  minutes: number,
+  durationMinutes = 60,
+): { startsAt: string; endsAt: string } {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const start = new Date(year, month - 1, day, 0, Math.max(0, minutes), 0);
+  const end = new Date(start.getTime() + Math.max(1, durationMinutes) * 60000);
+  return { startsAt: start.toISOString(), endsAt: end.toISOString() };
+}
+
 export function weekdayLabels(weekStartsOn: 1 | 7): string[] {
   const base = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
   return weekStartsOn === 7 ? [base[6], ...base.slice(0, 6)] : base;

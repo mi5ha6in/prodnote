@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildMonthMatrix,
+  buildTimeBlock,
   buildWeekDays,
   dayKey,
   groupByHorizon,
@@ -178,5 +179,19 @@ describe("itemsForDay", () => {
     }
     expect(itemsForDay([week], dayKey(new Date(2026, 5, 22)))).toHaveLength(0);
     expect(itemsForDay([week], dayKey(new Date(2026, 5, 14)))).toHaveLength(0);
+  });
+});
+
+describe("buildTimeBlock", () => {
+  it("creates a start/end pair at the given minutes with a default 60-minute duration", () => {
+    const block = buildTimeBlock("2026-07-01", 540);
+    expect(minutesIntoDay(block.startsAt)).toBe(540); // 09:00
+    expect((Date.parse(block.endsAt) - Date.parse(block.startsAt)) / 60000).toBe(60);
+  });
+
+  it("honors a custom duration", () => {
+    const block = buildTimeBlock("2026-07-01", 600, 90);
+    expect(minutesIntoDay(block.startsAt)).toBe(600);
+    expect((Date.parse(block.endsAt) - Date.parse(block.startsAt)) / 60000).toBe(90);
   });
 });
