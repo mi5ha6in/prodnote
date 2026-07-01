@@ -1,5 +1,6 @@
 import { SESSION_MODE_LABELS, TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from "../domain/defaults";
 import { escapeHtml, renderMarkdown } from "../domain/markdown";
+import { presetToRule, RECURRENCE_PRESET_LABELS, type RecurrencePreset, ruleToPreset } from "../domain/recurrence";
 import { formatDuration } from "../domain/stats";
 import type { Note, Task, TaskStatus, TimeSession, Workspace } from "../domain/types";
 import { requestTimerNotificationPermission } from "../platform/notifications";
@@ -288,6 +289,17 @@ export class TaskDetailView extends HTMLElement {
             })}
           </div>
           ${fieldHtml({ label: "Дедлайн", control: `<input name="dueDate" type="date" value="${escapeHtml(task.dueDate ?? "")}" />` })}
+          ${fieldHtml({
+            label: "Повтор (от дедлайна)",
+            control: `<select name="recurrence">
+              ${(Object.keys(RECURRENCE_PRESET_LABELS) as RecurrencePreset[])
+                .map(
+                  (preset) =>
+                    `<option value="${preset}" ${ruleToPreset(task.recurrence) === preset ? "selected" : ""}>${RECURRENCE_PRESET_LABELS[preset]}</option>`,
+                )
+                .join("")}
+            </select>`,
+          })}
           <fieldset class="tag-fieldset">
             <legend>Теги</legend>
             ${
@@ -362,6 +374,7 @@ export class TaskDetailView extends HTMLElement {
           dueDate: requireInput(form, "dueDate").value || null,
           priority: requireSelect(form, "priority").value as Task["priority"],
           tagIds,
+          recurrence: presetToRule(requireSelect(form, "recurrence").value as RecurrencePreset),
         })
         .then(() => {
           this.editing = false;

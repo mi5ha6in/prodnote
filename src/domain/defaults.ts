@@ -14,6 +14,7 @@ import {
   type Task,
   type Workspace,
 } from "./types";
+import type { RecurrenceRule } from "./recurrence";
 
 export const TASK_STATUS_LABELS = {
   backlog: "Бэклог",
@@ -123,6 +124,7 @@ export function createTask(input: {
   dueDate?: string | null;
   priority?: Task["priority"];
   tagIds?: string[];
+  recurrence?: RecurrenceRule | null;
 }): Task {
   const createdAt = nowIso();
 
@@ -142,7 +144,25 @@ export function createTask(input: {
     createdAt,
     updatedAt: createdAt,
     completedAt: null,
+    recurrence: input.recurrence ?? null,
+    recurrenceParentId: null,
   };
+}
+
+/** Build the next occurrence of a recurring task: fresh id/history, reset subtasks, shared series id. */
+export function createRecurringTaskInstance(source: Task, dueDate: string): Task {
+  const instance = createTask({
+    title: source.title,
+    description: source.description,
+    projectId: source.projectId,
+    dueDate,
+    priority: source.priority,
+    tagIds: [...source.tagIds],
+    recurrence: source.recurrence,
+  });
+  instance.recurrenceParentId = source.recurrenceParentId ?? source.id;
+  instance.subtasks = source.subtasks.map((subtask) => ({ id: createId("subtask"), title: subtask.title, done: false }));
+  return instance;
 }
 
 export function createChecklistItem(input: {
