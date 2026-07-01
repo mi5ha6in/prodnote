@@ -2,6 +2,12 @@ import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from "../domain/defaults";
 import { escapeHtml, renderMarkdown } from "../domain/markdown";
 import { formatDuration } from "../domain/stats";
 import {
+  presetToRule,
+  RECURRENCE_PRESET_LABELS,
+  type RecurrencePreset,
+  ruleToPreset,
+} from "../domain/recurrence";
+import {
   DEFAULT_TASK_FILTER,
   filterAndSortTasks,
   isTaskFilterActive,
@@ -348,6 +354,7 @@ export class TasksView extends HTMLElement {
         dueDate: requireInput(form, "dueDate").value || null,
         priority: requireSelect(form, "priority").value as Task["priority"],
         tagIds,
+        recurrence: presetToRule(requireSelect(form, "recurrence").value as RecurrencePreset),
       });
       form.reset();
       this.creating = false;
@@ -557,6 +564,7 @@ export class TasksView extends HTMLElement {
           dueDate: requireInput(form, "dueDate").value || null,
           priority: requireSelect(form, "priority").value as Task["priority"],
           tagIds,
+          recurrence: presetToRule(requireSelect(form, "recurrence").value as RecurrencePreset),
         })
         .then(() => {
           this.openedTaskId = taskId;
@@ -717,6 +725,14 @@ export class TasksView extends HTMLElement {
           ${fieldHtml({
             label: "Дедлайн",
             control: `<input name="dueDate" type="date" />`,
+          })}
+          ${fieldHtml({
+            label: "Повтор (от дедлайна)",
+            control: `<select name="recurrence">
+              ${(Object.keys(RECURRENCE_PRESET_LABELS) as RecurrencePreset[])
+                .map((preset) => `<option value="${preset}">${RECURRENCE_PRESET_LABELS[preset]}</option>`)
+                .join("")}
+            </select>`,
           })}
           <fieldset class="tag-fieldset">
             <legend>Теги</legend>
@@ -1034,6 +1050,17 @@ export class TasksView extends HTMLElement {
         ${fieldHtml({
           label: "Дедлайн",
           control: `<input name="dueDate" type="date" value="${escapeHtml(task.dueDate ?? "")}" />`,
+        })}
+        ${fieldHtml({
+          label: "Повтор (от дедлайна)",
+          control: `<select name="recurrence">
+            ${(Object.keys(RECURRENCE_PRESET_LABELS) as RecurrencePreset[])
+              .map(
+                (preset) =>
+                  `<option value="${preset}" ${ruleToPreset(task.recurrence) === preset ? "selected" : ""}>${RECURRENCE_PRESET_LABELS[preset]}</option>`,
+              )
+              .join("")}
+          </select>`,
         })}
         <fieldset class="tag-fieldset">
           <legend>Теги</legend>

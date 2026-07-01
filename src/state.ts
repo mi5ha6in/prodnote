@@ -7,11 +7,13 @@ import {
   createId,
   createNote,
   createProject,
+  createRecurringTaskInstance,
   createStarterWorkspace,
   createTag,
   createTask,
   nowIso,
 } from "./domain/defaults";
+import { nextRecurrenceDate, type RecurrenceRule } from "./domain/recurrence";
 import {
   getActiveTimerDurationMinutes,
   getActiveTimerEndedAtIso,
@@ -218,6 +220,7 @@ export class ProdNoteStore {
     dueDate?: string | null;
     priority?: TaskPriority;
     tagIds?: string[];
+    recurrence?: RecurrenceRule | null;
   }): Promise<Task> {
     const task = createTask(input);
     await this.commit((workspace) => {
@@ -595,6 +598,7 @@ export class ProdNoteStore {
     dueDate?: string | null;
     priority: TaskPriority;
     tagIds?: EntityId[];
+    recurrence?: RecurrenceRule | null;
   }): Promise<void> {
     await this.commit((workspace) => {
       const task = workspace.tasks.find((item) => item.id === input.taskId);
@@ -608,6 +612,9 @@ export class ProdNoteStore {
       task.dueDate = input.dueDate ?? null;
       task.priority = input.priority;
       task.tagIds = input.tagIds ?? [];
+      if (input.recurrence !== undefined) {
+        task.recurrence = input.recurrence;
+      }
       task.updatedAt = nowIso();
     });
   }
@@ -622,6 +629,20 @@ export class ProdNoteStore {
       task.status = status;
       task.updatedAt = nowIso();
       task.completedAt = status === "done" ? nowIso() : null;
+
+      // Completing a recurring task with a deadline spawns the next occurrence.
+      if (status === "done" && task.recurrence && task.dueDate) {
+        const nextDue = nextRecurrenceDate(task.dueDate, task.recurrence);
+        if (nextDue) {
+          const familyId = task.recurrenceParentId ?? task.id;
+          const alreadyExists = workspace.tasks.some(
+            (item) => (item.recurrenceParentId ?? item.id) === familyId && item.dueDate === nextDue,
+          );
+          if (!alreadyExists) {
+            workspace.tasks.unshift(createRecurringTaskInstance(task, nextDue));
+          }
+        }
+      }
     });
   }
 

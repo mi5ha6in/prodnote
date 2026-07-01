@@ -125,6 +125,8 @@ export async function getSyncedWorkspace(userId: string): Promise<SyncedWorkspac
         createdAt: toIso(task.created_at),
         updatedAt: toIso(task.updated_at),
         completedAt: task.completed_at ? toIso(task.completed_at) : null,
+        recurrence: parseRecurrence(task.recurrence),
+        recurrenceParentId: asNullableString(task.recurrence_parent_id),
       })),
       notes: notes.map((note) => ({
         id: asString(note.entity_id),
@@ -277,17 +279,20 @@ export async function putSyncedWorkspace(
       await transaction`
         insert into tasks (
           workspace_id, entity_id, title, description, project_id, status, priority, due_date, planned_at,
-          estimate_minutes, created_at, updated_at, completed_at, client_updated_at, server_revision, deleted_at
+          estimate_minutes, recurrence, recurrence_parent_id, created_at, updated_at, completed_at,
+          client_updated_at, server_revision, deleted_at
         )
         values (
           ${workspaceId}, ${task.id}, ${task.title}, ${task.description}, ${task.projectId}, ${task.status}, ${task.priority},
-          ${task.dueDate}, ${task.plannedAt}, ${task.estimateMinutes}, ${toSqlTimestamp(task.createdAt)}, ${toSqlTimestamp(task.updatedAt)},
+          ${task.dueDate}, ${task.plannedAt}, ${task.estimateMinutes}, ${task.recurrence ? JSON.stringify(task.recurrence) : null},
+          ${task.recurrenceParentId}, ${toSqlTimestamp(task.createdAt)}, ${toSqlTimestamp(task.updatedAt)},
           ${toSqlTimestamp(task.completedAt)}, ${toSqlTimestamp(task.updatedAt)}, ${nextRevision}, null
         )
         on conflict (workspace_id, entity_id) do update
         set title = excluded.title, description = excluded.description, project_id = excluded.project_id, status = excluded.status,
           priority = excluded.priority, due_date = excluded.due_date, planned_at = excluded.planned_at,
-          estimate_minutes = excluded.estimate_minutes, created_at = excluded.created_at, updated_at = excluded.updated_at,
+          estimate_minutes = excluded.estimate_minutes, recurrence = excluded.recurrence,
+          recurrence_parent_id = excluded.recurrence_parent_id, created_at = excluded.created_at, updated_at = excluded.updated_at,
           completed_at = excluded.completed_at, client_updated_at = excluded.client_updated_at,
           server_revision = excluded.server_revision, deleted_at = null
         where tasks.client_updated_at < excluded.client_updated_at or tasks.deleted_at is not null
@@ -577,6 +582,21 @@ function asNullableString(value: unknown): string | null {
 
 function asNullableNumber(value: unknown): number | null {
   return value === null || typeof value === "undefined" ? null : Number(value);
+}
+
+/** Recurrence is stored as a JSON text column; tolerate null and legacy rows. */
+function parseRecurrence(value: unknown): Workspace["tasks"][number]["recurrence"] {
+  if (value === null || typeof value === "undefined") {
+    return null;
+  }
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value) as Workspace["tasks"][number]["recurrence"];
+    } catch {
+      return null;
+    }
+  }
+  return value as Workspace["tasks"][number]["recurrence"];
 }
 
 function toIso(value: unknown): string {

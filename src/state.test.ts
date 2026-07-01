@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { dayKey } from "./domain/calendar";
+import { presetToRule } from "./domain/recurrence";
 import { ProdNoteStore } from "./state";
 
 describe("ProdNoteStore", () => {
@@ -302,5 +303,46 @@ describe("ProdNoteStore", () => {
     await store.deleteNote(note.id);
 
     expect(store.getWorkspace().notes.some((item) => item.id === note.id)).toBe(false);
+  });
+
+  it("spawns the next occurrence when a recurring task with a deadline is completed", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+
+    const task = await store.addTask({
+      title: "Полить цветы",
+      dueDate: "2026-07-01",
+      recurrence: presetToRule("daily"),
+    });
+    await store.addSubtask(task.id, "Взять лейку");
+
+    const before = store.getWorkspace().tasks.length;
+    await store.updateTaskStatus(task.id, "done");
+
+    const next = store.getWorkspace().tasks.find((item) => item.id !== task.id && item.recurrenceParentId === task.id);
+    expect(store.getWorkspace().tasks.length).toBe(before + 1);
+    expect(next?.dueDate).toBe("2026-07-02");
+    expect(next?.status).toBe("backlog");
+    expect(next?.recurrence).not.toBeNull();
+    expect(next?.subtasks).toHaveLength(1);
+    expect(next?.subtasks[0]?.done).toBe(false);
+
+    // Completing again must not duplicate the next occurrence.
+    await store.updateTaskStatus(task.id, "done");
+    expect(store.getWorkspace().tasks.length).toBe(before + 1);
+  });
+
+  it("does not spawn a next occurrence without both recurrence and a deadline", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+
+    const noRule = await store.addTask({ title: "Обычная", dueDate: "2026-07-01" });
+    const noDue = await store.addTask({ title: "Без дедлайна", recurrence: presetToRule("daily") });
+    const before = store.getWorkspace().tasks.length;
+
+    await store.updateTaskStatus(noRule.id, "done");
+    await store.updateTaskStatus(noDue.id, "done");
+
+    expect(store.getWorkspace().tasks.length).toBe(before);
   });
 });

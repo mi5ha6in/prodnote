@@ -113,3 +113,96 @@ function monthDiff(baseMidnight: number, date: Date): number {
   const start = new Date(baseMidnight);
   return (date.getFullYear() - start.getFullYear()) * 12 + (date.getMonth() - start.getMonth());
 }
+
+/**
+ * Next recurrence date as `YYYY-MM-DD` strictly after `fromDate`, or null once the
+ * rule has ended (past `untilMs`). Operates on date-only strings — used for task
+ * deadlines that recur when a task is completed.
+ */
+export function nextRecurrenceDate(fromDate: string, rule: RecurrenceRule): string | null {
+  const [year, month, day] = fromDate.split("-").map(Number);
+  if (!year || !month || !day) {
+    return null;
+  }
+
+  const start = new Date(year, month - 1, day);
+  const base = {
+    midnight: start.getTime(),
+    weekday: start.getDay(),
+    day: start.getDate(),
+    month: start.getMonth(),
+  };
+  const interval = Math.max(1, rule.interval);
+  const cursor = new Date(year, month - 1, day);
+
+  for (let safety = 0; safety < 800; safety += 1) {
+    cursor.setDate(cursor.getDate() + 1);
+    if (matchesFrequency(rule.freq, interval, rule.byDay, cursor, base)) {
+      if (rule.untilMs !== null && cursor.getTime() > rule.untilMs) {
+        return null;
+      }
+      return formatDateKey(cursor);
+    }
+  }
+
+  return null;
+}
+
+function formatDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/** UI-facing recurrence presets that map to a subset of RecurrenceRule. */
+export type RecurrencePreset = "none" | "daily" | "weekdays" | "weekly" | "monthly" | "yearly";
+
+export const RECURRENCE_PRESET_LABELS: Record<RecurrencePreset, string> = {
+  none: "Не повторять",
+  daily: "Ежедневно",
+  weekdays: "По будням",
+  weekly: "Еженедельно",
+  monthly: "Ежемесячно",
+  yearly: "Ежегодно",
+};
+
+const WEEKDAYS = [1, 2, 3, 4, 5];
+
+export function presetToRule(preset: RecurrencePreset): RecurrenceRule | null {
+  switch (preset) {
+    case "daily":
+      return { freq: "DAILY", interval: 1, count: null, untilMs: null, byDay: [] };
+    case "weekdays":
+      return { freq: "WEEKLY", interval: 1, count: null, untilMs: null, byDay: [...WEEKDAYS] };
+    case "weekly":
+      return { freq: "WEEKLY", interval: 1, count: null, untilMs: null, byDay: [] };
+    case "monthly":
+      return { freq: "MONTHLY", interval: 1, count: null, untilMs: null, byDay: [] };
+    case "yearly":
+      return { freq: "YEARLY", interval: 1, count: null, untilMs: null, byDay: [] };
+    case "none":
+    default:
+      return null;
+  }
+}
+
+export function ruleToPreset(rule: RecurrenceRule | null): RecurrencePreset {
+  if (!rule) {
+    return "none";
+  }
+  switch (rule.freq) {
+    case "DAILY":
+      return "daily";
+    case "WEEKLY":
+      return rule.byDay.length === WEEKDAYS.length && WEEKDAYS.every((day) => rule.byDay.includes(day))
+        ? "weekdays"
+        : "weekly";
+    case "MONTHLY":
+      return "monthly";
+    case "YEARLY":
+      return "yearly";
+    default:
+      return "none";
+  }
+}

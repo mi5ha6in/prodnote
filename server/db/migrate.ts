@@ -286,5 +286,11 @@ export async function runMigrations(): Promise<void> {
 
     alter table if exists calendar_events
       add column if not exists project_id text;
+
+    alter table if exists tasks
+      add column if not exists recurrence text;
+
+    alter table if exists tasks
+      add column if not exists recurrence_parent_id text;
   `);
 }
