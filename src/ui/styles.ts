@@ -369,6 +369,7 @@ export const sharedStyles = `
   }
 
   .form-grid {
+    align-content: start;
     display: grid;
     gap: var(--space-4);
     min-width: 0;
