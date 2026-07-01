@@ -7,6 +7,7 @@ import {
   type RecurrencePreset,
   ruleToPreset,
 } from "../domain/recurrence";
+import { parseQuickAdd } from "../domain/quick-add";
 import {
   DEFAULT_TASK_FILTER,
   filterAndSortTasks,
@@ -43,6 +44,7 @@ export class TasksView extends HTMLElement {
   private draggingTaskId: string | null = null;
   private filter: TaskFilterCriteria = { ...DEFAULT_TASK_FILTER };
   private focusSearch = false;
+  private captureFocus = false;
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
@@ -82,6 +84,8 @@ export class TasksView extends HTMLElement {
               <button ${buttonAttrs({ data: { action: "open-create" } })}>+ Новая задача</button>
             `,
           })}
+
+          ${this.renderQuickCapture()}
 
           ${metricBarHtml([
             { label: "Всего задач", value: workspace.tasks.length, hint: "Включая завершённые" },
@@ -293,6 +297,15 @@ export class TasksView extends HTMLElement {
           font-variant-numeric: tabular-nums;
         }
 
+        .quick-capture {
+          display: flex;
+          gap: var(--space-2);
+        }
+
+        .quick-capture input {
+          flex: 1;
+        }
+
         .task-filter {
           align-items: center;
           background: var(--surface);
@@ -435,6 +448,32 @@ export class TasksView extends HTMLElement {
       searchInput.focus();
       searchInput.setSelectionRange(caret, caret);
       this.focusSearch = false;
+    }
+
+    const captureForm = root.querySelector<HTMLFormElement>("[data-quick-capture]");
+    captureForm?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const input = requireInput(captureForm, "capture");
+      const value = input.value.trim();
+      if (!value) {
+        return;
+      }
+
+      const parsed = parseQuickAdd(value, { projects: workspace.projects, tags: workspace.tags });
+      this.captureFocus = true;
+      void appStore.addTask({
+        title: parsed.title || value,
+        dueDate: parsed.dueDate,
+        priority: parsed.priority ?? undefined,
+        projectId: parsed.projectId,
+        tagIds: parsed.tagIds,
+      });
+    });
+
+    // Keep focus on the capture field after the task is added and the view re-renders.
+    if (this.captureFocus) {
+      captureForm?.querySelector<HTMLInputElement>('input[name="capture"]')?.focus();
+      this.captureFocus = false;
     }
 
     root.querySelectorAll<HTMLElement>("[data-open-task]").forEach((card) => {
@@ -755,6 +794,21 @@ export class TasksView extends HTMLElement {
         </form>
       `,
     });
+  }
+
+  private renderQuickCapture(): string {
+    return `
+      <form class="quick-capture" data-quick-capture>
+        <input
+          name="capture"
+          type="text"
+          autocomplete="off"
+          placeholder="Быстрый ввод: Купить молоко завтра #дом !высокий"
+          aria-label="Быстрое добавление задачи"
+        />
+        <button ${buttonAttrs({ type: "submit", size: "small" })}>Добавить</button>
+      </form>
+    `;
   }
 
   private renderFilterBar(workspace: ReturnType<typeof appStore.getWorkspace>, shownCount: number): string {
