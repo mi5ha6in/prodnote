@@ -12,15 +12,17 @@ import {
   DEFAULT_TASK_FILTER,
   filterAndSortTasks,
   isTaskFilterActive,
+  TASK_SMART_LIST_LABELS,
   TASK_SORT_LABELS,
   type TaskFilterCriteria,
+  type TaskSmartList,
   type TaskSort,
 } from "../domain/task-filter";
 import type { Task, TaskPriority, TaskStatus } from "../domain/types";
 import { requestTimerNotificationPermission } from "../platform/notifications";
 import { appStore } from "../state";
 import { confirmDestructive } from "../ui/actions";
-import { badgeHtml, buttonAttrs, emptyStateHtml, fieldHtml, metricBarHtml, modalHtml, viewHeaderHtml } from "../ui/html";
+import { badgeHtml, buttonAttrs, emptyStateHtml, fieldHtml, modalHtml, viewHeaderHtml } from "../ui/html";
 import { setBodyScrollLock, wireModal } from "./modal";
 import { renderShadow } from "./shadow";
 import {
@@ -48,17 +50,45 @@ export class TasksView extends HTMLElement {
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
+    document.addEventListener("keydown", this.onHotkey);
     this.render();
   }
 
   disconnectedCallback(): void {
     this.unsubscribe?.();
+    document.removeEventListener("keydown", this.onHotkey);
     setBodyScrollLock(false);
   }
 
+  /** n — новая задача, / — поиск. Не срабатывает, когда фокус в поле ввода или открыта модалка. */
+  private onHotkey = (event: KeyboardEvent): void => {
+    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) {
+      return;
+    }
+    const target = event.composedPath()[0];
+    if (
+      target instanceof HTMLElement &&
+      (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+    ) {
+      return;
+    }
+    if (this.creating || this.openedTaskId !== null) {
+      return;
+    }
+
+    if (event.key === "n" || event.key === "т") {
+      event.preventDefault();
+      this.creating = true;
+      this.render();
+    } else if (event.key === "/") {
+      event.preventDefault();
+      this.focusSearch = true;
+      this.render();
+    }
+  };
+
   private render(): void {
     const workspace = appStore.getWorkspace();
-    const activeTasks = workspace.tasks.filter((task) => task.status !== "done").length;
     const totalMinutesByTask = new Map<string, number>();
     for (const session of workspace.sessions) {
       totalMinutesByTask.set(session.taskId, (totalMinutesByTask.get(session.taskId) ?? 0) + session.durationMinutes);
@@ -86,16 +116,6 @@ export class TasksView extends HTMLElement {
           })}
 
           ${this.renderQuickCapture()}
-
-          ${metricBarHtml([
-            { label: "Всего задач", value: workspace.tasks.length, hint: "Включая завершённые" },
-            { label: "Активный поток", value: activeTasks, hint: "Требуют внимания" },
-            {
-              label: "Записей в журнале",
-              value: workspace.tasks.reduce((sum, task) => sum + task.history.length, 0),
-              hint: "Прогресс и решения",
-            },
-          ])}
 
           ${this.renderFilterBar(workspace, visibleTasks.length)}
 
@@ -402,6 +422,13 @@ export class TasksView extends HTMLElement {
     root.querySelectorAll<HTMLButtonElement>("[data-mode]").forEach((button) => {
       button.addEventListener("click", () => {
         this.mode = button.dataset.mode === "list" ? "list" : "kanban";
+        this.render();
+      });
+    });
+
+    root.querySelectorAll<HTMLButtonElement>("[data-smart]").forEach((button) => {
+      button.addEventListener("click", () => {
+        this.filter = { ...this.filter, smartList: (button.dataset.smart || null) as TaskSmartList | null };
         this.render();
       });
     });
@@ -823,6 +850,15 @@ export class TasksView extends HTMLElement {
 
     return `
       <div class="task-filter" role="group" aria-label="Фильтры задач">
+        <div class="segmented" role="group" aria-label="Умные списки">
+          <button type="button" data-smart="" aria-pressed="${filter.smartList === null}">Все</button>
+          ${(Object.keys(TASK_SMART_LIST_LABELS) as TaskSmartList[])
+            .map(
+              (list) =>
+                `<button type="button" data-smart="${list}" aria-pressed="${filter.smartList === list}">${TASK_SMART_LIST_LABELS[list]}</button>`,
+            )
+            .join("")}
+        </div>
         <input
           data-filter-search
           type="search"
