@@ -547,6 +547,54 @@ export const sharedStyles = `
     padding-left: var(--space-3);
   }
 
+  .markdown-preview ol {
+    margin: 0 0 0.65rem;
+  }
+
+  .markdown-preview pre {
+    background: var(--paper-strong);
+    border-radius: var(--radius-md);
+    margin: 0 0 0.65rem;
+    overflow-x: auto;
+    padding: var(--space-3);
+  }
+
+  .markdown-preview pre code {
+    background: none;
+    font-size: 0.85em;
+    padding: 0;
+  }
+
+  .markdown-preview table {
+    border-collapse: collapse;
+    display: block;
+    margin: 0 0 0.65rem;
+    overflow-x: auto;
+  }
+
+  .markdown-preview th,
+  .markdown-preview td {
+    border: 1px solid var(--line-strong);
+    padding: 0.3rem var(--space-3);
+    text-align: left;
+  }
+
+  .markdown-preview th {
+    background: var(--surface);
+  }
+
+  .markdown-preview .task-item {
+    align-items: baseline;
+    display: flex;
+    gap: 0.35rem;
+    list-style: none;
+    margin-left: -1.1rem;
+  }
+
+  .markdown-preview .task-item input {
+    width: auto;
+  }
+
   @keyframes view-in {
     from {
       opacity: 0;

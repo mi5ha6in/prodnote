@@ -51,6 +51,14 @@ describe("workspace migrations", () => {
     expect(migrated.tasks[0]?.subtasks).toEqual([]);
   });
 
+  it("defaults recurrence fields on legacy tasks", () => {
+    const workspace = createStarterWorkspace();
+    const { recurrence: _r, recurrenceParentId: _p, ...legacyTask } = createTask({ title: "Legacy recurrence" });
+    const migrated = migrateWorkspace({ ...workspace, schemaVersion: 11, tasks: [legacyTask as never] });
+    expect(migrated.tasks[0]?.recurrence).toBeNull();
+    expect(migrated.tasks[0]?.recurrenceParentId).toBeNull();
+  });
+
   it("caps legacy overdue pomodoro sessions to configured focus duration", () => {
     const workspace = createStarterWorkspace();
     const cycle = {

@@ -1,5 +1,6 @@
 import { dayKey } from "../domain/calendar";
 import { escapeHtml } from "../domain/markdown";
+import { parseQuickAdd } from "../domain/quick-add";
 import { searchAll } from "../domain/search";
 import { appStore } from "../state";
 import { setBodyScrollLock } from "./modal";
@@ -13,18 +14,18 @@ interface PaletteItem {
 }
 
 const NAV_ITEMS: PaletteItem[] = [
-  { label: "Перейти: Обзор", sub: "Навигация", hash: "#/dashboard" },
-  { label: "Перейти: Сегодня", sub: "Навигация", hash: "#/today" },
-  { label: "Перейти: Привычки", sub: "Навигация", hash: "#/habits" },
-  { label: "Перейти: Задачи", sub: "Навигация", hash: "#/tasks" },
-  { label: "Перейти: Заметки", sub: "Навигация", hash: "#/notes" },
-  { label: "Перейти: Календарь", sub: "Навигация", hash: "#/calendar" },
-  { label: "Перейти: Фокус", sub: "Навигация", hash: "#/focus" },
-  { label: "Перейти: Статистика", sub: "Навигация", hash: "#/stats" },
-  { label: "Перейти: Ревью", sub: "Навигация", hash: "#/review" },
-  { label: "Перейти: Настройки", sub: "Навигация", hash: "#/settings" },
-  { label: "Создать: Событие", sub: "Действие", hash: "#/calendar" },
-  { label: "Начать фокус", sub: "Действие", hash: "#/focus" },
+  { label: "Перейти: Обзор", sub: "Навигация", hash: "#/planner/overview" },
+  { label: "Перейти: Сегодня", sub: "Навигация", hash: "#/planner/today" },
+  { label: "Перейти: Привычки", sub: "Навигация", hash: "#/planner/habits" },
+  { label: "Перейти: Задачи", sub: "Навигация", hash: "#/work/tasks" },
+  { label: "Перейти: Заметки", sub: "Навигация", hash: "#/notes/notes" },
+  { label: "Перейти: Календарь", sub: "Навигация", hash: "#/planner/calendar" },
+  { label: "Перейти: Фокус", sub: "Навигация", hash: "#/work/focus" },
+  { label: "Перейти: Статистика", sub: "Навигация", hash: "#/analytics/stats" },
+  { label: "Перейти: Ревью", sub: "Навигация", hash: "#/analytics/review" },
+  { label: "Перейти: Настройки", sub: "Навигация", hash: "#/settings/settings" },
+  { label: "Создать: Событие", sub: "Действие", hash: "#/planner/calendar" },
+  { label: "Начать фокус", sub: "Действие", hash: "#/work/focus" },
 ];
 
 export class CommandPalette extends HTMLElement {
@@ -84,34 +85,44 @@ export class CommandPalette extends HTMLElement {
 
   /** Query-driven quick creation: turn whatever was typed into a new entity. */
   private createActions(): PaletteItem[] {
-    const title = this.query.trim();
-    if (!title) {
+    const raw = this.query.trim();
+    if (!raw) {
       return [];
     }
 
+    const workspace = appStore.getWorkspace();
+    const parsed = parseQuickAdd(raw, { projects: workspace.projects, tags: workspace.tags });
+    const taskTitle = parsed.title || raw;
+
     return [
       {
-        label: `Создать задачу: «${title}»`,
+        label: `Создать задачу: «${taskTitle}»`,
         sub: "Создание",
         run: async () => {
-          await appStore.addTask({ title });
-          this.go("#/tasks");
+          await appStore.addTask({
+            title: taskTitle,
+            dueDate: parsed.dueDate,
+            priority: parsed.priority ?? undefined,
+            projectId: parsed.projectId,
+            tagIds: parsed.tagIds,
+          });
+          this.go("#/work/tasks");
         },
       },
       {
-        label: `Создать пункт дня: «${title}»`,
+        label: `Создать пункт дня: «${raw}»`,
         sub: "Создание",
         run: async () => {
-          await appStore.addChecklistItem({ title, day: dayKey(new Date()) });
-          this.go("#/today");
+          await appStore.addChecklistItem({ title: raw, day: dayKey(new Date()) });
+          this.go("#/planner/today");
         },
       },
       {
-        label: `Создать заметку: «${title}»`,
+        label: `Создать заметку: «${raw}»`,
         sub: "Создание",
         run: async () => {
-          await appStore.addNote({ title, markdown: "" });
-          this.go("#/notes");
+          await appStore.addNote({ title: raw, markdown: "" });
+          this.go("#/notes/notes");
         },
       },
     ];

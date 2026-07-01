@@ -8,6 +8,7 @@ import "./components/dashboard-view";
 import "./components/today-view";
 import "./components/habits-view";
 import "./components/tasks-view";
+import "./components/task-detail-view";
 import "./components/notes-view";
 import "./components/calendar-view";
 import "./components/focus-view";

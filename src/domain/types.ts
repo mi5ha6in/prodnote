@@ -1,4 +1,6 @@
-export const SCHEMA_VERSION = 11;
+import type { RecurrenceRule } from "./recurrence";
+
+export const SCHEMA_VERSION = 12;
 
 export type EntityId = string;
 
@@ -55,6 +57,10 @@ export interface Task {
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
+  /** Recurrence rule; when set and the task has a dueDate, completing it spawns the next instance. */
+  recurrence: RecurrenceRule | null;
+  /** Root task id shared by all instances of a recurring series. */
+  recurrenceParentId: EntityId | null;
 }
 
 export interface ChecklistItem {

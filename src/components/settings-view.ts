@@ -22,7 +22,7 @@ import {
   subscribeSync,
 } from "../sync/client";
 import { confirmDestructive } from "../ui/actions";
-import { badgeHtml, buttonAttrs, fieldHtml, modalHtml } from "../ui/html";
+import { badgeHtml, buttonAttrs, emptyStateHtml, fieldHtml, modalHtml } from "../ui/html";
 import { setBodyScrollLock, wireModal } from "./modal";
 import { renderShadow } from "./shadow";
 import { requireInput, requireSelect, requireTextArea } from "./view-utils";
@@ -31,6 +31,7 @@ export class SettingsView extends HTMLElement {
   private unsubscribe: (() => void) | null = null;
   private syncUnsubscribe: (() => void) | null = null;
   private creating: "project" | "tag" | null = null;
+  private editing: { type: "project" | "tag"; id: string } | null = null;
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
@@ -105,6 +106,77 @@ export class SettingsView extends HTMLElement {
     return "";
   }
 
+  private renderEditModal(workspace: ReturnType<typeof appStore.getWorkspace>): string {
+    const editing = this.editing;
+    if (!editing) {
+      return "";
+    }
+
+    if (editing.type === "project") {
+      const project = workspace.projects.find((item) => item.id === editing.id);
+      if (!project) {
+        return "";
+      }
+
+      return modalHtml({
+        label: "Редактирование проекта",
+        body: `
+          <form class="form-grid" data-form="edit-project">
+            <div class="card-header" style="margin-bottom: 0;">
+              <div>
+                <p class="eyebrow">Проекты</p>
+                <h2>Редактирование проекта</h2>
+              </div>
+              <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-edit" } })}>Закрыть</button>
+            </div>
+            ${fieldHtml({
+              label: "Название",
+              control: `<input name="name" required value="${escapeHtml(project.name)}" />`,
+            })}
+            ${fieldHtml({
+              label: "Цвет",
+              control: `<input name="color" type="color" value="${escapeHtml(project.color)}" />`,
+            })}
+            ${fieldHtml({
+              label: "Описание",
+              control: `<textarea name="description" placeholder="Для чего этот проект">${escapeHtml(project.description)}</textarea>`,
+            })}
+            <button ${buttonAttrs({ type: "submit" })}>Сохранить проект</button>
+          </form>
+        `,
+      });
+    }
+
+    const tag = workspace.tags.find((item) => item.id === editing.id);
+    if (!tag) {
+      return "";
+    }
+
+    return modalHtml({
+      label: "Редактирование тега",
+      body: `
+        <form class="form-grid" data-form="edit-tag">
+          <div class="card-header" style="margin-bottom: 0;">
+            <div>
+              <p class="eyebrow">Теги</p>
+              <h2>Редактирование тега</h2>
+            </div>
+            <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-edit" } })}>Закрыть</button>
+          </div>
+          ${fieldHtml({
+            label: "Название",
+            control: `<input name="name" required value="${escapeHtml(tag.name)}" />`,
+          })}
+          ${fieldHtml({
+            label: "Цвет",
+            control: `<input name="color" type="color" value="${escapeHtml(tag.color)}" />`,
+          })}
+          <button ${buttonAttrs({ type: "submit" })}>Сохранить тег</button>
+        </form>
+      `,
+    });
+  }
+
   private render(): void {
     const workspace = appStore.getWorkspace();
     const settings = workspace.settings;
@@ -119,6 +191,7 @@ export class SettingsView extends HTMLElement {
       `
         <section class="view-grid">
           ${this.renderCreateModal()}
+          ${this.renderEditModal(workspace)}
 
           <article class="card form-grid">
             <div>
@@ -293,7 +366,10 @@ export class SettingsView extends HTMLElement {
                             </div>
                             <p class="muted">${taskCount} задач, ${noteCount} заметок</p>
                           </div>
-                          <button ${buttonAttrs({ tone: "danger", size: "small", data: { deleteProject: project.id } })}>Удалить</button>
+                          <div class="row-actions">
+                            <button ${buttonAttrs({ tone: "ghost", size: "small", data: { editProject: project.id } })}>Изменить</button>
+                            <button ${buttonAttrs({ tone: "danger", size: "small", data: { deleteProject: project.id } })}>Удалить</button>
+                          </div>
                         </div>
                         ${project.description ? `<p class="muted">${escapeHtml(project.description)}</p>` : ""}
                       </div>
@@ -315,13 +391,36 @@ export class SettingsView extends HTMLElement {
                   <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "open-tag" } })}>+ Добавить</button>
                 </div>
               </div>
-              <div class="tag-cloud">
-                ${workspace.tags
-                  .map(
-                    (tag) =>
-                      `<span class="tag-pill" style="--tag-color: ${escapeHtml(tag.color)}">${escapeHtml(tag.name)}</span>`,
-                  )
-                  .join("")}
+              <div class="item-list">
+                ${
+                  workspace.tags.length
+                    ? workspace.tags
+                        .map((tag) => {
+                          const usage =
+                            workspace.tasks.filter((task) => task.tagIds.includes(tag.id)).length +
+                            workspace.notes.filter((note) => note.tagIds.includes(tag.id)).length;
+
+                          return `
+                        <div class="list-item">
+                          <div class="project-row">
+                            <div>
+                              <div class="meta-row">
+                                <span class="color-dot" style="--project-color: ${escapeHtml(tag.color)}"></span>
+                                <strong>${escapeHtml(tag.name)}</strong>
+                              </div>
+                              <p class="muted">Используется: ${usage}</p>
+                            </div>
+                            <div class="row-actions">
+                              <button ${buttonAttrs({ tone: "ghost", size: "small", data: { editTag: tag.id } })}>Изменить</button>
+                              <button ${buttonAttrs({ tone: "danger", size: "small", data: { deleteTag: tag.id } })}>Удалить</button>
+                            </div>
+                          </div>
+                        </div>
+                      `;
+                        })
+                        .join("")
+                    : emptyStateHtml("Тегов пока нет.")
+                }
               </div>
             </article>
           </div>
@@ -435,12 +534,47 @@ export class SettingsView extends HTMLElement {
       this.render();
     });
 
+    root.querySelector<HTMLFormElement>('[data-form="edit-project"]')?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!(form instanceof HTMLFormElement) || this.editing?.type !== "project") {
+        return;
+      }
+
+      void appStore.updateProject({
+        projectId: this.editing.id,
+        name: requireInput(form, "name").value,
+        color: requireInput(form, "color").value,
+        description: requireTextArea(form, "description").value,
+      });
+      this.editing = null;
+      this.render();
+    });
+
+    root.querySelector<HTMLFormElement>('[data-form="edit-tag"]')?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!(form instanceof HTMLFormElement) || this.editing?.type !== "tag") {
+        return;
+      }
+
+      void appStore.updateTag({
+        tagId: this.editing.id,
+        name: requireInput(form, "name").value,
+        color: requireInput(form, "color").value,
+      });
+      this.editing = null;
+      this.render();
+    });
+
     root.querySelector<HTMLButtonElement>('[data-action="open-project"]')?.addEventListener("click", () => {
+      this.editing = null;
       this.creating = "project";
       this.render();
     });
 
     root.querySelector<HTMLButtonElement>('[data-action="open-tag"]')?.addEventListener("click", () => {
+      this.editing = null;
       this.creating = "tag";
       this.render();
     });
@@ -450,12 +584,40 @@ export class SettingsView extends HTMLElement {
       this.render();
     });
 
-    setBodyScrollLock(this.creating !== null);
+    root.querySelectorAll<HTMLButtonElement>("[data-edit-project]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.dataset.editProject;
+        if (id) {
+          this.creating = null;
+          this.editing = { type: "project", id };
+          this.render();
+        }
+      });
+    });
 
-    if (this.creating) {
+    root.querySelectorAll<HTMLButtonElement>("[data-edit-tag]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.dataset.editTag;
+        if (id) {
+          this.creating = null;
+          this.editing = { type: "tag", id };
+          this.render();
+        }
+      });
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="close-edit"]')?.addEventListener("click", () => {
+      this.editing = null;
+      this.render();
+    });
+
+    setBodyScrollLock(this.creating !== null || this.editing !== null);
+
+    if (this.creating || this.editing) {
       wireModal(root, {
         onClose: () => {
           this.creating = null;
+          this.editing = null;
           this.render();
         },
       });
@@ -477,6 +639,27 @@ export class SettingsView extends HTMLElement {
 
         if (confirmed) {
           void appStore.deleteProject(projectId);
+        }
+      });
+    });
+
+    root.querySelectorAll<HTMLButtonElement>("[data-delete-tag]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const tagId = button.dataset.deleteTag;
+        const tag = workspace.tags.find((item) => item.id === tagId);
+        if (!tagId || !tag) {
+          return;
+        }
+
+        const usage =
+          workspace.tasks.filter((task) => task.tagIds.includes(tagId)).length +
+          workspace.notes.filter((note) => note.tagIds.includes(tagId)).length;
+        const confirmed = confirmDestructive(
+          `Удалить тег «${tag.name}»?\n\nОн будет снят с ${usage} задач и заметок. Сами записи останутся.`,
+        );
+
+        if (confirmed) {
+          void appStore.deleteTag(tagId);
         }
       });
     });
