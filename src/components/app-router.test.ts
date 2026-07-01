@@ -3,13 +3,24 @@ import { HUBS, hubDefaultHash, resolveRoute } from "./app-router";
 
 describe("resolveRoute", () => {
   it("defaults an empty or bare hash to the planner overview", () => {
-    expect(resolveRoute("")).toEqual({ hubId: "planner", tabId: "overview", canonical: "#/planner/overview" });
+    expect(resolveRoute("")).toEqual({ hubId: "planner", tabId: "overview", detailId: "", canonical: "#/planner/overview" });
     expect(resolveRoute("#/")).toMatchObject({ canonical: "#/planner/overview" });
   });
 
   it("passes canonical hub/tab routes through unchanged", () => {
-    expect(resolveRoute("#/work/focus")).toEqual({ hubId: "work", tabId: "focus", canonical: "#/work/focus" });
+    expect(resolveRoute("#/work/focus")).toEqual({ hubId: "work", tabId: "focus", detailId: "", canonical: "#/work/focus" });
     expect(resolveRoute("#/analytics/review")).toMatchObject({ hubId: "analytics", tabId: "review" });
+  });
+
+  it("captures a detail id for tabs that support a detail view", () => {
+    expect(resolveRoute("#/work/tasks/task_123")).toEqual({
+      hubId: "work",
+      tabId: "tasks",
+      detailId: "task_123",
+      canonical: "#/work/tasks/task_123",
+    });
+    // Tabs without a detail view drop the extra segment.
+    expect(resolveRoute("#/planner/today/whatever")).toMatchObject({ detailId: "", canonical: "#/planner/today" });
   });
 
   it("normalizes legacy single-segment routes to their hub/tab pair", () => {

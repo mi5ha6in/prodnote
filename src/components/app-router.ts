@@ -30,6 +30,8 @@ export interface TabDef {
   /** Custom element tag rendered for this tab. */
   tag: string;
   icon: IconName;
+  /** When set, `#/<hub>/<tab>/<id>` renders this element with an `entity-id` attribute. */
+  detailTag?: string;
 }
 
 export interface HubDef {
@@ -56,7 +58,14 @@ export const HUBS: HubDef[] = [
     label: "Работа",
     icon: "tasks",
     tabs: [
-      { id: "tasks", label: "Задачи", description: "Планы и текущая работа", tag: "pn-tasks-view", icon: "tasks" },
+      {
+        id: "tasks",
+        label: "Задачи",
+        description: "Планы и текущая работа",
+        tag: "pn-tasks-view",
+        icon: "tasks",
+        detailTag: "pn-task-detail-view",
+      },
       { id: "focus", label: "Фокус", description: "Таймер и помодоро", tag: "pn-focus-view", icon: "focus" },
     ],
   },
@@ -104,25 +113,31 @@ export const LEGACY_ROUTES: Record<string, string> = {
 export interface ResolvedRoute {
   hubId: HubId;
   tabId: string;
-  /** Canonical hash for the resolved route, e.g. `#/planner/today`. */
+  /** Entity id for a detail route (`#/<hub>/<tab>/<id>`), or "" when not a detail view. */
+  detailId: string;
+  /** Canonical hash for the resolved route, e.g. `#/planner/today` or `#/work/tasks/<id>`. */
   canonical: string;
 }
 
-/** Resolve any hash (canonical, legacy, hub-only, empty or unknown) to a hub/tab. */
+/** Resolve any hash (canonical, legacy, detail, hub-only, empty or unknown) to a hub/tab. */
 export function resolveRoute(hash: string): ResolvedRoute {
   const segments = hash.replace(/^#\/?/, "").split("/").filter(Boolean);
   let hubId = segments[0] ?? "";
   let tabId = segments[1] ?? "";
+  let detailId = segments[2] ?? "";
 
   if (segments.length <= 1 && LEGACY_ROUTES[hubId]) {
     const [legacyHub, legacyTab] = LEGACY_ROUTES[hubId].split("/");
     hubId = legacyHub;
     tabId = legacyTab;
+    detailId = "";
   }
 
   const hub = HUBS.find((item) => item.id === hubId) ?? HUBS[0];
   const tab = hub.tabs.find((item) => item.id === tabId) ?? hub.tabs[0];
-  return { hubId: hub.id, tabId: tab.id, canonical: `#/${hub.id}/${tab.id}` };
+  const resolvedDetailId = tab.detailTag ? detailId : "";
+  const canonical = `#/${hub.id}/${tab.id}${resolvedDetailId ? `/${resolvedDetailId}` : ""}`;
+  return { hubId: hub.id, tabId: tab.id, detailId: resolvedDetailId, canonical };
 }
 
 /** Canonical hash for a hub's default (first) tab — used by the sidebar. */
