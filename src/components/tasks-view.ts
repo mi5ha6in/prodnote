@@ -478,7 +478,7 @@ export class TasksView extends HTMLElement {
 
       void requestTimerNotificationPermission();
       void appStore.startTimer(taskId);
-      window.location.hash = "#/focus";
+      window.location.hash = "#/work/focus";
     });
 
     root.querySelector<HTMLButtonElement>('[data-action="start-task-pomodoro"]')?.addEventListener("click", () => {
@@ -489,7 +489,7 @@ export class TasksView extends HTMLElement {
 
       void requestTimerNotificationPermission();
       void appStore.startPomodoro(taskId);
-      window.location.hash = "#/focus";
+      window.location.hash = "#/work/focus";
     });
 
     root.querySelectorAll<HTMLSelectElement>("[data-status]").forEach((select) => {

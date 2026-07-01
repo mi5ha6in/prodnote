@@ -13,18 +13,18 @@ interface PaletteItem {
 }
 
 const NAV_ITEMS: PaletteItem[] = [
-  { label: "Перейти: Обзор", sub: "Навигация", hash: "#/dashboard" },
-  { label: "Перейти: Сегодня", sub: "Навигация", hash: "#/today" },
-  { label: "Перейти: Привычки", sub: "Навигация", hash: "#/habits" },
-  { label: "Перейти: Задачи", sub: "Навигация", hash: "#/tasks" },
-  { label: "Перейти: Заметки", sub: "Навигация", hash: "#/notes" },
-  { label: "Перейти: Календарь", sub: "Навигация", hash: "#/calendar" },
-  { label: "Перейти: Фокус", sub: "Навигация", hash: "#/focus" },
-  { label: "Перейти: Статистика", sub: "Навигация", hash: "#/stats" },
-  { label: "Перейти: Ревью", sub: "Навигация", hash: "#/review" },
-  { label: "Перейти: Настройки", sub: "Навигация", hash: "#/settings" },
-  { label: "Создать: Событие", sub: "Действие", hash: "#/calendar" },
-  { label: "Начать фокус", sub: "Действие", hash: "#/focus" },
+  { label: "Перейти: Обзор", sub: "Навигация", hash: "#/planner/overview" },
+  { label: "Перейти: Сегодня", sub: "Навигация", hash: "#/planner/today" },
+  { label: "Перейти: Привычки", sub: "Навигация", hash: "#/planner/habits" },
+  { label: "Перейти: Задачи", sub: "Навигация", hash: "#/work/tasks" },
+  { label: "Перейти: Заметки", sub: "Навигация", hash: "#/notes/notes" },
+  { label: "Перейти: Календарь", sub: "Навигация", hash: "#/planner/calendar" },
+  { label: "Перейти: Фокус", sub: "Навигация", hash: "#/work/focus" },
+  { label: "Перейти: Статистика", sub: "Навигация", hash: "#/analytics/stats" },
+  { label: "Перейти: Ревью", sub: "Навигация", hash: "#/analytics/review" },
+  { label: "Перейти: Настройки", sub: "Навигация", hash: "#/settings/settings" },
+  { label: "Создать: Событие", sub: "Действие", hash: "#/planner/calendar" },
+  { label: "Начать фокус", sub: "Действие", hash: "#/work/focus" },
 ];
 
 export class CommandPalette extends HTMLElement {
@@ -95,7 +95,7 @@ export class CommandPalette extends HTMLElement {
         sub: "Создание",
         run: async () => {
           await appStore.addTask({ title });
-          this.go("#/tasks");
+          this.go("#/work/tasks");
         },
       },
       {
@@ -103,7 +103,7 @@ export class CommandPalette extends HTMLElement {
         sub: "Создание",
         run: async () => {
           await appStore.addChecklistItem({ title, day: dayKey(new Date()) });
-          this.go("#/today");
+          this.go("#/planner/today");
         },
       },
       {
@@ -111,7 +111,7 @@ export class CommandPalette extends HTMLElement {
         sub: "Создание",
         run: async () => {
           await appStore.addNote({ title, markdown: "" });
-          this.go("#/notes");
+          this.go("#/notes/notes");
         },
       },
     ];
