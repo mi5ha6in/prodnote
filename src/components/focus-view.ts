@@ -41,6 +41,7 @@ export class FocusView extends HTMLElement {
     const root = renderShadow(
       this,
       `
+        <div class="view-grid">
         <section class="focus-stage">
           <div class="focus-panel">
             <p class="eyebrow">${active ? getFocusEyebrow(active) : "Готов к работе"}</p>
@@ -146,6 +147,7 @@ export class FocusView extends HTMLElement {
             `
             : ""
         }
+        </div>
       `,
       `
         .focus-stage {
