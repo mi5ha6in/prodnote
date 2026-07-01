@@ -1,12 +1,15 @@
-import { weekdayLabels } from "../domain/calendar";
+import { dayKey, weekdayLabels } from "../domain/calendar";
 import { shiftDayKey } from "../domain/checklist";
 import { escapeHtml } from "../domain/markdown";
 import { buildWeeklyReview, weekStartKey } from "../domain/review";
 import { formatDuration } from "../domain/stats";
+import { DEFAULT_TASK_FILTER, filterAndSortTasks } from "../domain/task-filter";
+import type { Task, Workspace } from "../domain/types";
 import { appStore } from "../state";
-import { badgeHtml, buttonAttrs, metricBarHtml, viewHeaderHtml } from "../ui/html";
+import { badgeHtml, buttonAttrs, emptyStateHtml, metricBarHtml, modalHtml, viewHeaderHtml } from "../ui/html";
+import { setBodyScrollLock, wireModal } from "./modal";
 import { renderShadow } from "./shadow";
-import { formatDate } from "./view-utils";
+import { formatDate, renderProjectOptions } from "./view-utils";
 
 function scoreLabel(score: number): string {
   if (score >= 90) return "Отличная неделя";
@@ -18,6 +21,8 @@ function scoreLabel(score: number): string {
 export class ReviewView extends HTMLElement {
   private unsubscribe: (() => void) | null = null;
   private weekStart: string | null = null;
+  /** 0 — мастер закрыт; 1..3 — текущий шаг направляемого ревью. */
+  private wizardStep = 0;
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
@@ -26,6 +31,7 @@ export class ReviewView extends HTMLElement {
 
   disconnectedCallback(): void {
     this.unsubscribe?.();
+    setBodyScrollLock(false);
   }
 
   private currentWeekStart(): string {
@@ -44,6 +50,8 @@ export class ReviewView extends HTMLElement {
       this,
       `
         <section class="view-grid">
+          ${this.wizardStep > 0 ? this.renderWizard(workspace, review.score) : ""}
+
           ${viewHeaderHtml({
             eyebrow: "Ревью",
             title: "Итоги недели",
@@ -54,6 +62,7 @@ export class ReviewView extends HTMLElement {
                 <button ${buttonAttrs({ tone: "ghost", size: "small", data: { weekShift: 7 } })} aria-label="Следующая неделя">›</button>
                 ${weekStart !== thisWeek ? `<button ${buttonAttrs({ size: "small", data: { action: "this-week" } })}>Эта неделя</button>` : ""}
               </div>
+              <button ${buttonAttrs({ data: { action: "start-wizard" } })}>Провести ревью</button>
             `,
           })}
 
@@ -118,6 +127,191 @@ export class ReviewView extends HTMLElement {
     root.querySelector<HTMLButtonElement>('[data-action="this-week"]')?.addEventListener("click", () => {
       this.weekStart = null;
       this.render();
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="start-wizard"]')?.addEventListener("click", () => {
+      this.wizardStep = 1;
+      this.render();
+    });
+
+    this.wireWizard(root);
+    setBodyScrollLock(this.wizardStep > 0);
+  }
+
+  private inboxTasks(workspace: Workspace): Task[] {
+    return filterAndSortTasks(workspace.tasks, { ...DEFAULT_TASK_FILTER, smartList: "inbox" }, workspace.projects);
+  }
+
+  private overdueTasks(workspace: Workspace): Task[] {
+    return filterAndSortTasks(workspace.tasks, { ...DEFAULT_TASK_FILTER, smartList: "overdue", sort: "due" }, workspace.projects);
+  }
+
+  private renderWizard(workspace: Workspace, score: number): string {
+    const steps = ["Входящие", "Просроченное", "Итоги"];
+    const stepBody =
+      this.wizardStep === 1
+        ? this.renderWizardInbox(workspace)
+        : this.wizardStep === 2
+          ? this.renderWizardOverdue(workspace)
+          : this.renderWizardSummary(score);
+
+    return modalHtml({
+      label: "Недельное ревью",
+      body: `
+        <div class="card-header" style="margin-bottom: 0;">
+          <div>
+            <p class="eyebrow">Шаг ${this.wizardStep} из ${steps.length}</p>
+            <h2>${escapeHtml(steps[this.wizardStep - 1] ?? "")}</h2>
+          </div>
+          <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-wizard" } })}>Закрыть</button>
+        </div>
+        ${stepBody}
+        <div class="row-actions wizard-footer">
+          ${this.wizardStep > 1 ? `<button ${buttonAttrs({ tone: "ghost", data: { action: "wizard-back" } })}>Назад</button>` : ""}
+          ${
+            this.wizardStep < steps.length
+              ? `<button ${buttonAttrs({ data: { action: "wizard-next" } })}>Далее</button>`
+              : `<button ${buttonAttrs({ data: { action: "close-wizard" } })}>Готово</button>`
+          }
+        </div>
+      `,
+    });
+  }
+
+  private renderWizardInbox(workspace: Workspace): string {
+    const tasks = this.inboxTasks(workspace);
+    if (!tasks.length) {
+      return `${emptyStateHtml("Входящие пусты — отлично!")}`;
+    }
+
+    return `
+      <p class="muted">Разложите захваченное по проектам или закройте то, что уже неактуально.</p>
+      <div class="item-list">
+        ${tasks
+          .map(
+            (task) => `
+              <div class="list-item wizard-row">
+                <strong>${escapeHtml(task.title)}</strong>
+                <div class="row-actions">
+                  <select data-wizard-project="${escapeHtml(task.id)}" aria-label="Проект для задачи">
+                    ${renderProjectOptions(workspace.projects, task.projectId)}
+                  </select>
+                  <button ${buttonAttrs({ tone: "ghost", size: "small", data: { wizardDone: task.id } })}>Завершить</button>
+                </div>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
+    `;
+  }
+
+  private renderWizardOverdue(workspace: Workspace): string {
+    const tasks = this.overdueTasks(workspace);
+    if (!tasks.length) {
+      return `${emptyStateHtml("Просроченных задач нет.")}`;
+    }
+
+    return `
+      <p class="muted">Решите судьбу каждого просроченного дедлайна: перенесите, снимите или закройте.</p>
+      <div class="item-list">
+        ${tasks
+          .map(
+            (task) => `
+              <div class="list-item wizard-row">
+                <strong>${escapeHtml(task.title)}</strong>
+                <div class="meta-row"><span>дедлайн: ${formatDate(task.dueDate)}</span></div>
+                <div class="row-actions">
+                  <button ${buttonAttrs({ tone: "ghost", size: "small", data: { wizardPostpone: task.id } })}>+7 дней</button>
+                  <button ${buttonAttrs({ tone: "ghost", size: "small", data: { wizardCleardue: task.id } })}>Снять дедлайн</button>
+                  <button ${buttonAttrs({ tone: "ghost", size: "small", data: { wizardDone: task.id } })}>Завершить</button>
+                </div>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
+    `;
+  }
+
+  private renderWizardSummary(score: number): string {
+    return `
+      <div class="wizard-summary">
+        <p>Индекс продуктивности этой недели — <strong>${score}/100</strong> (${escapeHtml(scoreLabel(score))}).</p>
+        <p class="muted">Входящие разобраны, просроченное решено. Остался последний шаг — распланировать следующую неделю в календаре.</p>
+        <a class="button ghost" href="#/planner/calendar" data-action-close-on-follow>Запланировать неделю</a>
+      </div>
+    `;
+  }
+
+  private wireWizard(root: ShadowRoot): void {
+    if (this.wizardStep === 0) {
+      return;
+    }
+
+    wireModal(root, {
+      onClose: () => {
+        this.wizardStep = 0;
+        this.render();
+      },
+    });
+
+    root.querySelectorAll<HTMLButtonElement>('[data-action="close-wizard"]').forEach((button) => {
+      button.addEventListener("click", () => {
+        this.wizardStep = 0;
+        this.render();
+      });
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="wizard-next"]')?.addEventListener("click", () => {
+      this.wizardStep += 1;
+      this.render();
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="wizard-back"]')?.addEventListener("click", () => {
+      this.wizardStep -= 1;
+      this.render();
+    });
+
+    root.querySelector<HTMLElement>("[data-action-close-on-follow]")?.addEventListener("click", () => {
+      this.wizardStep = 0;
+      setBodyScrollLock(false);
+    });
+
+    root.querySelectorAll<HTMLSelectElement>("[data-wizard-project]").forEach((select) => {
+      select.addEventListener("change", () => {
+        const taskId = select.dataset.wizardProject;
+        if (taskId) {
+          void appStore.assignTaskProject(taskId, select.value || null);
+        }
+      });
+    });
+
+    root.querySelectorAll<HTMLButtonElement>("[data-wizard-done]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const taskId = button.dataset.wizardDone;
+        if (taskId) {
+          void appStore.updateTaskStatus(taskId, "done");
+        }
+      });
+    });
+
+    root.querySelectorAll<HTMLButtonElement>("[data-wizard-postpone]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const taskId = button.dataset.wizardPostpone;
+        if (taskId) {
+          void appStore.rescheduleTask(taskId, shiftDayKey(dayKey(new Date()), 7));
+        }
+      });
+    });
+
+    root.querySelectorAll<HTMLButtonElement>("[data-wizard-cleardue]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const taskId = button.dataset.wizardCleardue;
+        if (taskId) {
+          void appStore.rescheduleTask(taskId, null);
+        }
+      });
     });
   }
 }
@@ -204,5 +398,19 @@ const styles = `
     color: var(--muted);
     font-size: var(--text-xs);
     text-align: center;
+  }
+
+  .wizard-row .row-actions select {
+    width: auto;
+  }
+
+  .wizard-footer {
+    justify-content: flex-end;
+  }
+
+  .wizard-summary {
+    display: grid;
+    gap: var(--space-3);
+    justify-items: start;
   }
 `;
