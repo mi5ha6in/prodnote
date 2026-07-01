@@ -646,6 +646,30 @@ export class ProdNoteStore {
     });
   }
 
+  /** Move a task to another project (or out of any) without touching its other fields. */
+  async assignTaskProject(taskId: EntityId, projectId: EntityId | null): Promise<void> {
+    await this.commit((workspace) => {
+      const task = workspace.tasks.find((item) => item.id === taskId);
+      if (!task) {
+        return;
+      }
+      task.projectId = projectId;
+      task.updatedAt = nowIso();
+    });
+  }
+
+  /** Change only the due date of a task (null clears the deadline). */
+  async rescheduleTask(taskId: EntityId, dueDate: string | null): Promise<void> {
+    await this.commit((workspace) => {
+      const task = workspace.tasks.find((item) => item.id === taskId);
+      if (!task) {
+        return;
+      }
+      task.dueDate = dueDate;
+      task.updatedAt = nowIso();
+    });
+  }
+
   /**
    * Delete a task and its dependent time data (sessions, pomodoro cycles, plans),
    * unlink it from checklist items and calendar events, and stop a running timer for it.
