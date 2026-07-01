@@ -4,6 +4,7 @@ import { formatDuration } from "../domain/stats";
 import type { Task, TaskStatus } from "../domain/types";
 import { requestTimerNotificationPermission } from "../platform/notifications";
 import { appStore } from "../state";
+import { confirmDestructive } from "../ui/actions";
 import { badgeHtml, buttonAttrs, emptyStateHtml, fieldHtml, metricBarHtml, modalHtml, viewHeaderHtml } from "../ui/html";
 import { setBodyScrollLock, wireModal } from "./modal";
 import { renderShadow } from "./shadow";
@@ -415,6 +416,32 @@ export class TasksView extends HTMLElement {
       this.render();
     });
 
+    root.querySelector<HTMLButtonElement>('[data-action="delete-task"]')?.addEventListener("click", () => {
+      const taskId = this.openedTaskId;
+      const workspace = appStore.getWorkspace();
+      const task = workspace.tasks.find((item) => item.id === taskId);
+      if (!taskId || !task) {
+        return;
+      }
+
+      const sessionCount = workspace.sessions.filter((session) => session.taskId === taskId).length;
+      const confirmed = confirmDestructive(
+        `Удалить задачу «${task.title}»?\n\n` +
+          `Будут безвозвратно удалены: рабочие сессии (${sessionCount}), ` +
+          `записи журнала (${task.history.length}), подзадачи (${task.subtasks.length}).\n\n` +
+          "Связи в чек-листе и календаре будут отвязаны, сами записи останутся.",
+      );
+      if (!confirmed) {
+        return;
+      }
+
+      void appStore.deleteTask(taskId).then(() => {
+        this.openedTaskId = null;
+        this.detailsMode = "view";
+        this.render();
+      });
+    });
+
     root.querySelector<HTMLFormElement>('[data-form="edit-task"]')?.addEventListener("submit", (event) => {
       event.preventDefault();
       const form = event.currentTarget;
@@ -657,6 +684,7 @@ export class TasksView extends HTMLElement {
           <div class="row-actions">
             <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-task-details" } })}>Закрыть</button>
             <button ${buttonAttrs({ size: "small", data: { action: "edit-task" } })}>Редактировать</button>
+            <button ${buttonAttrs({ tone: "danger", size: "small", data: { action: "delete-task" } })}>Удалить</button>
           </div>
         </div>
 
