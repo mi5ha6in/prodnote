@@ -4,7 +4,6 @@ import { HUBS, hubDefaultHash, type IconName, resolveRoute } from "./app-router"
 import { renderShadow } from "./shadow";
 
 const ICONS = {
-  dashboard: `<svg viewBox="0 0 24 24"><path d="M4 13h6V4H4v9Zm10 7h6V11h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z"/></svg>`,
   today: `<svg viewBox="0 0 24 24"><path d="M5 5h14v15H5V5Zm0 5h14M8 3v4M16 3v4m-7 9 2 2 4-4"/></svg>`,
   habits: `<svg viewBox="0 0 24 24"><path d="M4 5h4v4H4V5Zm6 0h4v4h-4V5Zm6 0h4v4h-4V5ZM4 11h4v4H4v-4Zm6 0h4v4h-4v-4Zm6 0h4v4h-4v-4ZM4 17h4v4H4v-4Zm6 0h4v4h-4v-4Z"/></svg>`,
   tasks: `<svg viewBox="0 0 24 24"><path d="m5 12 2.2 2.2L11 10.4M5 6l2.2 2.2L11 4.4M5 18l2.2 2.2 3.8-3.8M14 6h5M14 12h5M14 18h5"/></svg>`,
@@ -54,7 +53,7 @@ export class AppRoot extends HTMLElement {
       `
       <div class="app-shell">
         <aside class="sidebar">
-          <a class="brand" href="#/planner/overview" aria-label="ProdNote home">
+          <a class="brand" href="#/planner/today" aria-label="ProdNote home">
             <img class="brand-mark" src="${import.meta.env.BASE_URL}icons/icon.svg" alt="" />
             <span>
               <strong>ProdNote</strong>

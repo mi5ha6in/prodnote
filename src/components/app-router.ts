@@ -12,7 +12,6 @@
 export type HubId = "planner" | "work" | "notes" | "analytics" | "settings";
 
 export type IconName =
-  | "dashboard"
   | "today"
   | "habits"
   | "tasks"
@@ -47,8 +46,7 @@ export const HUBS: HubDef[] = [
     label: "Планер",
     icon: "today",
     tabs: [
-      { id: "overview", label: "Обзор", description: "Главное на сегодня", tag: "pn-dashboard-view", icon: "dashboard" },
-      { id: "today", label: "Сегодня", description: "Чек-лист дня и история", tag: "pn-today-view", icon: "today" },
+      { id: "today", label: "Сегодня", description: "Главное на день: чек-лист, события, задачи", tag: "pn-today-view", icon: "today" },
       { id: "habits", label: "Привычки", description: "Трекер привычек и серии", tag: "pn-habits-view", icon: "habits" },
       { id: "calendar", label: "Календарь", description: "План и история времени", tag: "pn-calendar-view", icon: "calendar" },
     ],
@@ -98,7 +96,7 @@ export const HUBS: HubDef[] = [
 
 /** Old single-segment routes mapped to their canonical `hub/tab` path. */
 export const LEGACY_ROUTES: Record<string, string> = {
-  dashboard: "planner/overview",
+  dashboard: "planner/today",
   today: "planner/today",
   habits: "planner/habits",
   calendar: "planner/calendar",
