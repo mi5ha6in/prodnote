@@ -3,6 +3,7 @@ import { applyMarkdownSnippetToText, MARKDOWN_SNIPPETS, type MarkdownSnippet } f
 import { findBacklinks, searchNotes } from "../domain/search";
 import type { Note, Workspace } from "../domain/types";
 import { appStore } from "../state";
+import { confirmDestructive } from "../ui/actions";
 import { badgeHtml, buttonAttrs, emptyStateHtml, fieldHtml, metricBarHtml, modalHtml, viewHeaderHtml } from "../ui/html";
 import { setBodyScrollLock, wireModal } from "./modal";
 import { renderShadow } from "./shadow";
@@ -444,6 +445,7 @@ export class NotesView extends HTMLElement {
             <div class="row-actions">
               <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-open-note" } })}>Закрыть</button>
               <button ${buttonAttrs({ size: "small", data: { action: "edit-open-note" } })}>Редактировать</button>
+              <button ${buttonAttrs({ tone: "danger", size: "small", data: { action: "delete-open-note" } })}>Удалить</button>
             </div>
           </div>
 
@@ -597,6 +599,21 @@ export class NotesView extends HTMLElement {
 
     root.querySelector<HTMLButtonElement>('[data-action="close-open-note"]')?.addEventListener("click", () => {
       this.closeModals();
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="delete-open-note"]')?.addEventListener("click", () => {
+      const noteId = this.openedNoteId;
+      const note = appStore.getWorkspace().notes.find((item) => item.id === noteId);
+      if (!noteId || !note) {
+        return;
+      }
+
+      const confirmed = confirmDestructive(`Удалить заметку «${note.title}»?\n\nЭто действие необратимо.`);
+      if (!confirmed) {
+        return;
+      }
+
+      void appStore.deleteNote(noteId).then(() => this.closeModals());
     });
 
     root.querySelector<HTMLButtonElement>('[data-action="close-create"]')?.addEventListener("click", () => {
