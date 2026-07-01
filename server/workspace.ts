@@ -27,11 +27,18 @@ export interface SyncedWorkspace {
   schemaVersion: number;
   serverRevision: number;
   workspace: Workspace;
+  /** Tombstones newer than the client's `since` revision, so other devices drop deleted entities. */
+  deletedEntities: DeletedEntity[];
+}
+
+export interface PutWorkspaceResult {
+  schemaVersion: number;
+  serverRevision: number;
 }
 
 type Row = Record<string, unknown>;
 
-export async function getSyncedWorkspace(userId: string): Promise<SyncedWorkspace> {
+export async function getSyncedWorkspace(userId: string, sinceRevision = 0): Promise<SyncedWorkspace> {
   const workspaceRecord = await ensureWorkspace(userId, SCHEMA_VERSION);
   const workspaceId = workspaceRecord.id;
   const [
@@ -72,6 +79,38 @@ export async function getSyncedWorkspace(userId: string): Promise<SyncedWorkspac
     sqlClient<Row[]>`select * from settings where workspace_id = ${workspaceId}`,
   ]);
 
+  const deletedRows = await sqlClient<Row[]>`
+    select 'project' as entity_type, entity_id, deleted_at from projects
+      where workspace_id = ${workspaceId} and deleted_at is not null and server_revision > ${sinceRevision}
+    union all
+    select 'tag', entity_id, deleted_at from tags
+      where workspace_id = ${workspaceId} and deleted_at is not null and server_revision > ${sinceRevision}
+    union all
+    select 'task', entity_id, deleted_at from tasks
+      where workspace_id = ${workspaceId} and deleted_at is not null and server_revision > ${sinceRevision}
+    union all
+    select 'note', entity_id, deleted_at from notes
+      where workspace_id = ${workspaceId} and deleted_at is not null and server_revision > ${sinceRevision}
+    union all
+    select 'checklistItem', entity_id, deleted_at from checklist_items
+      where workspace_id = ${workspaceId} and deleted_at is not null and server_revision > ${sinceRevision}
+    union all
+    select 'checklistTemplate', entity_id, deleted_at from checklist_templates
+      where workspace_id = ${workspaceId} and deleted_at is not null and server_revision > ${sinceRevision}
+    union all
+    select 'session', entity_id, deleted_at from time_sessions
+      where workspace_id = ${workspaceId} and deleted_at is not null and server_revision > ${sinceRevision}
+    union all
+    select 'pomodoroCycle', entity_id, deleted_at from pomodoro_cycles
+      where workspace_id = ${workspaceId} and deleted_at is not null and server_revision > ${sinceRevision}
+    union all
+    select 'plan', entity_id, deleted_at from calendar_plans
+      where workspace_id = ${workspaceId} and deleted_at is not null and server_revision > ${sinceRevision}
+    union all
+    select 'event', entity_id, deleted_at from calendar_events
+      where workspace_id = ${workspaceId} and deleted_at is not null and server_revision > ${sinceRevision}
+  `;
+
   const taskTagsByTask = groupValues(taskTags, "task_id", "tag_id");
   const taskHistoryByTask = groupRows(taskHistory, "task_id");
   const taskSubtasksByTask = groupRows(taskSubtasks, "task_id");
@@ -83,6 +122,11 @@ export async function getSyncedWorkspace(userId: string): Promise<SyncedWorkspac
   return {
     schemaVersion: Number(workspaceRecord.schemaVersion),
     serverRevision: Number(workspaceRecord.serverRevision),
+    deletedEntities: deletedRows.map((row) => ({
+      type: asString(row.entity_type) as DeletedEntityType,
+      id: asString(row.entity_id),
+      deletedAt: toIso(row.deleted_at),
+    })),
     workspace: {
       schemaVersion: Number(workspaceRecord.schemaVersion),
       exportedAt: null,
@@ -230,11 +274,13 @@ export async function putSyncedWorkspace(
   userId: string,
   workspace: Workspace,
   deletedEntities: DeletedEntity[] = [],
-): Promise<SyncedWorkspace> {
+): Promise<PutWorkspaceResult> {
+  let resultRevision = 0;
   await sqlClient.begin(async (transaction) => {
     const workspaceRecord = await ensureWorkspace(userId, workspace.schemaVersion);
     const workspaceId = workspaceRecord.id;
     const nextRevision = Number(workspaceRecord.serverRevision) + 1;
+    resultRevision = nextRevision;
     const now = toSqlTimestamp(new Date());
 
     await transaction`
@@ -496,7 +542,8 @@ export async function putSyncedWorkspace(
     `;
   });
 
-  return getSyncedWorkspace(userId);
+  // Pushes are frequent (debounced per commit); avoid re-reading the whole workspace.
+  return { schemaVersion: workspace.schemaVersion, serverRevision: resultRevision };
 }
 
 async function ensureWorkspace(userId: string, schemaVersion: number): Promise<{ id: string; schemaVersion: number; serverRevision: number }> {
