@@ -68,6 +68,8 @@ export class CalendarView extends HTMLElement {
   private weekAnchor = new Date();
   private draggingEventId: string | null = null;
   private draggingTaskId: string | null = null;
+  /** Task selected by tap for the tap-to-schedule flow (drag is unavailable on touch). */
+  private armedTaskId: string | null = null;
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
@@ -307,12 +309,16 @@ export class CalendarView extends HTMLElement {
 
     return `
       <div class="timeblock-strip">
-        <span class="timeblock-hint">Перетащите задачу в сетку, чтобы запланировать фокус-слот</span>
+        <span class="timeblock-hint">${
+          this.armedTaskId
+            ? "Теперь нажмите на время в сетке — там появится фокус-слот"
+            : "Перетащите задачу в сетку или нажмите на неё, а затем на время"
+        }</span>
         <div class="timeblock-chips">
           ${open
             .map(
               (task) =>
-                `<span class="timeblock-chip" draggable="true" data-drag-task="${escapeHtml(task.id)}" title="${escapeHtml(task.title)}">${escapeHtml(task.title)}</span>`,
+                `<button type="button" class="timeblock-chip ${this.armedTaskId === task.id ? "is-armed" : ""}" draggable="true" data-drag-task="${escapeHtml(task.id)}" title="${escapeHtml(task.title)}">${escapeHtml(task.title)}</button>`,
             )
             .join("")}
         </div>
@@ -699,6 +705,11 @@ export class CalendarView extends HTMLElement {
           return;
         }
         const minutes = snapMinutes(column, event.clientY);
+        if (this.armedTaskId) {
+          this.blockTaskAt(this.armedTaskId, date, minutes);
+          this.armedTaskId = null;
+          return;
+        }
         this.openEventModal(null, `${date}T${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}:00`);
       });
     });
@@ -718,6 +729,7 @@ export class CalendarView extends HTMLElement {
       element.addEventListener("dragstart", (event) => {
         this.draggingTaskId = element.dataset.dragTask ?? null;
         this.draggingEventId = null;
+        this.armedTaskId = null;
         if (event instanceof DragEvent && event.dataTransfer) {
           event.dataTransfer.effectAllowed = "copy";
           event.dataTransfer.setData("text/plain", this.draggingTaskId ?? "");
@@ -725,6 +737,11 @@ export class CalendarView extends HTMLElement {
       });
       element.addEventListener("dragend", () => {
         this.draggingTaskId = null;
+      });
+      element.addEventListener("click", () => {
+        const taskId = element.dataset.dragTask ?? null;
+        this.armedTaskId = this.armedTaskId === taskId ? null : taskId;
+        this.render();
       });
     });
 
@@ -1230,18 +1247,32 @@ export class CalendarView extends HTMLElement {
         background: var(--paper);
         border: 1px solid var(--line-strong);
         border-radius: var(--radius-pill);
+        color: var(--ink-soft);
         cursor: grab;
+        display: inline-block;
         font-size: var(--text-xs);
         font-weight: 600;
         max-width: 14rem;
+        min-height: 0;
         overflow: hidden;
         padding: 0.2rem var(--space-3);
         text-overflow: ellipsis;
         white-space: nowrap;
       }
 
+      .timeblock-chip:hover {
+        background: var(--surface);
+        border-color: var(--line-strong);
+      }
+
       .timeblock-chip:active {
         cursor: grabbing;
+      }
+
+      .timeblock-chip.is-armed {
+        background: var(--accent-soft);
+        border-color: var(--accent);
+        color: var(--accent-strong);
       }
 
       .month-day {

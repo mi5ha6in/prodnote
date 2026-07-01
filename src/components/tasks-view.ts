@@ -233,6 +233,19 @@ export class TasksView extends HTMLElement {
           padding-top: var(--space-3);
         }
 
+        /* Touch devices cannot drag cards between columns — show arrow controls instead. */
+        .move-controls {
+          display: none;
+          flex: none;
+          gap: var(--space-1);
+        }
+
+        @media (hover: none), (pointer: coarse) {
+          .move-controls {
+            display: flex;
+          }
+        }
+
         fieldset {
           border: 1px solid var(--line);
           border-radius: var(--radius-md);
@@ -665,6 +678,21 @@ export class TasksView extends HTMLElement {
       void requestTimerNotificationPermission();
       void appStore.startPomodoro(taskId);
       window.location.hash = "#/work/focus";
+    });
+
+    root.querySelectorAll<HTMLButtonElement>("[data-move-task]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const taskId = button.dataset.moveTask;
+        const dir = Number(button.dataset.moveDir);
+        const task = appStore.getWorkspace().tasks.find((item) => item.id === taskId);
+        if (!taskId || !task || !dir) {
+          return;
+        }
+        const next = STATUS_ORDER[STATUS_ORDER.indexOf(task.status) + dir];
+        if (next) {
+          void appStore.updateTaskStatus(taskId, next);
+        }
+      });
     });
 
     root.querySelectorAll<HTMLSelectElement>("[data-status]").forEach((select) => {
@@ -1254,6 +1282,17 @@ export class TasksView extends HTMLElement {
     const recentHistory = task.history.slice(0, 2);
 
     const dragAttrs = variant === "kanban" ? `draggable="true" data-drag-task="${escapeHtml(task.id)}"` : "";
+    const statusIndex = STATUS_ORDER.indexOf(task.status);
+    // Touch fallback for drag-and-drop: arrows walk the card across kanban columns.
+    const moveControls =
+      variant === "kanban"
+        ? `
+          <div class="move-controls">
+            <button ${buttonAttrs({ tone: "ghost", size: "small", data: { moveTask: task.id, moveDir: "-1" }, disabled: statusIndex <= 0 })} aria-label="В колонку левее">‹</button>
+            <button ${buttonAttrs({ tone: "ghost", size: "small", data: { moveTask: task.id, moveDir: "1" }, disabled: statusIndex >= STATUS_ORDER.length - 1 })} aria-label="В колонку правее">›</button>
+          </div>
+        `
+        : "";
 
     return `
       <article class="list-item task-card" data-open-task="${escapeHtml(task.id)}" ${dragAttrs} tabindex="0">
@@ -1267,6 +1306,7 @@ export class TasksView extends HTMLElement {
               ${(totalMinutesByTask.get(task.id) ?? 0) > 0 ? `<span>время: ${formatDuration(totalMinutesByTask.get(task.id) ?? 0)}</span>` : ""}
             </div>
           </div>
+          ${moveControls}
         </div>
         ${task.description ? `<div class="markdown-preview">${renderMarkdown(task.description)}</div>` : ""}
         ${
