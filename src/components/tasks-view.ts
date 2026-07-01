@@ -12,15 +12,17 @@ import {
   DEFAULT_TASK_FILTER,
   filterAndSortTasks,
   isTaskFilterActive,
+  TASK_SMART_LIST_LABELS,
   TASK_SORT_LABELS,
   type TaskFilterCriteria,
+  type TaskSmartList,
   type TaskSort,
 } from "../domain/task-filter";
 import type { Task, TaskPriority, TaskStatus } from "../domain/types";
 import { requestTimerNotificationPermission } from "../platform/notifications";
 import { appStore } from "../state";
 import { confirmDestructive } from "../ui/actions";
-import { badgeHtml, buttonAttrs, emptyStateHtml, fieldHtml, metricBarHtml, modalHtml, viewHeaderHtml } from "../ui/html";
+import { badgeHtml, buttonAttrs, emptyStateHtml, fieldHtml, modalHtml, viewHeaderHtml } from "../ui/html";
 import { setBodyScrollLock, wireModal } from "./modal";
 import { renderShadow } from "./shadow";
 import {
@@ -48,17 +50,45 @@ export class TasksView extends HTMLElement {
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
+    document.addEventListener("keydown", this.onHotkey);
     this.render();
   }
 
   disconnectedCallback(): void {
     this.unsubscribe?.();
+    document.removeEventListener("keydown", this.onHotkey);
     setBodyScrollLock(false);
   }
 
+  /** n — новая задача, / — поиск. Не срабатывает, когда фокус в поле ввода или открыта модалка. */
+  private onHotkey = (event: KeyboardEvent): void => {
+    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) {
+      return;
+    }
+    const target = event.composedPath()[0];
+    if (
+      target instanceof HTMLElement &&
+      (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+    ) {
+      return;
+    }
+    if (this.creating || this.openedTaskId !== null) {
+      return;
+    }
+
+    if (event.key === "n" || event.key === "т") {
+      event.preventDefault();
+      this.creating = true;
+      this.render();
+    } else if (event.key === "/") {
+      event.preventDefault();
+      this.focusSearch = true;
+      this.render();
+    }
+  };
+
   private render(): void {
     const workspace = appStore.getWorkspace();
-    const activeTasks = workspace.tasks.filter((task) => task.status !== "done").length;
     const totalMinutesByTask = new Map<string, number>();
     for (const session of workspace.sessions) {
       totalMinutesByTask.set(session.taskId, (totalMinutesByTask.get(session.taskId) ?? 0) + session.durationMinutes);
@@ -86,16 +116,6 @@ export class TasksView extends HTMLElement {
           })}
 
           ${this.renderQuickCapture()}
-
-          ${metricBarHtml([
-            { label: "Всего задач", value: workspace.tasks.length, hint: "Включая завершённые" },
-            { label: "Активный поток", value: activeTasks, hint: "Требуют внимания" },
-            {
-              label: "Записей в журнале",
-              value: workspace.tasks.reduce((sum, task) => sum + task.history.length, 0),
-              hint: "Прогресс и решения",
-            },
-          ])}
 
           ${this.renderFilterBar(workspace, visibleTasks.length)}
 
@@ -211,6 +231,19 @@ export class TasksView extends HTMLElement {
           border-top: 1px solid var(--line);
           margin-top: var(--space-3);
           padding-top: var(--space-3);
+        }
+
+        /* Touch devices cannot drag cards between columns — show arrow controls instead. */
+        .move-controls {
+          display: none;
+          flex: none;
+          gap: var(--space-1);
+        }
+
+        @media (hover: none), (pointer: coarse) {
+          .move-controls {
+            display: flex;
+          }
         }
 
         fieldset {
@@ -344,6 +377,12 @@ export class TasksView extends HTMLElement {
             grid-template-columns: 1fr;
           }
         }
+
+        @media (max-width: 680px) {
+          .task-filter select {
+            flex: 1 1 42%;
+          }
+        }
       `,
     );
 
@@ -396,6 +435,13 @@ export class TasksView extends HTMLElement {
     root.querySelectorAll<HTMLButtonElement>("[data-mode]").forEach((button) => {
       button.addEventListener("click", () => {
         this.mode = button.dataset.mode === "list" ? "list" : "kanban";
+        this.render();
+      });
+    });
+
+    root.querySelectorAll<HTMLButtonElement>("[data-smart]").forEach((button) => {
+      button.addEventListener("click", () => {
+        this.filter = { ...this.filter, smartList: (button.dataset.smart || null) as TaskSmartList | null };
         this.render();
       });
     });
@@ -634,6 +680,21 @@ export class TasksView extends HTMLElement {
       window.location.hash = "#/work/focus";
     });
 
+    root.querySelectorAll<HTMLButtonElement>("[data-move-task]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const taskId = button.dataset.moveTask;
+        const dir = Number(button.dataset.moveDir);
+        const task = appStore.getWorkspace().tasks.find((item) => item.id === taskId);
+        if (!taskId || !task || !dir) {
+          return;
+        }
+        const next = STATUS_ORDER[STATUS_ORDER.indexOf(task.status) + dir];
+        if (next) {
+          void appStore.updateTaskStatus(taskId, next);
+        }
+      });
+    });
+
     root.querySelectorAll<HTMLSelectElement>("[data-status]").forEach((select) => {
       select.addEventListener("change", () => {
         const taskId = select.dataset.taskId;
@@ -817,6 +878,15 @@ export class TasksView extends HTMLElement {
 
     return `
       <div class="task-filter" role="group" aria-label="Фильтры задач">
+        <div class="segmented" role="group" aria-label="Умные списки">
+          <button type="button" data-smart="" aria-pressed="${filter.smartList === null}">Все</button>
+          ${(Object.keys(TASK_SMART_LIST_LABELS) as TaskSmartList[])
+            .map(
+              (list) =>
+                `<button type="button" data-smart="${list}" aria-pressed="${filter.smartList === list}">${TASK_SMART_LIST_LABELS[list]}</button>`,
+            )
+            .join("")}
+        </div>
         <input
           data-filter-search
           type="search"
@@ -1212,6 +1282,17 @@ export class TasksView extends HTMLElement {
     const recentHistory = task.history.slice(0, 2);
 
     const dragAttrs = variant === "kanban" ? `draggable="true" data-drag-task="${escapeHtml(task.id)}"` : "";
+    const statusIndex = STATUS_ORDER.indexOf(task.status);
+    // Touch fallback for drag-and-drop: arrows walk the card across kanban columns.
+    const moveControls =
+      variant === "kanban"
+        ? `
+          <div class="move-controls">
+            <button ${buttonAttrs({ tone: "ghost", size: "small", data: { moveTask: task.id, moveDir: "-1" }, disabled: statusIndex <= 0 })} aria-label="В колонку левее">‹</button>
+            <button ${buttonAttrs({ tone: "ghost", size: "small", data: { moveTask: task.id, moveDir: "1" }, disabled: statusIndex >= STATUS_ORDER.length - 1 })} aria-label="В колонку правее">›</button>
+          </div>
+        `
+        : "";
 
     return `
       <article class="list-item task-card" data-open-task="${escapeHtml(task.id)}" ${dragAttrs} tabindex="0">
@@ -1221,10 +1302,11 @@ export class TasksView extends HTMLElement {
             <div class="meta-row">
               ${badgeHtml(TASK_PRIORITY_LABELS[task.priority])}
               <span>${escapeHtml(getProjectName(workspace.projects, task.projectId))}</span>
-              <span>дедлайн: ${formatDate(task.dueDate)}</span>
-              <span>время: ${formatDuration(totalMinutesByTask.get(task.id) ?? 0)}</span>
+              ${task.dueDate ? `<span>дедлайн: ${formatDate(task.dueDate)}</span>` : ""}
+              ${(totalMinutesByTask.get(task.id) ?? 0) > 0 ? `<span>время: ${formatDuration(totalMinutesByTask.get(task.id) ?? 0)}</span>` : ""}
             </div>
           </div>
+          ${moveControls}
         </div>
         ${task.description ? `<div class="markdown-preview">${renderMarkdown(task.description)}</div>` : ""}
         ${
@@ -1235,19 +1317,19 @@ export class TasksView extends HTMLElement {
               </div>`
             : ""
         }
-        <div class="meta-row">${renderTagPills(workspace.tags, task.tagIds)}</div>
-        ${fieldHtml({
-          label: "Статус",
-          control: `<select data-status data-task-id="${escapeHtml(task.id)}">
-            ${STATUS_ORDER.map(
-              (status) =>
-                `<option value="${status}" ${task.status === status ? "selected" : ""}>${TASK_STATUS_LABELS[status]}</option>`,
-            ).join("")}
-          </select>`,
-        })}
+        ${task.tagIds.length ? `<div class="meta-row">${renderTagPills(workspace.tags, task.tagIds)}</div>` : ""}
         ${
           variant === "list"
             ? `
+              ${fieldHtml({
+                label: "Статус",
+                control: `<select data-status data-task-id="${escapeHtml(task.id)}">
+                  ${STATUS_ORDER.map(
+                    (status) =>
+                      `<option value="${status}" ${task.status === status ? "selected" : ""}>${TASK_STATUS_LABELS[status]}</option>`,
+                  ).join("")}
+                </select>`,
+              })}
               <form class="task-history form-grid" data-history-form data-task-id="${escapeHtml(task.id)}">
                 <div class="inline-grid">
                   ${fieldHtml({
@@ -1265,12 +1347,7 @@ export class TasksView extends HTMLElement {
                 </div>
                 <button ${buttonAttrs({ type: "submit", tone: "ghost", size: "small" })}>Добавить запись</button>
               </form>
-            `
-            : `<p class="muted">Журнал задачи доступен в режиме списка.</p>`
-        }
-        ${
-          recentHistory.length
-            ? recentHistory
+              ${recentHistory
                 .map(
                   (entry) => `
                     <div class="history-entry">
@@ -1279,7 +1356,8 @@ export class TasksView extends HTMLElement {
                     </div>
                   `,
                 )
-                .join("")
+                .join("")}
+            `
             : ""
         }
       </article>

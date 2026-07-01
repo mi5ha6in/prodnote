@@ -39,8 +39,9 @@ describe("filterAndSortTasks", () => {
     const pool = [inProject, noProject, tagged, highDone];
 
     expect(filterAndSortTasks(pool, criteria({ projectId: project.id }), [project]).map((t) => t.id)).toEqual([inProject.id]);
-    expect(filterAndSortTasks(pool, criteria({ projectId: "none" }), [project]).map((t) => t.id)).toEqual(
-      [noProject, tagged, highDone].map((t) => t.id),
+    // Порядок при равных createdAt недетерминирован — сравниваем состав, а не порядок.
+    expect(filterAndSortTasks(pool, criteria({ projectId: "none" }), [project]).map((t) => t.id).sort()).toEqual(
+      [noProject, tagged, highDone].map((t) => t.id).sort(),
     );
     expect(filterAndSortTasks(pool, criteria({ tagId: "tag1" }), []).map((t) => t.id)).toEqual([tagged.id]);
     expect(filterAndSortTasks(pool, criteria({ priority: "high" }), []).map((t) => t.id)).toEqual([highDone.id]);
@@ -85,5 +86,49 @@ describe("filterAndSortTasks", () => {
     expect(isTaskFilterActive(criteria({ sort: "due" }))).toBe(false);
     expect(isTaskFilterActive(criteria({ search: "x" }))).toBe(true);
     expect(isTaskFilterActive(criteria({ status: "done" }))).toBe(true);
+    expect(isTaskFilterActive(criteria({ smartList: "today" }))).toBe(true);
+  });
+
+  describe("smart lists", () => {
+    const now = new Date("2026-07-02T12:00:00");
+
+    it("today includes tasks due today and overdue, skips done and undated", () => {
+      const dueToday = makeTask({ title: "Сегодня", dueDate: "2026-07-02" });
+      const overdue = makeTask({ title: "Просрочена", dueDate: "2026-06-30" });
+      const future = makeTask({ title: "Позже", dueDate: "2026-07-03" });
+      const done = makeTask({ title: "Готова", dueDate: "2026-07-02", status: "done" });
+      const undated = makeTask({ title: "Без даты" });
+      const pool = [dueToday, overdue, future, done, undated];
+
+      const matched = filterAndSortTasks(pool, criteria({ smartList: "today" }), [], now).map((t) => t.id);
+      expect(matched.sort()).toEqual([dueToday.id, overdue.id].sort());
+    });
+
+    it("week spans the next 7 days inclusive, overdue is strictly before today", () => {
+      const overdue = makeTask({ title: "Вчера", dueDate: "2026-07-01" });
+      const today = makeTask({ title: "Сегодня", dueDate: "2026-07-02" });
+      const lastDay = makeTask({ title: "Через 6 дней", dueDate: "2026-07-08" });
+      const beyond = makeTask({ title: "Через 7 дней", dueDate: "2026-07-09" });
+      const pool = [overdue, today, lastDay, beyond];
+
+      const week = filterAndSortTasks(pool, criteria({ smartList: "week" }), [], now).map((t) => t.id);
+      expect(week.sort()).toEqual([overdue.id, today.id, lastDay.id].sort());
+
+      const overdueOnly = filterAndSortTasks(pool, criteria({ smartList: "overdue" }), [], now).map((t) => t.id);
+      expect(overdueOnly).toEqual([overdue.id]);
+    });
+
+    it("inbox collects tasks without a project or in the «Входящие» project, skips done", () => {
+      const inbox = createProject({ name: "Входящие" });
+      const other = createProject({ name: "Работа" });
+      const noProject = makeTask({ title: "A", projectId: null });
+      const inInbox = makeTask({ title: "B", projectId: inbox.id });
+      const inOther = makeTask({ title: "C", projectId: other.id });
+      const doneNoProject = makeTask({ title: "D", projectId: null, status: "done" });
+      const pool = [noProject, inInbox, inOther, doneNoProject];
+
+      const matched = filterAndSortTasks(pool, criteria({ smartList: "inbox" }), [inbox, other], now).map((t) => t.id);
+      expect(matched.sort()).toEqual([noProject.id, inInbox.id].sort());
+    });
   });
 });

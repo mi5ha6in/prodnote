@@ -123,7 +123,9 @@ app.post("/api/auth/logout", async (context) => {
 
 app.get("/api/workspace", requireAuth, async (context) => {
   const user = context.get("user");
-  return context.json(await getSyncedWorkspace(user.id));
+  const sinceRaw = Number(context.req.query("since") ?? 0);
+  const since = Number.isSafeInteger(sinceRaw) && sinceRaw > 0 ? sinceRaw : 0;
+  return context.json(await getSyncedWorkspace(user.id, since));
 });
 
 app.put("/api/workspace", requireAuth, async (context) => {

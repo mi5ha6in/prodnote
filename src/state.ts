@@ -50,6 +50,7 @@ import type {
 import { clearActiveTimer, isActiveTimerStorageEvent, loadActiveTimer, saveActiveTimer } from "./storage/active-timer";
 import { loadWorkspace, replaceWorkspace, saveWorkspace } from "./storage/idb";
 import {
+  getSyncState,
   pullRemoteWorkspace,
   queueWorkspacePush,
   recordSyncDeletion,
@@ -89,6 +90,17 @@ export class ProdNoteStore {
     await this.prepareToday();
     this.emit();
     void this.pullRemoteWorkspace();
+    this.startAutoPull();
+  }
+
+  /** Keep other devices' changes flowing in: pull every minute and on window focus. */
+  private startAutoPull(): void {
+    if (typeof window === "undefined" || import.meta.env.MODE === "test") {
+      return;
+    }
+
+    window.setInterval(() => void this.pullRemoteWorkspace(), 60_000);
+    window.addEventListener("focus", () => void this.pullRemoteWorkspace());
   }
 
   /** Carry unfinished items from yesterday and materialize today's recurring templates. */
@@ -646,6 +658,30 @@ export class ProdNoteStore {
     });
   }
 
+  /** Move a task to another project (or out of any) without touching its other fields. */
+  async assignTaskProject(taskId: EntityId, projectId: EntityId | null): Promise<void> {
+    await this.commit((workspace) => {
+      const task = workspace.tasks.find((item) => item.id === taskId);
+      if (!task) {
+        return;
+      }
+      task.projectId = projectId;
+      task.updatedAt = nowIso();
+    });
+  }
+
+  /** Change only the due date of a task (null clears the deadline). */
+  async rescheduleTask(taskId: EntityId, dueDate: string | null): Promise<void> {
+    await this.commit((workspace) => {
+      const task = workspace.tasks.find((item) => item.id === taskId);
+      if (!task) {
+        return;
+      }
+      task.dueDate = dueDate;
+      task.updatedAt = nowIso();
+    });
+  }
+
   /**
    * Delete a task and its dependent time data (sessions, pomodoro cycles, plans),
    * unlink it from checklist items and calendar events, and stop a running timer for it.
@@ -1015,7 +1051,10 @@ export class ProdNoteStore {
   }
 
   private async pullRemoteWorkspace(): Promise<void> {
-    await refreshSyncSession();
+    // /api/me only when the session is not established yet; steady-state pulls go straight to the workspace.
+    if (!getSyncState().authenticated) {
+      await refreshSyncSession();
+    }
     const result = await pullRemoteWorkspace(this.workspace);
     if (!result.changed) {
       return;
