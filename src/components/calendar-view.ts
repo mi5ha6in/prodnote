@@ -463,7 +463,7 @@ export class CalendarView extends HTMLElement {
             ${fieldHtml({ label: "Конец", control: endControl })}
           </div>
 
-          <div class="inline-grid">
+          <div class="three-grid">
             ${fieldHtml({
               label: "Вид",
               control: `<select name="kind">
