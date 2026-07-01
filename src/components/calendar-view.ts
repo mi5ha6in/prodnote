@@ -1,5 +1,6 @@
 import {
   buildMonthMatrix,
+  buildTimeBlock,
   buildWeekDays,
   dayKey,
   groupByHorizon,
@@ -66,6 +67,7 @@ export class CalendarView extends HTMLElement {
   private monthCursor = { year: new Date().getFullYear(), month: new Date().getMonth() };
   private weekAnchor = new Date();
   private draggingEventId: string | null = null;
+  private draggingTaskId: string | null = null;
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
@@ -297,6 +299,45 @@ export class CalendarView extends HTMLElement {
     `;
   }
 
+  private renderUnscheduledTasks(workspace: Workspace): string {
+    const open = workspace.tasks.filter((task) => task.status !== "done").slice(0, 20);
+    if (!open.length) {
+      return "";
+    }
+
+    return `
+      <div class="timeblock-strip">
+        <span class="timeblock-hint">Перетащите задачу в сетку, чтобы запланировать фокус-слот</span>
+        <div class="timeblock-chips">
+          ${open
+            .map(
+              (task) =>
+                `<span class="timeblock-chip" draggable="true" data-drag-task="${escapeHtml(task.id)}" title="${escapeHtml(task.title)}">${escapeHtml(task.title)}</span>`,
+            )
+            .join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  /** Create a focus event linked to a task from a drop onto the week grid. */
+  private blockTaskAt(taskId: string, dateKey: string, minutes: number): void {
+    const task = appStore.getWorkspace().tasks.find((item) => item.id === taskId);
+    if (!task) {
+      return;
+    }
+
+    const { startsAt, endsAt } = buildTimeBlock(dateKey, minutes);
+    void appStore.addEvent({
+      title: task.title,
+      startsAt,
+      endsAt,
+      kind: "focus",
+      taskId: task.id,
+      projectId: task.projectId,
+    });
+  }
+
   private renderWeek(items: CalendarItem[], workspace: Workspace): string {
     const days = buildWeekDays(this.weekAnchor, workspace.settings.weekStartsOn);
     const labels = weekdayLabels(workspace.settings.weekStartsOn);
@@ -309,6 +350,7 @@ export class CalendarView extends HTMLElement {
     const rangeLabel = `${formatDate(days[0].date.toISOString())} – ${formatDate(days[6].date.toISOString())}`;
 
     return `
+      ${this.renderUnscheduledTasks(workspace)}
       <article class="card week-card">
         <div class="card-header month-nav">
           <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "prev-week" } })}>‹</button>
@@ -664,10 +706,25 @@ export class CalendarView extends HTMLElement {
     root.querySelectorAll<HTMLElement>("[data-drag-event]").forEach((element) => {
       element.addEventListener("dragstart", (event) => {
         this.draggingEventId = element.dataset.dragEvent ?? null;
+        this.draggingTaskId = null;
         if (event instanceof DragEvent && event.dataTransfer) {
           event.dataTransfer.effectAllowed = "move";
           event.dataTransfer.setData("text/plain", this.draggingEventId ?? "");
         }
+      });
+    });
+
+    root.querySelectorAll<HTMLElement>("[data-drag-task]").forEach((element) => {
+      element.addEventListener("dragstart", (event) => {
+        this.draggingTaskId = element.dataset.dragTask ?? null;
+        this.draggingEventId = null;
+        if (event instanceof DragEvent && event.dataTransfer) {
+          event.dataTransfer.effectAllowed = "copy";
+          event.dataTransfer.setData("text/plain", this.draggingTaskId ?? "");
+        }
+      });
+      element.addEventListener("dragend", () => {
+        this.draggingTaskId = null;
       });
     });
 
@@ -722,9 +779,16 @@ export class CalendarView extends HTMLElement {
         event.preventDefault();
         column.classList.remove("is-drop-target");
         const date = column.dataset.weekCol;
-        if (date) {
-          this.moveEventToDayTime(date, snapMinutes(column, event.clientY));
+        if (!date) {
+          return;
         }
+        const minutes = snapMinutes(column, event.clientY);
+        if (this.draggingTaskId) {
+          this.blockTaskAt(this.draggingTaskId, date, minutes);
+          this.draggingTaskId = null;
+          return;
+        }
+        this.moveEventToDayTime(date, minutes);
       });
     });
 
@@ -1135,6 +1199,49 @@ export class CalendarView extends HTMLElement {
       .month-cell.is-drop-target,
       .week-col.is-drop-target {
         box-shadow: inset 0 0 0 2px var(--accent);
+      }
+
+      .timeblock-strip {
+        align-items: center;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2) var(--space-3);
+        margin-bottom: var(--space-4);
+        padding: var(--space-3);
+      }
+
+      .timeblock-hint {
+        color: var(--muted);
+        font-size: var(--text-xs);
+        font-weight: 600;
+      }
+
+      .timeblock-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+        min-width: 0;
+      }
+
+      .timeblock-chip {
+        background: var(--paper);
+        border: 1px solid var(--line-strong);
+        border-radius: var(--radius-pill);
+        cursor: grab;
+        font-size: var(--text-xs);
+        font-weight: 600;
+        max-width: 14rem;
+        overflow: hidden;
+        padding: 0.2rem var(--space-3);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .timeblock-chip:active {
+        cursor: grabbing;
       }
 
       .month-day {
