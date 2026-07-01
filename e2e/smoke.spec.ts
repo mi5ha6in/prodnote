@@ -17,19 +17,32 @@ test("renders the shell without a large gap above the content", async ({ page })
     .toBeLessThan(160);
 });
 
-test("navigates to the new sections via the sidebar", async ({ page }) => {
+test("navigates hubs and sub-tabs via the sidebar", async ({ page }) => {
+  // Planner hub → its sub-tabs.
+  await page.locator('a.nav-item[href="#/planner/overview"]').click();
   for (const [hash, label] of [
-    ["#/today", "Сегодня"],
-    ["#/habits", "Привычки"],
-    ["#/review", "Ревью"],
+    ["#/planner/today", "Сегодня"],
+    ["#/planner/habits", "Привычки"],
   ] as const) {
-    await page.locator(`a.nav-item[href="${hash}"]`).click();
+    await page.locator(`a.subnav-item[href="${hash}"]`).click();
     await expect(page.locator("h1").first()).toHaveText(label);
   }
+
+  // Analytics hub → Review sub-tab.
+  await page.locator('a.nav-item[href="#/analytics/stats"]').click();
+  await page.locator('a.subnav-item[href="#/analytics/review"]').click();
+  await expect(page.locator("h1").first()).toHaveText("Ревью");
+});
+
+test("normalizes a legacy hash to its canonical hub/tab route", async ({ page }) => {
+  await page.goto("/#/tasks");
+  await expect(page.locator("h1").first()).toHaveText("Задачи");
+  await expect.poll(async () => new URL(page.url()).hash).toBe("#/work/tasks");
 });
 
 test("adds a daily checklist item and checks it off", async ({ page }) => {
-  await page.locator('a.nav-item[href="#/today"]').click();
+  await page.locator('a.nav-item[href="#/planner/overview"]').click();
+  await page.locator('a.subnav-item[href="#/planner/today"]').click();
   await page.getByPlaceholder("Добавить пункт на день…").fill("E2E пункт");
   await page.getByPlaceholder("Добавить пункт на день…").press("Enter");
 
