@@ -74,7 +74,25 @@ Passkey/WebAuthn не принимает IP `127.0.0.1` как RP domain, поэ
 
 Сервер хранит нормализованные таблицы для workspace-сущностей и отдаёт/принимает текущий `Workspace` JSON contract.
 
-Активный таймер не синхронизируется в v1. Синхронизируются только завершённые `TimeSession`.
+Активный таймер не синхронизируется. Синхронизируются только завершённые `TimeSession`.
+
+### v2: per-entity last-write-wins
+
+- **Push — только дельта.** Клиент держит отпечатки последнего успешно
+  отправленного состояния (`diffWorkspaceForPush`) и кладёт в `PUT /api/workspace`
+  только изменённые сущности; нетронутые коллекции уходят пустыми массивами и
+  сервер их не трогает. Первый push сессии — полный.
+- **Удаления доезжают до всех устройств.** `GET /api/workspace?since=<revision>`
+  возвращает `deletedEntities` (tombstones с `server_revision > since`). Клиент
+  применяет их через `applyRemoteDeletions`: сущность удаляется, если её локальный
+  timestamp не новее `deletedAt` (правка после удаления воскрешает сущность —
+  честный LWW).
+- **Фоновая синхронизация.** Помимо pull при старте, стор тянет изменения раз в
+  минуту и при фокусе окна (`startAutoPull`), поэтому два открытых устройства
+  сходятся без ручной кнопки.
+- Конфликты решаются per-entity по `updatedAt` (sessions — `endedAt`,
+  pomodoro — `startedAt`, plans — `createdAt`); настройки — одной строкой,
+  побеждает последний push.
 
 ## API
 
@@ -85,12 +103,12 @@ Passkey/WebAuthn не принимает IP `127.0.0.1` как RP domain, поэ
 - `POST /api/auth/passkey/login/options`
 - `POST /api/auth/passkey/login/verify`
 - `POST /api/auth/logout`
-- `GET /api/workspace`
+- `GET /api/workspace?since=<serverRevision>` — workspace + tombstones новее ревизии
 - `PUT /api/workspace`
 
-## Ограничения v1
+## Ограничения
 
 - Один пользователь владеет одним workspace.
 - Нет совместной работы.
 - Нет end-to-end encryption: self-host сервер технически видит содержимое задач и заметок.
-- Conflict policy: entity-level last-write-wins по timestamp.
+- Conflict policy: entity-level last-write-wins по timestamp (без merge полей внутри сущности).

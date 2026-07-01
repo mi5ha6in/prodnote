@@ -133,9 +133,14 @@ export async function pullRemoteWorkspace(localWorkspace: Workspace): Promise<Sy
 
   try {
     setState({ status: "syncing", error: null });
-    const remote = await api<{ serverRevision: number; workspace: Workspace }>("/api/workspace");
     const meta = readMeta();
-    const merged = mergeWorkspaces(localWorkspace, remote.workspace, remote.serverRevision, meta.serverRevision);
+    const remote = await api<{ serverRevision: number; workspace: Workspace; deletedEntities?: SyncTombstone[] }>(
+      `/api/workspace?since=${meta.serverRevision}`,
+    );
+    const merged = applyRemoteDeletions(
+      mergeWorkspaces(localWorkspace, remote.workspace, remote.serverRevision, meta.serverRevision),
+      remote.deletedEntities ?? [],
+    );
     writeMeta({
       lastSyncedAt: new Date().toISOString(),
       serverRevision: remote.serverRevision,
@@ -152,8 +157,17 @@ export async function pullRemoteWorkspace(localWorkspace: Workspace): Promise<Sy
   }
 }
 
+/** Fingerprints of the last successfully pushed state; null until the first push this session. */
+let pushIndex: SyncPushIndex | null = null;
+
 export async function pushWorkspace(workspace: Workspace): Promise<void> {
   if (!state.authenticated) {
+    return;
+  }
+
+  const tombstones = readTombstones();
+  const diff = diffWorkspaceForPush(workspace, pushIndex);
+  if (diff.changedCount === 0 && !tombstones.length && pushIndex !== null) {
     return;
   }
 
@@ -166,10 +180,11 @@ export async function pushWorkspace(workspace: Workspace): Promise<void> {
         schemaVersion: workspace.schemaVersion,
         baseRevision: meta.serverRevision,
         deviceId: getDeviceId(),
-        workspace,
-        deletedEntities: readTombstones(),
+        workspace: diff.payload,
+        deletedEntities: tombstones,
       }),
     });
+    pushIndex = diff.nextIndex;
     clearTombstones();
     writeMeta({
       lastSyncedAt: new Date().toISOString(),
@@ -234,6 +249,108 @@ const SYNC_ENTITY_TYPES: readonly SyncEntityType[] = [
   "plan",
   "event",
 ];
+
+export interface SyncTombstone {
+  type: SyncEntityType;
+  id: string;
+  deletedAt: string;
+}
+
+/** Workspace collections that sync per entity, with the timestamp used for edit-vs-delete LWW. */
+const SYNC_COLLECTIONS = [
+  { type: "project", key: "projects", timestamp: (item: { updatedAt: string }) => item.updatedAt },
+  { type: "tag", key: "tags", timestamp: () => null },
+  { type: "task", key: "tasks", timestamp: (item: { updatedAt: string }) => item.updatedAt },
+  { type: "note", key: "notes", timestamp: (item: { updatedAt: string }) => item.updatedAt },
+  { type: "checklistItem", key: "checklist", timestamp: (item: { updatedAt: string }) => item.updatedAt },
+  { type: "checklistTemplate", key: "checklistTemplates", timestamp: (item: { updatedAt: string }) => item.updatedAt },
+  { type: "session", key: "sessions", timestamp: (item: { endedAt: string }) => item.endedAt },
+  { type: "pomodoroCycle", key: "pomodoroCycles", timestamp: (item: { startedAt: string }) => item.startedAt },
+  { type: "plan", key: "plans", timestamp: (item: { createdAt: string }) => item.createdAt },
+  { type: "event", key: "events", timestamp: (item: { updatedAt: string }) => item.updatedAt },
+] as const;
+
+/**
+ * Drop entities that other devices deleted, unless the local copy was edited
+ * after the deletion (per-entity last-write-wins between edit and delete).
+ */
+export function applyRemoteDeletions(workspace: Workspace, tombstones: SyncTombstone[]): Workspace {
+  if (!tombstones.length) {
+    return workspace;
+  }
+
+  const deletedAtByType = new Map<SyncEntityType, Map<string, string>>();
+  for (const tombstone of tombstones) {
+    const byId = deletedAtByType.get(tombstone.type) ?? new Map<string, string>();
+    byId.set(tombstone.id, tombstone.deletedAt);
+    deletedAtByType.set(tombstone.type, byId);
+  }
+
+  const result = { ...workspace };
+  for (const collection of SYNC_COLLECTIONS) {
+    const deleted = deletedAtByType.get(collection.type);
+    if (!deleted?.size) {
+      continue;
+    }
+    const items = workspace[collection.key] as Array<{ id: string }>;
+    (result as Record<string, unknown>)[collection.key] = items.filter((item) => {
+      const deletedAt = deleted.get(item.id);
+      if (!deletedAt) {
+        return true;
+      }
+      const localStamp = (collection.timestamp as (item: unknown) => string | null)(item);
+      return localStamp !== null && Date.parse(localStamp) > Date.parse(deletedAt);
+    });
+  }
+  return result;
+}
+
+/** Fingerprints of pushed entities keyed by collection, then by entity id. */
+export type SyncPushIndex = Record<string, Map<string, string>>;
+
+export interface SyncPushDiff {
+  /** Workspace with unchanged collections emptied — the server upserts only what is present. */
+  payload: Workspace;
+  nextIndex: SyncPushIndex;
+  changedCount: number;
+}
+
+/**
+ * Build a partial workspace containing only entities that changed since the
+ * last successful push. `index === null` means "push everything" (first push
+ * of the session). Settings are always included — they are one row server-side.
+ */
+export function diffWorkspaceForPush(workspace: Workspace, index: SyncPushIndex | null): SyncPushDiff {
+  const nextIndex: SyncPushIndex = {};
+  let changedCount = 0;
+  const payload = { ...workspace };
+
+  for (const collection of SYNC_COLLECTIONS) {
+    const items = workspace[collection.key] as Array<{ id: string }>;
+    const fingerprints = new Map<string, string>();
+    const previous = index?.[collection.key];
+    const changed: Array<{ id: string }> = [];
+
+    for (const item of items) {
+      const fingerprint = JSON.stringify(item);
+      fingerprints.set(item.id, fingerprint);
+      if (!previous || previous.get(item.id) !== fingerprint) {
+        changed.push(item);
+      }
+    }
+
+    nextIndex[collection.key] = fingerprints;
+    changedCount += changed.length;
+    (payload as Record<string, unknown>)[collection.key] = changed;
+  }
+
+  return { payload, nextIndex, changedCount };
+}
+
+/** Test-only escape hatch: pretend nothing was pushed yet this session. */
+export function resetPushIndexForTests(): void {
+  pushIndex = null;
+}
 
 export function recordSyncDeletion(type: SyncEntityType, id: string): void {
   if (!hasBrowserStorage()) {
