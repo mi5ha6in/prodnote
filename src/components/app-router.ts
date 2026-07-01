@@ -74,7 +74,7 @@ export const HUBS: HubDef[] = [
     label: "Заметки",
     icon: "notes",
     tabs: [
-      { id: "notes", label: "Заметки", description: "Конспекты и база знаний", tag: "pn-notes-view", icon: "notes" },
+      { id: "notes", label: "Заметки", description: "Markdown-заметки и база знаний", tag: "pn-notes-view", icon: "notes" },
     ],
   },
   {
