@@ -1,5 +1,6 @@
 import { dayKey } from "../domain/calendar";
 import { escapeHtml } from "../domain/markdown";
+import { parseQuickAdd } from "../domain/quick-add";
 import { searchAll } from "../domain/search";
 import { appStore } from "../state";
 import { setBodyScrollLock } from "./modal";
@@ -84,33 +85,43 @@ export class CommandPalette extends HTMLElement {
 
   /** Query-driven quick creation: turn whatever was typed into a new entity. */
   private createActions(): PaletteItem[] {
-    const title = this.query.trim();
-    if (!title) {
+    const raw = this.query.trim();
+    if (!raw) {
       return [];
     }
 
+    const workspace = appStore.getWorkspace();
+    const parsed = parseQuickAdd(raw, { projects: workspace.projects, tags: workspace.tags });
+    const taskTitle = parsed.title || raw;
+
     return [
       {
-        label: `Создать задачу: «${title}»`,
+        label: `Создать задачу: «${taskTitle}»`,
         sub: "Создание",
         run: async () => {
-          await appStore.addTask({ title });
+          await appStore.addTask({
+            title: taskTitle,
+            dueDate: parsed.dueDate,
+            priority: parsed.priority ?? undefined,
+            projectId: parsed.projectId,
+            tagIds: parsed.tagIds,
+          });
           this.go("#/work/tasks");
         },
       },
       {
-        label: `Создать пункт дня: «${title}»`,
+        label: `Создать пункт дня: «${raw}»`,
         sub: "Создание",
         run: async () => {
-          await appStore.addChecklistItem({ title, day: dayKey(new Date()) });
+          await appStore.addChecklistItem({ title: raw, day: dayKey(new Date()) });
           this.go("#/planner/today");
         },
       },
       {
-        label: `Создать заметку: «${title}»`,
+        label: `Создать заметку: «${raw}»`,
         sub: "Создание",
         run: async () => {
-          await appStore.addNote({ title, markdown: "" });
+          await appStore.addNote({ title: raw, markdown: "" });
           this.go("#/notes/notes");
         },
       },
