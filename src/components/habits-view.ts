@@ -31,7 +31,72 @@ export class HabitsView extends HTMLElement {
     this.unsubscribe?.();
   }
 
+  /**
+   * Store может эмитить во время набора (догоняющий commit, init, sync) —
+   * re-render стёр бы недопечатанную форму. Снимаем значения перед перерисовкой
+   * и возвращаем их в свежую форму.
+   */
+  private readTemplateFormDraft(): {
+    title: string;
+    cadence: string;
+    targetCount: string;
+    targetPerWeek: string;
+    isHabit: boolean;
+    focusedName: string | null;
+  } | null {
+    const form = this.shadowRoot?.querySelector<HTMLFormElement>("[data-template-form]");
+    if (!form) {
+      return null;
+    }
+    const value = (name: string): string => {
+      const control = form.elements.namedItem(name);
+      return control instanceof HTMLInputElement || control instanceof HTMLSelectElement ? control.value : "";
+    };
+    const habit = form.elements.namedItem("isHabit");
+    const active = this.shadowRoot?.activeElement;
+    return {
+      title: value("title"),
+      cadence: value("cadence"),
+      targetCount: value("targetCount"),
+      targetPerWeek: value("targetPerWeek"),
+      isHabit: habit instanceof HTMLInputElement ? habit.checked : false,
+      focusedName: active instanceof HTMLInputElement && active.form === form ? active.name : null,
+    };
+  }
+
+  private restoreTemplateFormDraft(
+    root: ShadowRoot,
+    draft: NonNullable<ReturnType<HabitsView["readTemplateFormDraft"]>>,
+  ): void {
+    const form = root.querySelector<HTMLFormElement>("[data-template-form]");
+    if (!form) {
+      return;
+    }
+    const set = (name: string, value: string): void => {
+      const control = form.elements.namedItem(name);
+      if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement) {
+        control.value = value;
+      }
+    };
+    set("title", draft.title);
+    set("cadence", draft.cadence);
+    set("targetCount", draft.targetCount);
+    set("targetPerWeek", draft.targetPerWeek);
+    const habit = form.elements.namedItem("isHabit");
+    if (habit instanceof HTMLInputElement) {
+      habit.checked = draft.isHabit;
+    }
+    if (draft.focusedName) {
+      const focused = form.elements.namedItem(draft.focusedName);
+      if (focused instanceof HTMLInputElement) {
+        focused.focus();
+        focused.setSelectionRange?.(focused.value.length, focused.value.length);
+      }
+    }
+  }
+
   private render(): void {
+    const formDraft = this.readTemplateFormDraft();
     const workspace = appStore.getWorkspace();
     const today = dayKey(new Date());
     const habits = workspace.checklistTemplates.filter((template) => template.isHabit && !template.archived);
@@ -231,6 +296,9 @@ export class HabitsView extends HTMLElement {
       `,
     );
 
+    if (formDraft) {
+      this.restoreTemplateFormDraft(root, formDraft);
+    }
     this.wire(root);
   }
 
@@ -333,6 +401,8 @@ export class HabitsView extends HTMLElement {
         targetPerWeek:
           targetPerWeek instanceof HTMLInputElement && targetPerWeek.value ? Number(targetPerWeek.value) : null,
       });
+      // Иначе снапшот формы вернёт введённое обратно после re-render.
+      templateForm.reset();
     });
 
     root.querySelectorAll<HTMLButtonElement>("[data-edit-template]").forEach((button) => {
