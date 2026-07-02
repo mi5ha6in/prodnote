@@ -300,10 +300,39 @@ export class ProdNoteStore {
       if (!item) {
         return;
       }
+      const target = this.checklistItemTarget(workspace, item);
       item.done = !item.done;
+      item.count = item.done ? target : 0;
       item.doneAt = item.done ? nowIso() : null;
       item.updatedAt = nowIso();
     });
+  }
+
+  /** Step a quantity habit's progress; `done` flips when the daily target is reached. */
+  async incrementChecklistItem(itemId: EntityId, delta: 1 | -1): Promise<void> {
+    await this.commit((workspace) => {
+      const item = workspace.checklist.find((entry) => entry.id === itemId);
+      if (!item) {
+        return;
+      }
+      const target = this.checklistItemTarget(workspace, item);
+      item.count = Math.max(0, Math.min(target, item.count + delta));
+      const wasDone = item.done;
+      item.done = item.count >= target;
+      if (item.done && !wasDone) {
+        item.doneAt = nowIso();
+      } else if (!item.done) {
+        item.doneAt = null;
+      }
+      item.updatedAt = nowIso();
+    });
+  }
+
+  private checklistItemTarget(workspace: Workspace, item: ChecklistItem): number {
+    const template = item.templateId
+      ? workspace.checklistTemplates.find((entry) => entry.id === item.templateId)
+      : undefined;
+    return Math.max(1, template?.targetCount ?? 1);
   }
 
   async renameChecklistItem(itemId: EntityId, title: string): Promise<void> {
@@ -419,13 +448,25 @@ export class ProdNoteStore {
     });
   }
 
-  async addChecklistTemplate(input: { title: string; cadence?: ChecklistCadence; isHabit?: boolean }): Promise<ChecklistTemplate | null> {
+  async addChecklistTemplate(input: {
+    title: string;
+    cadence?: ChecklistCadence;
+    isHabit?: boolean;
+    targetCount?: number;
+    targetPerWeek?: number | null;
+  }): Promise<ChecklistTemplate | null> {
     const trimmed = input.title.trim();
     if (!trimmed) {
       return null;
     }
 
-    const template = createChecklistTemplate({ title: trimmed, cadence: input.cadence, isHabit: input.isHabit });
+    const template = createChecklistTemplate({
+      title: trimmed,
+      cadence: input.cadence,
+      isHabit: input.isHabit,
+      targetCount: input.targetCount,
+      targetPerWeek: input.targetPerWeek,
+    });
     await this.commit((workspace) => {
       workspace.checklistTemplates.push(template);
     });
@@ -438,6 +479,8 @@ export class ProdNoteStore {
     title?: string;
     cadence?: ChecklistCadence;
     isHabit?: boolean;
+    targetCount?: number;
+    targetPerWeek?: number | null;
   }): Promise<void> {
     await this.commit((workspace) => {
       const template = workspace.checklistTemplates.find((entry) => entry.id === input.templateId);
@@ -449,6 +492,13 @@ export class ProdNoteStore {
       }
       if (input.cadence !== undefined) {
         template.cadence = input.cadence;
+      }
+      if (input.targetCount !== undefined) {
+        template.targetCount = Math.max(1, Math.round(input.targetCount));
+      }
+      if (input.targetPerWeek !== undefined) {
+        template.targetPerWeek =
+          input.targetPerWeek !== null && input.targetPerWeek > 0 ? Math.round(input.targetPerWeek) : null;
       }
       if (input.isHabit !== undefined) {
         template.isHabit = input.isHabit;

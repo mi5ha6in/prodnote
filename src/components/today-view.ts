@@ -145,7 +145,7 @@ export class TodayView extends HTMLElement {
             <div class="check-list">
               ${
                 dayItems.length
-                  ? dayItems.map((item) => this.renderItem(item)).join("")
+                  ? dayItems.map((item) => this.renderItem(item, workspace)).join("")
                   : emptyStateHtml("Пунктов нет. Составьте список на день.")
               }
             </div>
@@ -318,6 +318,17 @@ export class TodayView extends HTMLElement {
           width: auto;
         }
 
+        .target-input {
+          width: 3.6rem;
+        }
+
+        .count-control {
+          align-items: center;
+          display: inline-flex;
+          flex: none;
+          gap: var(--space-1);
+        }
+
         .check-item label {
           margin: 0;
         }
@@ -464,7 +475,7 @@ export class TodayView extends HTMLElement {
     setBodyScrollLock(this.planStep > 0 || this.shutdownStep > 0);
   }
 
-  private renderItem(item: ChecklistItem): string {
+  private renderItem(item: ChecklistItem, workspace: Workspace): string {
     if (this.editing?.kind === "item" && this.editing.id === item.id) {
       return `
         <div class="check-item">
@@ -475,9 +486,21 @@ export class TodayView extends HTMLElement {
       `;
     }
 
+    const target = item.templateId
+      ? Math.max(1, workspace.checklistTemplates.find((template) => template.id === item.templateId)?.targetCount ?? 1)
+      : 1;
+
     return `
       <div class="check-item ${item.done ? "is-done" : ""}" draggable="true" data-drag-item="${escapeHtml(item.id)}">
-        <input type="checkbox" data-toggle="${escapeHtml(item.id)}" ${item.done ? "checked" : ""} aria-label="Отметить выполненным" />
+        ${
+          target > 1
+            ? `<span class="count-control">
+                <button ${buttonAttrs({ tone: "ghost", size: "small", data: { countDec: item.id } })} aria-label="Убавить">−</button>
+                <span class="check-time">${item.count}/${target}</span>
+                <button ${buttonAttrs({ tone: "ghost", size: "small", data: { countInc: item.id } })} aria-label="Прибавить">+</button>
+              </span>`
+            : `<input type="checkbox" data-toggle="${escapeHtml(item.id)}" ${item.done ? "checked" : ""} aria-label="Отметить выполненным" />`
+        }
         <button type="button" class="check-title check-edit-start" data-edit-item="${escapeHtml(item.id)}" title="Переименовать">${escapeHtml(item.title)}</button>
         ${item.rolledFrom ? badgeHtml("перенесено") : ""}
         ${item.done && item.doneAt ? `<span class="check-time">${escapeHtml(formatTime(item.doneAt))}</span>` : ""}
@@ -986,6 +1009,23 @@ export class TodayView extends HTMLElement {
       });
     });
 
+    root.querySelectorAll<HTMLButtonElement>("[data-count-inc]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.dataset.countInc;
+        if (id) {
+          void appStore.incrementChecklistItem(id, 1);
+        }
+      });
+    });
+    root.querySelectorAll<HTMLButtonElement>("[data-count-dec]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.dataset.countDec;
+        if (id) {
+          void appStore.incrementChecklistItem(id, -1);
+        }
+      });
+    });
+
     root.querySelectorAll<HTMLButtonElement>("[data-remove]").forEach((button) => {
       button.addEventListener("click", () => {
         const id = button.dataset.remove;
@@ -1028,6 +1068,8 @@ export class TodayView extends HTMLElement {
       const title = templateForm.elements.namedItem("title");
       const cadence = templateForm.elements.namedItem("cadence");
       const habit = templateForm.elements.namedItem("isHabit");
+      const targetCount = templateForm.elements.namedItem("targetCount");
+      const targetPerWeek = templateForm.elements.namedItem("targetPerWeek");
       if (!(title instanceof HTMLInputElement) || !title.value.trim()) {
         return;
       }
@@ -1035,6 +1077,9 @@ export class TodayView extends HTMLElement {
         title: title.value,
         cadence: cadence instanceof HTMLSelectElement ? (cadence.value as ChecklistCadence) : "daily",
         isHabit: habit instanceof HTMLInputElement ? habit.checked : false,
+        targetCount: targetCount instanceof HTMLInputElement ? Number(targetCount.value) || 1 : 1,
+        targetPerWeek:
+          targetPerWeek instanceof HTMLInputElement && targetPerWeek.value ? Number(targetPerWeek.value) : null,
       });
     });
 
@@ -1191,6 +1236,8 @@ export class TodayView extends HTMLElement {
         <form class="template-form" data-template-form>
           <input name="title" placeholder="Например: зарядка" aria-label="Название шаблона" autocomplete="off" />
           <select name="cadence" aria-label="Периодичность">${cadenceOptions("daily")}</select>
+          <label class="template-habit"><input type="number" name="targetCount" min="1" max="99" value="1" aria-label="Повторов в день" class="target-input" /> в день</label>
+          <label class="template-habit"><input type="number" name="targetPerWeek" min="1" max="7" placeholder="—" aria-label="Раз в неделю" class="target-input" /> в неделю</label>
           <label class="template-habit"><input type="checkbox" name="isHabit" /> привычка</label>
           <button ${buttonAttrs({ type: "submit", size: "small" })}>Добавить</button>
         </form>
@@ -1208,6 +1255,8 @@ export class TodayView extends HTMLElement {
                             : `<button type="button" class="check-title check-edit-start" data-edit-template="${escapeHtml(template.id)}" title="Переименовать">${escapeHtml(template.title)}</button>`
                         }
                         ${template.isHabit ? badgeHtml("привычка") : ""}
+                        ${template.targetCount > 1 ? badgeHtml(`×${template.targetCount}/день`) : ""}
+                        ${template.targetPerWeek ? badgeHtml(`${template.targetPerWeek}/нед`) : ""}
                         <select data-template-cadence="${escapeHtml(template.id)}" aria-label="Периодичность">${cadenceOptions(template.cadence)}</select>
                         <label class="template-habit">
                           <input type="checkbox" data-template-habit="${escapeHtml(template.id)}" ${template.isHabit ? "checked" : ""} /> привычка

@@ -153,6 +153,7 @@ describe("getPlanVsActualByTask", () => {
       taskId: null,
       templateId: null,
       rolledFrom: null,
+      count: done ? 1 : 0,
       createdAt: `${day}T08:00:00.000Z`,
       updatedAt: `${day}T08:00:00.000Z`,
     });

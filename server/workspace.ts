@@ -198,6 +198,7 @@ export async function getSyncedWorkspace(userId: string, sinceRevision = 0): Pro
         taskId: asNullableString(item.task_id),
         templateId: asNullableString(item.template_id),
         rolledFrom: asNullableString(item.rolled_from),
+        count: Number(item.count ?? 0),
         createdAt: toIso(item.created_at),
         updatedAt: toIso(item.updated_at),
       })),
@@ -206,6 +207,8 @@ export async function getSyncedWorkspace(userId: string, sinceRevision = 0): Pro
         title: asString(template.title),
         cadence: asString(template.cadence) as Workspace["checklistTemplates"][number]["cadence"],
         isHabit: Boolean(template.is_habit),
+        targetCount: Number(template.target_count ?? 1),
+        targetPerWeek: asNullableNumber(template.target_per_week),
         archived: Boolean(template.archived),
         createdAt: toIso(template.created_at),
         updatedAt: toIso(template.updated_at),
@@ -374,18 +377,19 @@ export async function putSyncedWorkspace(
     for (const item of workspace.checklist) {
       await transaction`
         insert into checklist_items (
-          workspace_id, entity_id, day, title, done, done_at, position, task_id, template_id, rolled_from,
+          workspace_id, entity_id, day, title, done, done_at, position, task_id, template_id, rolled_from, count,
           created_at, updated_at, client_updated_at, server_revision, deleted_at
         )
         values (
           ${workspaceId}, ${item.id}, ${item.day}, ${item.title}, ${item.done}, ${toSqlTimestamp(item.doneAt)},
-          ${item.order}, ${item.taskId}, ${item.templateId}, ${item.rolledFrom}, ${toSqlTimestamp(item.createdAt)}, ${toSqlTimestamp(item.updatedAt)},
+          ${item.order}, ${item.taskId}, ${item.templateId}, ${item.rolledFrom}, ${item.count ?? 0},
+          ${toSqlTimestamp(item.createdAt)}, ${toSqlTimestamp(item.updatedAt)},
           ${toSqlTimestamp(item.updatedAt)}, ${nextRevision}, null
         )
         on conflict (workspace_id, entity_id) do update
         set day = excluded.day, title = excluded.title, done = excluded.done, done_at = excluded.done_at,
           position = excluded.position, task_id = excluded.task_id, template_id = excluded.template_id, rolled_from = excluded.rolled_from,
-          created_at = excluded.created_at, updated_at = excluded.updated_at,
+          count = excluded.count, created_at = excluded.created_at, updated_at = excluded.updated_at,
           client_updated_at = excluded.client_updated_at, server_revision = excluded.server_revision, deleted_at = null
         where checklist_items.client_updated_at < excluded.client_updated_at or checklist_items.deleted_at is not null
       `;
@@ -394,16 +398,18 @@ export async function putSyncedWorkspace(
     for (const template of workspace.checklistTemplates) {
       await transaction`
         insert into checklist_templates (
-          workspace_id, entity_id, title, cadence, is_habit, archived,
+          workspace_id, entity_id, title, cadence, is_habit, target_count, target_per_week, archived,
           created_at, updated_at, client_updated_at, server_revision, deleted_at
         )
         values (
-          ${workspaceId}, ${template.id}, ${template.title}, ${template.cadence}, ${template.isHabit}, ${template.archived},
+          ${workspaceId}, ${template.id}, ${template.title}, ${template.cadence}, ${template.isHabit},
+          ${template.targetCount ?? 1}, ${template.targetPerWeek ?? null}, ${template.archived},
           ${toSqlTimestamp(template.createdAt)}, ${toSqlTimestamp(template.updatedAt)}, ${toSqlTimestamp(template.updatedAt)},
           ${nextRevision}, null
         )
         on conflict (workspace_id, entity_id) do update
-        set title = excluded.title, cadence = excluded.cadence, is_habit = excluded.is_habit, archived = excluded.archived,
+        set title = excluded.title, cadence = excluded.cadence, is_habit = excluded.is_habit,
+          target_count = excluded.target_count, target_per_week = excluded.target_per_week, archived = excluded.archived,
           created_at = excluded.created_at, updated_at = excluded.updated_at,
           client_updated_at = excluded.client_updated_at, server_revision = excluded.server_revision, deleted_at = null
         where checklist_templates.client_updated_at < excluded.client_updated_at or checklist_templates.deleted_at is not null

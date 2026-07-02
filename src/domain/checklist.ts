@@ -69,6 +69,46 @@ export function habitStreak(template: ChecklistTemplate, items: ChecklistItem[],
   return streak;
 }
 
+/** Done-days of a habit within the week starting at `weekStart` (7 days). */
+export function habitWeekProgress(template: ChecklistTemplate, items: ChecklistItem[], weekStart: string): number {
+  const weekEnd = shiftDayKey(weekStart, 6);
+  const done = habitDoneDays(items, template.id);
+  let count = 0;
+  for (const day of done) {
+    if (day >= weekStart && day <= weekEnd) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+/**
+ * For habits with a weekly goal: consecutive weeks meeting `targetPerWeek`,
+ * counting back from the previous week. The current (unfinished) week extends
+ * the streak once the goal is already met, but does not break it otherwise.
+ */
+export function habitWeekStreak(
+  template: ChecklistTemplate,
+  items: ChecklistItem[],
+  weekStart: string,
+): number {
+  const target = template.targetPerWeek;
+  if (!target || target <= 0) {
+    return 0;
+  }
+
+  let streak = habitWeekProgress(template, items, weekStart) >= target ? 1 : 0;
+  let cursor = shiftDayKey(weekStart, -7);
+  for (let step = 0; step < 260; step += 1) {
+    if (habitWeekProgress(template, items, cursor) < target) {
+      break;
+    }
+    streak += 1;
+    cursor = shiftDayKey(cursor, -7);
+  }
+  return streak;
+}
+
 /**
  * Build the checklist items that recurring templates should add to a day,
  * skipping templates that already have an item materialized for that day.

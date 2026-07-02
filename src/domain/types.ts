@@ -1,6 +1,6 @@
 import type { RecurrenceRule } from "./recurrence";
 
-export const SCHEMA_VERSION = 16;
+export const SCHEMA_VERSION = 17;
 
 export type EntityId = string;
 
@@ -81,6 +81,8 @@ export interface ChecklistItem {
   templateId: EntityId | null;
   /** Day key this item was carried over from, when rolled forward. */
   rolledFrom: string | null;
+  /** Progress for quantity habits; `done` flips when count reaches the template target. */
+  count: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -93,6 +95,10 @@ export interface ChecklistTemplate {
   cadence: ChecklistCadence;
   /** Track this template as a habit in the habit tracker. */
   isHabit: boolean;
+  /** Repetitions per day for quantity habits («8 стаканов»); 1 = plain checkbox. */
+  targetCount: number;
+  /** Weekly goal in done-days («3 раза в неделю»); null = every scheduled day counts. */
+  targetPerWeek: number | null;
   archived: boolean;
   createdAt: string;
   updatedAt: string;
