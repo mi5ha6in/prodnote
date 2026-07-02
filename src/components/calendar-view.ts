@@ -73,6 +73,12 @@ export class CalendarView extends HTMLElement {
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
+    // Deep link `#/planner/calendar/<id>` (command palette): open that event's editor.
+    const entityId = this.getAttribute("entity-id");
+    if (entityId && appStore.getWorkspace().events.some((event) => event.id === entityId)) {
+      this.openEventModal(entityId, null);
+      return;
+    }
     this.render();
   }
 
@@ -1089,6 +1095,10 @@ export class CalendarView extends HTMLElement {
     this.editingEventId = null;
     this.draftStart = null;
     this.draftAllDay = false;
+    // Drop a stale deep-link hash so the same event can be reopened from the palette.
+    if (window.location.hash.startsWith("#/planner/calendar/")) {
+      history.replaceState(null, "", "#/planner/calendar");
+    }
     this.render();
   }
 

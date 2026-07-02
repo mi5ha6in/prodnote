@@ -34,7 +34,9 @@ export interface SearchHit {
   hash: string;
 }
 
-/** Global search across tasks, notes and events for the command palette. */
+const HIT_DATE = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short" });
+
+/** Global search across tasks, notes and events; hits deep-link to the entity. */
 export function searchAll(
   query: string,
   data: { tasks: Task[]; notes: Note[]; events: CalendarEvent[] },
@@ -48,18 +50,30 @@ export function searchAll(
   const hits: SearchHit[] = [];
 
   for (const task of data.tasks) {
-    if (matchesAll(`${task.title} ${task.description}`, queryTerms)) {
-      hits.push({ kind: "task", id: task.id, title: task.title, subtitle: "Задача", hash: "#/work/tasks" });
+    const haystack = [
+      task.title,
+      task.description,
+      ...task.history.map((entry) => entry.markdown),
+      ...task.subtasks.map((subtask) => subtask.title),
+    ].join(" ");
+    if (matchesAll(haystack, queryTerms)) {
+      hits.push({ kind: "task", id: task.id, title: task.title, subtitle: "Задача", hash: `#/work/tasks/${task.id}` });
     }
   }
   for (const note of data.notes) {
     if (matchesAll(`${note.title} ${note.markdown}`, queryTerms)) {
-      hits.push({ kind: "note", id: note.id, title: note.title, subtitle: "Заметка", hash: "#/notes/notes" });
+      hits.push({ kind: "note", id: note.id, title: note.title, subtitle: "Заметка", hash: `#/notes/notes/${note.id}` });
     }
   }
   for (const event of data.events) {
     if (matchesAll(`${event.title} ${event.description}`, queryTerms)) {
-      hits.push({ kind: "event", id: event.id, title: event.title, subtitle: "Событие", hash: "#/planner/calendar" });
+      hits.push({
+        kind: "event",
+        id: event.id,
+        title: event.title,
+        subtitle: `Событие · ${HIT_DATE.format(new Date(event.startsAt))}`,
+        hash: `#/planner/calendar/${event.id}`,
+      });
     }
   }
 
