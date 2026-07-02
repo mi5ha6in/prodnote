@@ -1,7 +1,7 @@
 import { dayKey, weekdayLabels } from "../domain/calendar";
 import { shiftDayKey } from "../domain/checklist";
 import { escapeHtml } from "../domain/markdown";
-import { buildWeeklyReview, weekStartKey } from "../domain/review";
+import { buildReviewTrends, buildWeeklyReview, weekStartKey } from "../domain/review";
 import { formatDuration } from "../domain/stats";
 import { DEFAULT_TASK_FILTER, filterAndSortTasks } from "../domain/task-filter";
 import type { Task, Workspace } from "../domain/types";
@@ -10,6 +10,13 @@ import { badgeHtml, buttonAttrs, emptyStateHtml, metricBarHtml, viewHeaderHtml, 
 import { setBodyScrollLock, wireModal } from "./modal";
 import { renderShadow } from "./shadow";
 import { formatDate, renderProjectOptions } from "./view-utils";
+
+function trendBadge(label: string, delta: number, format: (value: number) => string): string {
+  if (delta === 0) {
+    return badgeHtml(`${label}: без изменений`);
+  }
+  return badgeHtml(`${label}: ${delta > 0 ? "▲" : "▼"} ${format(delta)}`);
+}
 
 function scoreLabel(score: number): string {
   if (score >= 90) return "Отличная неделя";
@@ -43,6 +50,7 @@ export class ReviewView extends HTMLElement {
     const thisWeek = this.currentWeekStart();
     const weekStart = this.weekStart ?? thisWeek;
     const review = buildWeeklyReview(workspace, weekStart);
+    const trends = buildReviewTrends(workspace, weekStart);
     const labels = weekdayLabels(workspace.settings.weekStartsOn);
     const maxMinutes = Math.max(1, ...review.perDay.map((day) => day.minutes));
 
@@ -88,6 +96,28 @@ export class ReviewView extends HTMLElement {
             { label: "Чек-лист", value: `${review.checklistDone}/${review.checklistPlanned}`, hint: "Выполнено из запланированных" },
             { label: "Активных дней", value: `${review.activeDays}/7`, hint: "С работой или отметками" },
           ])}
+
+          <article class="card">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">Динамика</p>
+                <h2>Против прошлой недели</h2>
+              </div>
+            </div>
+            <div class="meta-row trend-row">
+              ${trendBadge("время", trends.deltaMinutes, (value) => formatDuration(Math.abs(value)))}
+              ${trendBadge("индекс", trends.deltaScore, (value) => `${Math.abs(value)}`)}
+              ${trendBadge("задачи", trends.deltaTasksCompleted, (value) => `${Math.abs(value)}`)}
+              ${
+                trends.minutesVsAveragePercent !== null
+                  ? badgeHtml(
+                      `${trends.minutesVsAveragePercent >= 0 ? "+" : ""}${trends.minutesVsAveragePercent}% к среднему за 4 недели`,
+                    )
+                  : ""
+              }
+              ${trends.bestDayIndex !== null ? badgeHtml(`лучший день: ${labels[trends.bestDayIndex] ?? ""}`) : ""}
+            </div>
+          </article>
 
           <article class="card">
             <div class="card-header">

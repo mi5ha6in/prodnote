@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createChecklistItem, createChecklistTemplate, createStarterWorkspace, createTask } from "./defaults";
-import { buildWeeklyReview, weekStartKey } from "./review";
+import { buildReviewTrends, buildWeeklyReview, weekStartKey } from "./review";
 import type { TimeSession, Workspace } from "./types";
 
 const WEEK_START = "2026-06-29"; // Monday
@@ -70,5 +70,34 @@ describe("weekly review", () => {
 
     expect(met.goalMinutes).toBe(60);
     expect(met.score).toBeGreaterThan(missed.score);
+  });
+
+  it("compares the week with the previous one and the trailing average", () => {
+    const workspace: Workspace = {
+      ...createStarterWorkspace(),
+      sessions: [
+        session("2026-06-29T10:00:00.000Z", 120), // текущая неделя
+        session("2026-06-30T10:00:00.000Z", 60),
+        session("2026-06-22T10:00:00.000Z", 90), // прошлая
+        session("2026-06-15T10:00:00.000Z", 30), // позапрошлая
+      ],
+      tasks: [{ ...createTask({ title: "Закрыта" }), completedAt: "2026-06-29T12:00:00.000Z" }],
+    };
+
+    const trends = buildReviewTrends(workspace, WEEK_START);
+    expect(trends.deltaMinutes).toBe(180 - 90);
+    expect(trends.deltaTasksCompleted).toBe(1);
+    // Среднее по двум непустым прошлым неделям: (90 + 30) / 2 = 60 → +200%.
+    expect(trends.minutesVsAveragePercent).toBe(200);
+    // Лучший день — понедельник (120 мин), индекс 0 при weekStartsOn=1.
+    expect(trends.bestDayIndex).toBe(0);
+  });
+
+  it("returns null averages without history and no best day for an empty week", () => {
+    const empty = createStarterWorkspace();
+    const trends = buildReviewTrends(empty, WEEK_START);
+    expect(trends.minutesVsAveragePercent).toBeNull();
+    expect(trends.bestDayIndex).toBeNull();
+    expect(trends.deltaMinutes).toBe(0);
   });
 });
