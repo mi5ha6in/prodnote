@@ -7,6 +7,10 @@ export interface ServerConfig {
   port: number;
   rpName: string;
   sessionTtlDays: number;
+  /** Web Push is enabled only when both VAPID keys are provided (npx web-push generate-vapid-keys). */
+  vapidPublicKey: string | null;
+  vapidPrivateKey: string | null;
+  vapidSubject: string;
 }
 
 export function getServerConfig(): ServerConfig {
@@ -22,6 +26,9 @@ export function getServerConfig(): ServerConfig {
     port: Number(process.env.PORT ?? 8787),
     rpName: process.env.WEBAUTHN_RP_NAME ?? "ProdNote",
     sessionTtlDays: Number(process.env.SESSION_TTL_DAYS ?? 30),
+    vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? null,
+    vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? null,
+    vapidSubject: process.env.VAPID_SUBJECT ?? "mailto:admin@localhost",
   };
 }
 

@@ -298,5 +298,20 @@ export async function runMigrations(): Promise<void> {
 
     alter table if exists notes
       add column if not exists day_key text;
+
+    alter table if exists settings
+      add column if not exists event_reminder_minutes integer not null default 15;
+
+    alter table if exists settings
+      add column if not exists all_day_reminder_hour integer not null default 9;
+
+    create table if not exists push_subscriptions (
+      id uuid primary key,
+      user_id uuid not null references users(id) on delete cascade,
+      endpoint text not null unique,
+      p256dh text not null,
+      auth text not null,
+      created_at timestamptz not null
+    );
   `);
 }

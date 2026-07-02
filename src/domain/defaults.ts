@@ -76,8 +76,16 @@ export function createDefaultSettings(): Settings {
     weekStartsOn: 1,
     weeklyTimeGoalMinutes: 0,
     dailyCapacityMinutes: 480,
+    eventReminderMinutes: 15,
+    allDayReminderHour: 9,
   };
 }
+
+/** Lead-time choices for timed-event reminders (minutes; 0 = off). */
+export const REMINDER_OPTIONS = [0, 5, 10, 15, 30, 60] as const;
+
+/** Morning-hour choices for all-day/deadline reminders (-1 = off). */
+export const ALLDAY_REMINDER_OPTIONS = [-1, 7, 8, 9, 10, 12] as const;
 
 export function createStarterWorkspace(): Workspace {
   const createdAt = nowIso();

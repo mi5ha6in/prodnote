@@ -88,10 +88,38 @@ export class ProdNoteStore {
     this.workspace = await loadWorkspace();
     this.activeTimer = loadActiveTimer(this.workspace);
     this.initialized = true;
+    await this.adoptLegacyReminderPrefs();
     await this.prepareToday();
     this.emit();
     void this.pullRemoteWorkspace();
     this.startAutoPull();
+  }
+
+  /**
+   * One-time adoption of the pre-v15 per-device reminder prefs (localStorage)
+   * into synced settings, so upgrading users keep their lead times.
+   */
+  private async adoptLegacyReminderPrefs(): Promise<void> {
+    if (typeof localStorage === "undefined") {
+      return;
+    }
+
+    const lead = localStorage.getItem("prodnote-event-reminder-minutes");
+    const hour = localStorage.getItem("prodnote-allday-reminder-hour");
+    if (lead === null && hour === null) {
+      return;
+    }
+
+    await this.commit((workspace) => {
+      if (lead !== null && Number.isFinite(Number(lead))) {
+        workspace.settings.eventReminderMinutes = Math.max(0, Math.round(Number(lead)));
+      }
+      if (hour !== null && Number.isFinite(Number(hour))) {
+        workspace.settings.allDayReminderHour = Math.max(-1, Math.min(23, Math.round(Number(hour))));
+      }
+    });
+    localStorage.removeItem("prodnote-event-reminder-minutes");
+    localStorage.removeItem("prodnote-allday-reminder-hour");
   }
 
   /** Keep other devices' changes flowing in: pull every minute and on window focus. */
