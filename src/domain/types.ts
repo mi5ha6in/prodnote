@@ -1,6 +1,6 @@
 import type { RecurrenceRule } from "./recurrence";
 
-export const SCHEMA_VERSION = 12;
+export const SCHEMA_VERSION = 13;
 
 export type EntityId = string;
 
@@ -173,6 +173,8 @@ export interface Settings {
   weekStartsOn: 1 | 7;
   /** Weekly tracked-time target in minutes; 0 disables the goal. */
   weeklyTimeGoalMinutes: number;
+  /** Realistic plannable minutes per day for the day-budget check; 0 disables it. */
+  dailyCapacityMinutes: number;
 }
 
 export interface WorkspaceExport {

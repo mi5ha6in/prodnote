@@ -6,7 +6,7 @@ import { formatDuration } from "../domain/stats";
 import { DEFAULT_TASK_FILTER, filterAndSortTasks } from "../domain/task-filter";
 import type { Task, Workspace } from "../domain/types";
 import { appStore } from "../state";
-import { badgeHtml, buttonAttrs, emptyStateHtml, metricBarHtml, modalHtml, viewHeaderHtml } from "../ui/html";
+import { badgeHtml, buttonAttrs, emptyStateHtml, metricBarHtml, viewHeaderHtml, wizardStepHtml } from "../ui/html";
 import { setBodyScrollLock, wireModal } from "./modal";
 import { renderShadow } from "./shadow";
 import { formatDate, renderProjectOptions } from "./view-utils";
@@ -155,26 +155,17 @@ export class ReviewView extends HTMLElement {
           ? this.renderWizardOverdue(workspace)
           : this.renderWizardSummary(score);
 
-    return modalHtml({
+    return wizardStepHtml({
       label: "Недельное ревью",
-      body: `
-        <div class="card-header" style="margin-bottom: 0;">
-          <div>
-            <p class="eyebrow">Шаг ${this.wizardStep} из ${steps.length}</p>
-            <h2>${escapeHtml(steps[this.wizardStep - 1] ?? "")}</h2>
-          </div>
-          <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-wizard" } })}>Закрыть</button>
-        </div>
-        ${stepBody}
-        <div class="row-actions wizard-footer">
-          ${this.wizardStep > 1 ? `<button ${buttonAttrs({ tone: "ghost", data: { action: "wizard-back" } })}>Назад</button>` : ""}
-          ${
-            this.wizardStep < steps.length
-              ? `<button ${buttonAttrs({ data: { action: "wizard-next" } })}>Далее</button>`
-              : `<button ${buttonAttrs({ data: { action: "close-wizard" } })}>Готово</button>`
-          }
-        </div>
-      `,
+      step: this.wizardStep,
+      totalSteps: steps.length,
+      title: steps[this.wizardStep - 1] ?? "",
+      body: stepBody,
+      showBack: this.wizardStep > 1,
+      footer:
+        this.wizardStep < steps.length
+          ? `<button ${buttonAttrs({ data: { action: "wizard-next" } })}>Далее</button>`
+          : `<button ${buttonAttrs({ data: { action: "close-wizard" } })}>Готово</button>`,
     });
   }
 
@@ -402,10 +393,6 @@ const styles = `
 
   .wizard-row .row-actions select {
     width: auto;
-  }
-
-  .wizard-footer {
-    justify-content: flex-end;
   }
 
   .wizard-summary {

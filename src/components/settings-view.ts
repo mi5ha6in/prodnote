@@ -251,6 +251,10 @@ export class SettingsView extends HTMLElement {
                 label: "Цель по времени в неделю, часов (0 — выключено)",
                 control: `<input name="weeklyGoalHours" type="number" min="0" max="120" step="0.5" value="${settings.weeklyTimeGoalMinutes / 60}" />`,
               })}
+              ${fieldHtml({
+                label: "Ёмкость дня для планирования, часов (0 — выключено)",
+                control: `<input name="dayCapacityHours" type="number" min="0" max="24" step="0.5" value="${settings.dailyCapacityMinutes / 60}" />`,
+              })}
               <button ${buttonAttrs({ type: "submit" })}>Сохранить настройки</button>
             </form>
 
@@ -506,6 +510,7 @@ export class SettingsView extends HTMLElement {
         pomodoroLongBreakEvery: Number(requireInput(form, "longBreakEvery").value),
         weekStartsOn: Number(requireSelect(form, "weekStartsOn").value) === 7 ? 7 : 1,
         weeklyTimeGoalMinutes: Math.max(0, Math.round(Number(requireInput(form, "weeklyGoalHours").value) * 60)),
+        dailyCapacityMinutes: Math.max(0, Math.round(Number(requireInput(form, "dayCapacityHours").value) * 60)),
       });
     });
 

@@ -264,6 +264,7 @@ export async function getSyncedWorkspace(userId: string, sinceRevision = 0): Pro
             pomodoroLongBreakEvery: Number(settings.pomodoro_long_break_every),
             weekStartsOn: Number(settings.week_starts_on) === 7 ? 7 : 1,
             weeklyTimeGoalMinutes: Number(settings.weekly_time_goal_minutes ?? 0),
+            dailyCapacityMinutes: Number(settings.daily_capacity_minutes ?? 480),
           }
         : createDefaultSettings(),
     },
@@ -523,12 +524,14 @@ export async function putSyncedWorkspace(
     await transaction`
       insert into settings (
         workspace_id, pomodoro_focus_minutes, pomodoro_short_break_minutes, pomodoro_long_break_minutes,
-        pomodoro_long_break_every, week_starts_on, weekly_time_goal_minutes, client_updated_at, server_revision
+        pomodoro_long_break_every, week_starts_on, weekly_time_goal_minutes, daily_capacity_minutes,
+        client_updated_at, server_revision
       )
       values (
         ${workspaceId}, ${workspace.settings.pomodoroFocusMinutes}, ${workspace.settings.pomodoroShortBreakMinutes},
         ${workspace.settings.pomodoroLongBreakMinutes}, ${workspace.settings.pomodoroLongBreakEvery},
-        ${workspace.settings.weekStartsOn}, ${workspace.settings.weeklyTimeGoalMinutes}, ${now}, ${nextRevision}
+        ${workspace.settings.weekStartsOn}, ${workspace.settings.weeklyTimeGoalMinutes},
+        ${workspace.settings.dailyCapacityMinutes ?? 480}, ${now}, ${nextRevision}
       )
       on conflict (workspace_id) do update
       set pomodoro_focus_minutes = excluded.pomodoro_focus_minutes,
@@ -537,6 +540,7 @@ export async function putSyncedWorkspace(
         pomodoro_long_break_every = excluded.pomodoro_long_break_every,
         week_starts_on = excluded.week_starts_on,
         weekly_time_goal_minutes = excluded.weekly_time_goal_minutes,
+        daily_capacity_minutes = excluded.daily_capacity_minutes,
         client_updated_at = excluded.client_updated_at,
         server_revision = excluded.server_revision
     `;

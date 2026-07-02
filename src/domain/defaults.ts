@@ -75,6 +75,7 @@ export function createDefaultSettings(): Settings {
     pomodoroLongBreakEvery: 4,
     weekStartsOn: 1,
     weeklyTimeGoalMinutes: 0,
+    dailyCapacityMinutes: 480,
   };
 }
 

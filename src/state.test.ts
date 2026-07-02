@@ -197,6 +197,27 @@ describe("ProdNoteStore", () => {
     expect(store.getWorkspace().tasks.find((item) => item.id === task.id)?.projectId).toBeNull();
   });
 
+  it("plans a task for a day and sets its estimate independently", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+    const task = await store.addTask({ title: "Планируемая" });
+
+    await store.planTaskForDay(task.id, "2026-07-02");
+    let updated = store.getWorkspace().tasks.find((item) => item.id === task.id);
+    expect(updated?.plannedAt).toBe("2026-07-02T00:00:00");
+
+    await store.setTaskEstimate(task.id, 90);
+    updated = store.getWorkspace().tasks.find((item) => item.id === task.id);
+    expect(updated?.estimateMinutes).toBe(90);
+    expect(updated?.plannedAt).toBe("2026-07-02T00:00:00");
+
+    await store.setTaskEstimate(task.id, 0);
+    expect(store.getWorkspace().tasks.find((item) => item.id === task.id)?.estimateMinutes).toBeNull();
+
+    await store.planTaskForDay(task.id, null);
+    expect(store.getWorkspace().tasks.find((item) => item.id === task.id)?.plannedAt).toBeNull();
+  });
+
   it("deletes projects without deleting linked tasks and notes", async () => {
     const store = new ProdNoteStore();
     await store.init();
