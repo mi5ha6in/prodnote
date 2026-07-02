@@ -22,6 +22,15 @@ function isOpen(task: Task): boolean {
   return task.status !== "done";
 }
 
+/**
+ * Which of the two day rituals is the primary action right now:
+ * morning/afternoon — plan the day; evening (17:00+) — close it.
+ * An evening with nothing planned keeps planning primary — there is nothing to close.
+ */
+export function primaryDayAction(now: Date, hasPlannedTasks: boolean): "plan" | "shutdown" {
+  return now.getHours() >= 17 && hasPlannedTasks ? "shutdown" : "plan";
+}
+
 /** A task counts as planned for the day when its deadline or planned slot is on it. */
 export function isPlannedForDay(task: Task, day: string): boolean {
   return task.dueDate === day || (task.plannedAt ? task.plannedAt.slice(0, 10) === day : false);

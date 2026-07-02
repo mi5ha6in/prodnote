@@ -511,6 +511,26 @@ export const sharedStyles = `
     height: 100%;
   }
 
+  .quick-create {
+    display: grid;
+    gap: var(--space-2);
+    justify-items: start;
+  }
+
+  .quick-create-fields {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .quick-create-fields input[type="color"] {
+    flex: none;
+    min-height: 2.25rem;
+    padding: 0.15rem;
+    width: 2.6rem;
+  }
+
   .markdown-preview {
     color: var(--ink-soft);
     line-height: 1.62;

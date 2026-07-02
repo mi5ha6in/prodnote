@@ -1,9 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { buildDayPlan, isPlannedForDay } from "./day-plan";
+import { buildDayPlan, isPlannedForDay, primaryDayAction } from "./day-plan";
 import { createCalendarEvent, createStarterWorkspace, createTask } from "./defaults";
 
 const DAY = "2026-07-02";
 const NOW = new Date("2026-07-02T08:00:00");
+
+describe("primaryDayAction", () => {
+  it("suggests planning through the day and shutdown in the evening", () => {
+    expect(primaryDayAction(new Date("2026-07-02T08:00:00"), true)).toBe("plan");
+    expect(primaryDayAction(new Date("2026-07-02T16:59:00"), true)).toBe("plan");
+    expect(primaryDayAction(new Date("2026-07-02T17:00:00"), true)).toBe("shutdown");
+    expect(primaryDayAction(new Date("2026-07-02T22:30:00"), true)).toBe("shutdown");
+  });
+
+  it("keeps planning primary in an evening with nothing planned", () => {
+    expect(primaryDayAction(new Date("2026-07-02T19:00:00"), false)).toBe("plan");
+  });
+});
 
 describe("isPlannedForDay", () => {
   it("counts due date and planned slot on the day", () => {

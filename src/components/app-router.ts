@@ -54,7 +54,7 @@ export const HUBS: HubDef[] = [
         icon: "today",
         detailTag: "pn-today-view",
       },
-      { id: "habits", label: "Привычки", description: "Трекер привычек и серии", tag: "pn-habits-view", icon: "habits" },
+      { id: "habits", label: "Привычки", description: "Привычки, рутины и серии", tag: "pn-habits-view", icon: "habits" },
       {
         id: "calendar",
         label: "Календарь",

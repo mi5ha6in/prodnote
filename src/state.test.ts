@@ -173,6 +173,66 @@ describe("ProdNoteStore", () => {
     expect(store.getWorkspace().checklistTemplates).toHaveLength(0);
   });
 
+  it("archives a template so it stops materializing, and unarchives it back", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+    const today = dayKey(new Date());
+
+    const template = await store.addChecklistTemplate({ title: "Растяжка", cadence: "daily" });
+    await store.updateChecklistTemplate({ templateId: template!.id, archived: true });
+    expect(store.getWorkspace().checklistTemplates[0]?.archived).toBe(true);
+
+    // Архивный шаблон не материализуется в новый день.
+    const materialized = store.getWorkspace().checklist.find((item) => item.templateId === template!.id);
+    if (materialized) {
+      await store.removeChecklistItem(materialized.id);
+    }
+    await store.ensureChecklistForDay(today);
+    expect(store.getWorkspace().checklist.some((item) => item.templateId === template!.id)).toBe(false);
+
+    await store.updateChecklistTemplate({ templateId: template!.id, archived: false });
+    expect(store.getWorkspace().checklistTemplates[0]?.archived).toBe(false);
+  });
+
+  it("retro-marks a template day: creates a done item for a past day, toggles existing, ignores future", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+    const today = dayKey(new Date());
+    const pastDay = "2026-01-05";
+    const futureDay = "2999-01-01";
+
+    const template = await store.addChecklistTemplate({ title: "Чтение", cadence: "daily", targetCount: 2 });
+
+    // Прошлый день: пункта нет — создаётся сразу выполненным, с целевым count.
+    await store.toggleTemplateItemForDay(template!.id, pastDay);
+    const created = store.getWorkspace().checklist.find(
+      (item) => item.templateId === template!.id && item.day === pastDay,
+    );
+    expect(created?.done).toBe(true);
+    expect(created?.count).toBe(2);
+    expect(created?.doneAt).toBeTruthy();
+    // Другие шаблоны в прошлый день не материализуются.
+    expect(store.getWorkspace().checklist.filter((item) => item.day === pastDay)).toHaveLength(1);
+
+    // Повторный клик по существующему пункту — обычный toggle (снимает отметку).
+    await store.toggleTemplateItemForDay(template!.id, pastDay);
+    expect(
+      store.getWorkspace().checklist.find((item) => item.templateId === template!.id && item.day === pastDay)?.done,
+    ).toBe(false);
+
+    // Сегодняшний materialized пункт тоже переключается, а не дублируется.
+    const before = store.getWorkspace().checklist.filter((item) => item.day === today).length;
+    await store.toggleTemplateItemForDay(template!.id, today);
+    expect(store.getWorkspace().checklist.filter((item) => item.day === today)).toHaveLength(before);
+    expect(
+      store.getWorkspace().checklist.find((item) => item.templateId === template!.id && item.day === today)?.done,
+    ).toBe(true);
+
+    // Будущие дни игнорируются.
+    await store.toggleTemplateItemForDay(template!.id, futureDay);
+    expect(store.getWorkspace().checklist.some((item) => item.day === futureDay)).toBe(false);
+  });
+
   it("reassigns a task's project and reschedules its due date without touching other fields", async () => {
     const store = new ProdNoteStore();
     await store.init();

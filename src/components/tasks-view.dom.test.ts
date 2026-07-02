@@ -47,6 +47,37 @@ describe("tasks-view (DOM)", () => {
     expect(document.body.classList.contains("pn-modal-open")).toBe(true);
   });
 
+  it("quick-creates a project from the task modal without losing typed fields", async () => {
+    const element = mount();
+    shadow(element).querySelector<HTMLButtonElement>('[data-action="open-create"]')?.click();
+
+    const title = shadow(element).querySelector<HTMLInputElement>('form[data-form="task"] input[name="title"]');
+    expect(title).toBeTruthy();
+    title!.value = "Задача с новым проектом";
+
+    shadow(element).querySelector<HTMLButtonElement>('[data-quick-create="project"] [data-quick-create-toggle]')?.click();
+    const nameInput = shadow(element).querySelector<HTMLInputElement>(
+      '[data-quick-create="project"] [data-quick-create-name]',
+    );
+    expect(nameInput).toBeTruthy();
+    nameInput!.value = "Проект-на-лету";
+    shadow(element).querySelector<HTMLButtonElement>('[data-quick-create="project"] [data-quick-create-submit]')?.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const project = appStore.getWorkspace().projects.find((item) => item.name === "Проект-на-лету");
+    expect(project).toBeTruthy();
+
+    // Форма пересобралась после записи в store, но черновик сохранил ввод и выбрал новый проект.
+    const titleAfter = shadow(element).querySelector<HTMLInputElement>('form[data-form="task"] input[name="title"]');
+    expect(titleAfter?.value).toBe("Задача с новым проектом");
+    const projectSelect = shadow(element).querySelector<HTMLSelectElement>(
+      'form[data-form="task"] select[name="projectId"]',
+    );
+    expect(projectSelect?.value).toBe(project!.id);
+  });
+
   it("batch-completes selected tasks from the select mode", async () => {
     const a = await appStore.addTask({ title: "Батч-1" });
     const b = await appStore.addTask({ title: "Батч-2" });
