@@ -292,5 +292,38 @@ export async function runMigrations(): Promise<void> {
 
     alter table if exists tasks
       add column if not exists recurrence_parent_id text;
+
+    alter table if exists settings
+      add column if not exists daily_capacity_minutes integer not null default 480;
+
+    alter table if exists notes
+      add column if not exists day_key text;
+
+    alter table if exists settings
+      add column if not exists event_reminder_minutes integer not null default 15;
+
+    alter table if exists settings
+      add column if not exists all_day_reminder_hour integer not null default 9;
+
+    alter table if exists tasks
+      add column if not exists board_order double precision;
+
+    alter table if exists checklist_items
+      add column if not exists count integer not null default 0;
+
+    alter table if exists checklist_templates
+      add column if not exists target_count integer not null default 1;
+
+    alter table if exists checklist_templates
+      add column if not exists target_per_week integer;
+
+    create table if not exists push_subscriptions (
+      id uuid primary key,
+      user_id uuid not null references users(id) on delete cascade,
+      endpoint text not null unique,
+      p256dh text not null,
+      auth text not null,
+      created_at timestamptz not null
+    );
   `);
 }

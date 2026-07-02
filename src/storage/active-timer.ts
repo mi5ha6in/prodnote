@@ -2,8 +2,8 @@ import type { ActiveTimer, Workspace } from "../domain/types";
 
 const ACTIVE_TIMER_KEY = "prodnote-active-timer";
 
-type StoredActiveTimer = Omit<ActiveTimer, "pausedAt" | "pausedTotalMs"> &
-  Partial<Pick<ActiveTimer, "pausedAt" | "pausedTotalMs">>;
+type StoredActiveTimer = Omit<ActiveTimer, "pausedAt" | "pausedTotalMs" | "goal"> &
+  Partial<Pick<ActiveTimer, "pausedAt" | "pausedTotalMs" | "goal">>;
 
 function isStorageAvailable(): boolean {
   return typeof localStorage !== "undefined";
@@ -35,6 +35,7 @@ function normalizeStoredActiveTimer(timer: StoredActiveTimer): ActiveTimer {
     ...timer,
     pausedAt: timer.pausedAt ?? null,
     pausedTotalMs: timer.pausedTotalMs ?? 0,
+    goal: typeof timer.goal === "string" && timer.goal.trim() ? timer.goal : null,
   };
 }
 

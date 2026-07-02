@@ -155,6 +155,7 @@ export async function getSyncedWorkspace(userId: string, sinceRevision = 0): Pro
         dueDate: asNullableString(task.due_date),
         plannedAt: asNullableString(task.planned_at),
         estimateMinutes: asNullableNumber(task.estimate_minutes),
+        boardOrder: Number(task.board_order ?? 0),
         subtasks: (taskSubtasksByTask.get(asString(task.entity_id)) ?? []).map((sub) => ({
           id: asString(sub.entity_id),
           title: asString(sub.title),
@@ -183,6 +184,7 @@ export async function getSyncedWorkspace(userId: string, sinceRevision = 0): Pro
           id: asString(entry.entity_id),
           editedAt: toIso(entry.edited_at),
         })),
+        dayKey: asNullableString(note.day_key),
         createdAt: toIso(note.created_at),
         updatedAt: toIso(note.updated_at),
       })),
@@ -196,6 +198,7 @@ export async function getSyncedWorkspace(userId: string, sinceRevision = 0): Pro
         taskId: asNullableString(item.task_id),
         templateId: asNullableString(item.template_id),
         rolledFrom: asNullableString(item.rolled_from),
+        count: Number(item.count ?? 0),
         createdAt: toIso(item.created_at),
         updatedAt: toIso(item.updated_at),
       })),
@@ -204,6 +207,8 @@ export async function getSyncedWorkspace(userId: string, sinceRevision = 0): Pro
         title: asString(template.title),
         cadence: asString(template.cadence) as Workspace["checklistTemplates"][number]["cadence"],
         isHabit: Boolean(template.is_habit),
+        targetCount: Number(template.target_count ?? 1),
+        targetPerWeek: asNullableNumber(template.target_per_week),
         archived: Boolean(template.archived),
         createdAt: toIso(template.created_at),
         updatedAt: toIso(template.updated_at),
@@ -264,6 +269,9 @@ export async function getSyncedWorkspace(userId: string, sinceRevision = 0): Pro
             pomodoroLongBreakEvery: Number(settings.pomodoro_long_break_every),
             weekStartsOn: Number(settings.week_starts_on) === 7 ? 7 : 1,
             weeklyTimeGoalMinutes: Number(settings.weekly_time_goal_minutes ?? 0),
+            dailyCapacityMinutes: Number(settings.daily_capacity_minutes ?? 480),
+            eventReminderMinutes: Number(settings.event_reminder_minutes ?? 15),
+            allDayReminderHour: Number(settings.all_day_reminder_hour ?? 9),
           }
         : createDefaultSettings(),
     },
@@ -325,19 +333,20 @@ export async function putSyncedWorkspace(
       await transaction`
         insert into tasks (
           workspace_id, entity_id, title, description, project_id, status, priority, due_date, planned_at,
-          estimate_minutes, recurrence, recurrence_parent_id, created_at, updated_at, completed_at,
+          estimate_minutes, board_order, recurrence, recurrence_parent_id, created_at, updated_at, completed_at,
           client_updated_at, server_revision, deleted_at
         )
         values (
           ${workspaceId}, ${task.id}, ${task.title}, ${task.description}, ${task.projectId}, ${task.status}, ${task.priority},
-          ${task.dueDate}, ${task.plannedAt}, ${task.estimateMinutes}, ${task.recurrence ? JSON.stringify(task.recurrence) : null},
+          ${task.dueDate}, ${task.plannedAt}, ${task.estimateMinutes}, ${task.boardOrder ?? 0},
+          ${task.recurrence ? JSON.stringify(task.recurrence) : null},
           ${task.recurrenceParentId}, ${toSqlTimestamp(task.createdAt)}, ${toSqlTimestamp(task.updatedAt)},
           ${toSqlTimestamp(task.completedAt)}, ${toSqlTimestamp(task.updatedAt)}, ${nextRevision}, null
         )
         on conflict (workspace_id, entity_id) do update
         set title = excluded.title, description = excluded.description, project_id = excluded.project_id, status = excluded.status,
           priority = excluded.priority, due_date = excluded.due_date, planned_at = excluded.planned_at,
-          estimate_minutes = excluded.estimate_minutes, recurrence = excluded.recurrence,
+          estimate_minutes = excluded.estimate_minutes, board_order = excluded.board_order, recurrence = excluded.recurrence,
           recurrence_parent_id = excluded.recurrence_parent_id, created_at = excluded.created_at, updated_at = excluded.updated_at,
           completed_at = excluded.completed_at, client_updated_at = excluded.client_updated_at,
           server_revision = excluded.server_revision, deleted_at = null
@@ -368,18 +377,19 @@ export async function putSyncedWorkspace(
     for (const item of workspace.checklist) {
       await transaction`
         insert into checklist_items (
-          workspace_id, entity_id, day, title, done, done_at, position, task_id, template_id, rolled_from,
+          workspace_id, entity_id, day, title, done, done_at, position, task_id, template_id, rolled_from, count,
           created_at, updated_at, client_updated_at, server_revision, deleted_at
         )
         values (
           ${workspaceId}, ${item.id}, ${item.day}, ${item.title}, ${item.done}, ${toSqlTimestamp(item.doneAt)},
-          ${item.order}, ${item.taskId}, ${item.templateId}, ${item.rolledFrom}, ${toSqlTimestamp(item.createdAt)}, ${toSqlTimestamp(item.updatedAt)},
+          ${item.order}, ${item.taskId}, ${item.templateId}, ${item.rolledFrom}, ${item.count ?? 0},
+          ${toSqlTimestamp(item.createdAt)}, ${toSqlTimestamp(item.updatedAt)},
           ${toSqlTimestamp(item.updatedAt)}, ${nextRevision}, null
         )
         on conflict (workspace_id, entity_id) do update
         set day = excluded.day, title = excluded.title, done = excluded.done, done_at = excluded.done_at,
           position = excluded.position, task_id = excluded.task_id, template_id = excluded.template_id, rolled_from = excluded.rolled_from,
-          created_at = excluded.created_at, updated_at = excluded.updated_at,
+          count = excluded.count, created_at = excluded.created_at, updated_at = excluded.updated_at,
           client_updated_at = excluded.client_updated_at, server_revision = excluded.server_revision, deleted_at = null
         where checklist_items.client_updated_at < excluded.client_updated_at or checklist_items.deleted_at is not null
       `;
@@ -388,16 +398,18 @@ export async function putSyncedWorkspace(
     for (const template of workspace.checklistTemplates) {
       await transaction`
         insert into checklist_templates (
-          workspace_id, entity_id, title, cadence, is_habit, archived,
+          workspace_id, entity_id, title, cadence, is_habit, target_count, target_per_week, archived,
           created_at, updated_at, client_updated_at, server_revision, deleted_at
         )
         values (
-          ${workspaceId}, ${template.id}, ${template.title}, ${template.cadence}, ${template.isHabit}, ${template.archived},
+          ${workspaceId}, ${template.id}, ${template.title}, ${template.cadence}, ${template.isHabit},
+          ${template.targetCount ?? 1}, ${template.targetPerWeek ?? null}, ${template.archived},
           ${toSqlTimestamp(template.createdAt)}, ${toSqlTimestamp(template.updatedAt)}, ${toSqlTimestamp(template.updatedAt)},
           ${nextRevision}, null
         )
         on conflict (workspace_id, entity_id) do update
-        set title = excluded.title, cadence = excluded.cadence, is_habit = excluded.is_habit, archived = excluded.archived,
+        set title = excluded.title, cadence = excluded.cadence, is_habit = excluded.is_habit,
+          target_count = excluded.target_count, target_per_week = excluded.target_per_week, archived = excluded.archived,
           created_at = excluded.created_at, updated_at = excluded.updated_at,
           client_updated_at = excluded.client_updated_at, server_revision = excluded.server_revision, deleted_at = null
         where checklist_templates.client_updated_at < excluded.client_updated_at or checklist_templates.deleted_at is not null
@@ -407,14 +419,14 @@ export async function putSyncedWorkspace(
     for (const note of workspace.notes) {
       await transaction`
         insert into notes (
-          workspace_id, entity_id, title, markdown, project_id, created_at, updated_at, client_updated_at, server_revision, deleted_at
+          workspace_id, entity_id, title, markdown, project_id, day_key, created_at, updated_at, client_updated_at, server_revision, deleted_at
         )
         values (
-          ${workspaceId}, ${note.id}, ${note.title}, ${note.markdown}, ${note.projectId}, ${toSqlTimestamp(note.createdAt)},
+          ${workspaceId}, ${note.id}, ${note.title}, ${note.markdown}, ${note.projectId}, ${note.dayKey ?? null}, ${toSqlTimestamp(note.createdAt)},
           ${toSqlTimestamp(note.updatedAt)}, ${toSqlTimestamp(note.updatedAt)}, ${nextRevision}, null
         )
         on conflict (workspace_id, entity_id) do update
-        set title = excluded.title, markdown = excluded.markdown, project_id = excluded.project_id,
+        set title = excluded.title, markdown = excluded.markdown, project_id = excluded.project_id, day_key = excluded.day_key,
           created_at = excluded.created_at, updated_at = excluded.updated_at, client_updated_at = excluded.client_updated_at,
           server_revision = excluded.server_revision, deleted_at = null
         where notes.client_updated_at < excluded.client_updated_at or notes.deleted_at is not null
@@ -523,12 +535,15 @@ export async function putSyncedWorkspace(
     await transaction`
       insert into settings (
         workspace_id, pomodoro_focus_minutes, pomodoro_short_break_minutes, pomodoro_long_break_minutes,
-        pomodoro_long_break_every, week_starts_on, weekly_time_goal_minutes, client_updated_at, server_revision
+        pomodoro_long_break_every, week_starts_on, weekly_time_goal_minutes, daily_capacity_minutes,
+        event_reminder_minutes, all_day_reminder_hour, client_updated_at, server_revision
       )
       values (
         ${workspaceId}, ${workspace.settings.pomodoroFocusMinutes}, ${workspace.settings.pomodoroShortBreakMinutes},
         ${workspace.settings.pomodoroLongBreakMinutes}, ${workspace.settings.pomodoroLongBreakEvery},
-        ${workspace.settings.weekStartsOn}, ${workspace.settings.weeklyTimeGoalMinutes}, ${now}, ${nextRevision}
+        ${workspace.settings.weekStartsOn}, ${workspace.settings.weeklyTimeGoalMinutes},
+        ${workspace.settings.dailyCapacityMinutes ?? 480}, ${workspace.settings.eventReminderMinutes ?? 15},
+        ${workspace.settings.allDayReminderHour ?? 9}, ${now}, ${nextRevision}
       )
       on conflict (workspace_id) do update
       set pomodoro_focus_minutes = excluded.pomodoro_focus_minutes,
@@ -537,6 +552,9 @@ export async function putSyncedWorkspace(
         pomodoro_long_break_every = excluded.pomodoro_long_break_every,
         week_starts_on = excluded.week_starts_on,
         weekly_time_goal_minutes = excluded.weekly_time_goal_minutes,
+        daily_capacity_minutes = excluded.daily_capacity_minutes,
+        event_reminder_minutes = excluded.event_reminder_minutes,
+        all_day_reminder_hour = excluded.all_day_reminder_hour,
         client_updated_at = excluded.client_updated_at,
         server_revision = excluded.server_revision
     `;

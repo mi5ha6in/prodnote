@@ -36,6 +36,47 @@ function inRange(day: string, start: string, end: string): boolean {
   return day >= start && day <= end;
 }
 
+export interface ReviewTrends {
+  /** Delta of the current week vs the previous one. */
+  deltaMinutes: number;
+  deltaScore: number;
+  deltaTasksCompleted: number;
+  /** Current week vs the average of the previous `weeksBack` weeks (percent, rounded; null = no history). */
+  minutesVsAveragePercent: number | null;
+  /** Weekday label index (0..6 of perDay) with the most minutes this week, null when the week is empty. */
+  bestDayIndex: number | null;
+}
+
+/** Compare the week at `weekStart` with the previous one and the trailing average. */
+export function buildReviewTrends(workspace: Workspace, weekStart: string, weeksBack = 4): ReviewTrends {
+  const current = buildWeeklyReview(workspace, weekStart);
+  const previous = buildWeeklyReview(workspace, shiftDayKey(weekStart, -7));
+
+  let historyMinutes = 0;
+  let historyWeeks = 0;
+  for (let index = 1; index <= weeksBack; index += 1) {
+    const week = buildWeeklyReview(workspace, shiftDayKey(weekStart, -7 * index));
+    if (week.totalMinutes > 0 || week.checklistPlanned > 0) {
+      historyMinutes += week.totalMinutes;
+      historyWeeks += 1;
+    }
+  }
+  const average = historyWeeks > 0 ? historyMinutes / historyWeeks : 0;
+
+  const best = current.perDay.reduce(
+    (acc, day, index) => (day.minutes > acc.minutes ? { minutes: day.minutes, index } : acc),
+    { minutes: 0, index: -1 },
+  );
+
+  return {
+    deltaMinutes: current.totalMinutes - previous.totalMinutes,
+    deltaScore: current.score - previous.score,
+    deltaTasksCompleted: current.tasksCompleted - previous.tasksCompleted,
+    minutesVsAveragePercent: average > 0 ? Math.round(((current.totalMinutes - average) / average) * 100) : null,
+    bestDayIndex: best.index >= 0 ? best.index : null,
+  };
+}
+
 export function buildWeeklyReview(workspace: Workspace, weekStart: string): WeeklyReview {
   const days = Array.from({ length: 7 }, (_, offset) => shiftDayKey(weekStart, offset));
   const end = days[6] ?? weekStart;

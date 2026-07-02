@@ -1,5 +1,6 @@
 import { escapeHtml, renderMarkdown } from "../domain/markdown";
 import { applyMarkdownSnippetToText, MARKDOWN_SNIPPETS, type MarkdownSnippet } from "../domain/markdown-snippets";
+import { extractOpenCheckboxes } from "../domain/note-tasks";
 import { findBacklinks, searchNotes } from "../domain/search";
 import type { Note, Workspace } from "../domain/types";
 import { appStore } from "../state";
@@ -30,6 +31,11 @@ export class NotesView extends HTMLElement {
   private searchQuery = "";
 
   connectedCallback(): void {
+    // Deep link `#/notes/notes/<id>` (command palette): pre-open that note.
+    const entityId = this.getAttribute("entity-id");
+    if (entityId) {
+      this.openedNoteId = entityId;
+    }
     this.unsubscribe = appStore.subscribe(() => this.render());
     document.addEventListener("keydown", this.onHotkey);
     this.render();
@@ -75,6 +81,10 @@ export class NotesView extends HTMLElement {
     this.creating = false;
     this.openedNoteId = null;
     this.openedNoteMode = "preview";
+    // Drop a stale deep-link hash so the same note can be reopened from the palette.
+    if (window.location.hash.startsWith("#/notes/notes/")) {
+      history.replaceState(null, "", "#/notes/notes");
+    }
     this.render();
   }
 
@@ -488,6 +498,11 @@ export class NotesView extends HTMLElement {
             </div>
             <div class="row-actions">
               <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-open-note" } })}>Закрыть</button>
+              ${
+                extractOpenCheckboxes(note.markdown).length
+                  ? `<button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "extract-tasks" } })}>Чекбоксы → задачи</button>`
+                  : ""
+              }
               <button ${buttonAttrs({ size: "small", data: { action: "edit-open-note" } })}>Редактировать</button>
               <button ${buttonAttrs({ tone: "danger", size: "small", data: { action: "delete-open-note" } })}>Удалить</button>
             </div>
@@ -643,6 +658,12 @@ export class NotesView extends HTMLElement {
 
     root.querySelector<HTMLButtonElement>('[data-action="close-open-note"]')?.addEventListener("click", () => {
       this.closeModals();
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="extract-tasks"]')?.addEventListener("click", () => {
+      if (this.openedNoteId) {
+        void appStore.extractTasksFromNote(this.openedNoteId);
+      }
     });
 
     root.querySelector<HTMLButtonElement>('[data-action="delete-open-note"]')?.addEventListener("click", () => {

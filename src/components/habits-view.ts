@@ -1,7 +1,15 @@
 import { dayKey } from "../domain/calendar";
-import { habitDoneDays, habitStreak, lastNDays, templateAppliesToDay } from "../domain/checklist";
+import {
+  habitDoneDays,
+  habitStreak,
+  habitWeekProgress,
+  habitWeekStreak,
+  lastNDays,
+  templateAppliesToDay,
+} from "../domain/checklist";
 import { CHECKLIST_CADENCE_LABELS } from "../domain/defaults";
 import { escapeHtml } from "../domain/markdown";
+import { weekStartKey } from "../domain/review";
 import type { ChecklistItem, ChecklistTemplate } from "../domain/types";
 import { appStore } from "../state";
 import { badgeHtml, emptyStateHtml, metricBarHtml, viewHeaderHtml } from "../ui/html";
@@ -48,7 +56,17 @@ export class HabitsView extends HTMLElement {
 
           ${
             habits.length
-              ? `<div class="habit-list">${habits.map((habit) => this.renderHabit(habit, workspace.checklist, days, today)).join("")}</div>`
+              ? `<div class="habit-list">${habits
+                  .map((habit) =>
+                    this.renderHabit(
+                      habit,
+                      workspace.checklist,
+                      days,
+                      today,
+                      weekStartKey(new Date(), workspace.settings.weekStartsOn),
+                    ),
+                  )
+                  .join("")}</div>`
               : `<article class="card">${emptyStateHtml("Отметьте пункт как «привычку» в разделе «Сегодня» — он появится здесь со статистикой и серией.")}</article>`
           }
         </section>
@@ -137,9 +155,14 @@ export class HabitsView extends HTMLElement {
     items: ChecklistItem[],
     days: string[],
     today: string,
+    weekStart: string,
   ): string {
     const done = habitDoneDays(items, habit.id);
-    const streak = habitStreak(habit, items, today);
+    // Недельная цель считает недели, дневная — дни подряд.
+    const streak = habit.targetPerWeek
+      ? habitWeekStreak(habit, items, weekStart)
+      : habitStreak(habit, items, today);
+    const weekProgress = habit.targetPerWeek ? habitWeekProgress(habit, items, weekStart) : null;
     const todayItem = items.find((item) => item.templateId === habit.id && item.day === today);
 
     const cells = days
@@ -167,7 +190,9 @@ export class HabitsView extends HTMLElement {
           <span class="habit-title">${escapeHtml(habit.title)}</span>
           <div class="meta-row">
             ${badgeHtml(CHECKLIST_CADENCE_LABELS[habit.cadence])}
-            ${badgeHtml(`серия: ${streak}`)}
+            ${habit.targetCount > 1 ? badgeHtml(`×${habit.targetCount}/день`) : ""}
+            ${weekProgress !== null ? badgeHtml(`неделя: ${weekProgress}/${habit.targetPerWeek}`) : ""}
+            ${badgeHtml(habit.targetPerWeek ? `серия недель: ${streak}` : `серия: ${streak}`)}
           </div>
         </div>
         <div class="habit-grid" aria-label="Последние ${WINDOW_DAYS} дней">${cells}</div>

@@ -54,4 +54,18 @@ describe("command-palette (DOM)", () => {
 
     expect(appStore.getWorkspace().tasks.some((task) => task.title === "Позвонить врачу")).toBe(true);
   });
+
+  it("deep-links a search hit to the task detail route", async () => {
+    const task = await appStore.addTask({ title: "Уникальная-палитра-задача" });
+    const element = mount();
+    const root = openWith(element, "Уникальная-палитра-задача");
+
+    const hit = [...root.querySelectorAll<HTMLButtonElement>(".palette-item")].find(
+      (button) => button.textContent?.includes("Уникальная-палитра-задача") && button.textContent?.includes("Задача"),
+    );
+    expect(hit).toBeTruthy();
+    hit?.click();
+
+    expect(window.location.hash).toBe(`#/work/tasks/${task.id}`);
+  });
 });

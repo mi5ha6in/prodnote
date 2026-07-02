@@ -46,4 +46,28 @@ describe("tasks-view (DOM)", () => {
     expect(shadow(element).querySelector('form[data-form="task"]')).toBeTruthy();
     expect(document.body.classList.contains("pn-modal-open")).toBe(true);
   });
+
+  it("batch-completes selected tasks from the select mode", async () => {
+    const a = await appStore.addTask({ title: "Батч-1" });
+    const b = await appStore.addTask({ title: "Батч-2" });
+    const element = mount();
+
+    shadow(element).querySelector<HTMLButtonElement>('[data-action="toggle-select"]')?.click();
+    for (const task of [a, b]) {
+      const box = shadow(element).querySelector<HTMLInputElement>(`[data-select-task="${task.id}"]`);
+      expect(box).toBeTruthy();
+      box!.checked = true;
+      box!.dispatchEvent(new Event("change"));
+    }
+    expect(shadow(element).textContent).toContain("Выбрано: 2");
+
+    shadow(element).querySelector<HTMLButtonElement>('[data-action="batch-done"]')?.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const tasks = appStore.getWorkspace().tasks;
+    expect(tasks.find((task) => task.id === a.id)?.status).toBe("done");
+    expect(tasks.find((task) => task.id === b.id)?.status).toBe("done");
+  });
 });

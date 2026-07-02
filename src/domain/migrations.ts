@@ -23,20 +23,30 @@ type LegacyNoteEditEntry =
       durationMinutes?: number;
     };
 
-type LegacyNote = Omit<Note, "editHistory"> & {
+type LegacyNote = Omit<Note, "editHistory" | "dayKey"> & {
   editHistory?: LegacyNoteEditEntry[];
+  dayKey?: string | null;
 };
 
 type LegacyPomodoroCycle = Omit<PomodoroCycle, "completedShortBreakCount" | "completedLongBreakCount"> &
   Partial<Pick<PomodoroCycle, "completedShortBreakCount" | "completedLongBreakCount">>;
 
-type LegacyTask = Omit<Task, "subtasks" | "recurrence" | "recurrenceParentId"> & {
+type LegacyTask = Omit<Task, "subtasks" | "recurrence" | "recurrenceParentId" | "boardOrder"> & {
   subtasks?: Task["subtasks"];
   recurrence?: Task["recurrence"];
   recurrenceParentId?: Task["recurrenceParentId"];
+  boardOrder?: number;
 };
 
-type LegacyChecklistItem = Omit<ChecklistItem, "templateId"> & { templateId?: string | null };
+type LegacyChecklistItem = Omit<ChecklistItem, "templateId" | "count"> & {
+  templateId?: string | null;
+  count?: number;
+};
+
+type LegacyChecklistTemplate = Omit<ChecklistTemplate, "targetCount" | "targetPerWeek"> & {
+  targetCount?: number;
+  targetPerWeek?: number | null;
+};
 
 type LegacyWorkspace = Omit<
   Workspace,
@@ -48,7 +58,7 @@ type LegacyWorkspace = Omit<
   pomodoroCycles?: LegacyPomodoroCycle[];
   events?: Workspace["events"];
   checklist?: LegacyChecklistItem[];
-  checklistTemplates?: ChecklistTemplate[];
+  checklistTemplates?: LegacyChecklistTemplate[];
 };
 
 export function migrateWorkspace(workspace: LegacyWorkspace): Workspace {
@@ -68,7 +78,9 @@ export function migrateWorkspace(workspace: LegacyWorkspace): Workspace {
     schemaVersion: SCHEMA_VERSION,
     exportedAt: workspace.exportedAt ?? null,
     checklist: Array.isArray(workspace.checklist) ? workspace.checklist.map(normalizeChecklistItem) : [],
-    checklistTemplates: Array.isArray(workspace.checklistTemplates) ? workspace.checklistTemplates : [],
+    checklistTemplates: Array.isArray(workspace.checklistTemplates)
+      ? workspace.checklistTemplates.map(normalizeChecklistTemplate)
+      : [],
     tasks: workspace.tasks.map(normalizeTask),
     notes: workspace.notes.map(normalizeNote),
     pomodoroCycles: Array.isArray(workspace.pomodoroCycles) ? workspace.pomodoroCycles.map(normalizePomodoroCycle) : [],
@@ -131,6 +143,8 @@ function normalizeTask(task: LegacyTask): Task {
     subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
     recurrence: task.recurrence ?? null,
     recurrenceParentId: task.recurrenceParentId ?? null,
+    // Derived from creation time so migrated boards keep newest-first order.
+    boardOrder: task.boardOrder ?? -(Date.parse(task.createdAt) || 0),
   };
 }
 
@@ -138,12 +152,22 @@ function normalizeChecklistItem(item: LegacyChecklistItem): ChecklistItem {
   return {
     ...item,
     templateId: item.templateId ?? null,
+    count: item.count ?? (item.done ? 1 : 0),
+  };
+}
+
+function normalizeChecklistTemplate(template: LegacyChecklistTemplate): ChecklistTemplate {
+  return {
+    ...template,
+    targetCount: Math.max(1, template.targetCount ?? 1),
+    targetPerWeek: template.targetPerWeek ?? null,
   };
 }
 
 function normalizeNote(note: LegacyNote): Note {
   return {
     ...note,
+    dayKey: note.dayKey ?? null,
     editHistory: Array.isArray(note.editHistory)
       ? note.editHistory.map((entry) => normalizeNoteEditEntry(entry, note.updatedAt))
       : [],

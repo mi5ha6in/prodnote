@@ -39,4 +39,60 @@ describe("today-view (DOM)", () => {
     await appStore.toggleChecklistItem(item!.id);
     expect(shadow(element).querySelector(".check-item.is-done")).toBeTruthy();
   });
+
+  it("walks the day-planning wizard: overdue triage, task picking, budget", async () => {
+    const overdue = await appStore.addTask({ title: "Хвост-планирования", dueDate: "2020-01-01" });
+    const candidate = await appStore.addTask({ title: "Кандидат-планирования" });
+
+    const element = mount();
+    shadow(element).querySelector<HTMLButtonElement>('[data-action="start-plan"]')?.click();
+    expect(shadow(element).textContent).toContain("Шаг 1 из 3");
+    expect(shadow(element).textContent).toContain("Хвост-планирования");
+
+    // забираем хвост в день — дедлайн переезжает на выбранный день
+    shadow(element).querySelector<HTMLButtonElement>(`[data-plan-take="${overdue.id}"]`)?.click();
+    await Promise.resolve();
+    expect(appStore.getWorkspace().tasks.find((t) => t.id === overdue.id)?.dueDate).toBe(dayKey(new Date()));
+
+    shadow(element).querySelector<HTMLButtonElement>('[data-action="wizard-next"]')?.click();
+    expect(shadow(element).textContent).toContain("Шаг 2 из 3");
+
+    const pick = shadow(element).querySelector<HTMLInputElement>(`[data-plan-pick="${candidate.id}"]`);
+    expect(pick).toBeTruthy();
+    pick!.checked = true;
+    pick!.dispatchEvent(new Event("change"));
+    await Promise.resolve();
+    expect(appStore.getWorkspace().tasks.find((t) => t.id === candidate.id)?.plannedAt).toContain(dayKey(new Date()));
+
+    shadow(element).querySelector<HTMLButtonElement>('[data-action="wizard-next"]')?.click();
+    expect(shadow(element).textContent).toContain("Шаг 3 из 3");
+    expect(shadow(element).textContent).toContain("Ёмкость дня");
+
+    shadow(element).querySelector<HTMLButtonElement>('[data-action="close-wizard"]')?.click();
+    expect(shadow(element).querySelector("[data-modal]")).toBeFalsy();
+  });
+
+  it("walks the shutdown wizard and writes the reflection into the day note", async () => {
+    const today = dayKey(new Date());
+    await appStore.addChecklistItem({ title: "Незакрытый пункт", day: today });
+
+    const element = mount();
+    shadow(element).querySelector<HTMLButtonElement>('[data-action="start-shutdown"]')?.click();
+    expect(shadow(element).textContent).toContain("Итог дня");
+
+    shadow(element).querySelector<HTMLButtonElement>('[data-action="wizard-next"]')?.click();
+    expect(shadow(element).textContent).toContain("Незакрытый пункт");
+
+    shadow(element).querySelector<HTMLButtonElement>('[data-action="wizard-next"]')?.click();
+    const textarea = shadow(element).querySelector<HTMLTextAreaElement>("[data-shutdown-reflection]");
+    expect(textarea).toBeTruthy();
+    textarea!.value = "День прошёл собранно.";
+    shadow(element).querySelector<HTMLButtonElement>('[data-action="shutdown-finish"]')?.click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const dayNote = appStore.getWorkspace().notes.find((note) => note.dayKey === today);
+    expect(dayNote?.markdown).toContain("День прошёл собранно.");
+    expect(shadow(element).querySelector("[data-modal]")).toBeFalsy();
+  });
 });

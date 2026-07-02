@@ -12,7 +12,8 @@ import {
   type PlanActualStat,
 } from "../domain/stats";
 import { appStore } from "../state";
-import { metricBarHtml } from "../ui/html";
+import { sessionsToCsv } from "../domain/csv";
+import { buttonAttrs, metricBarHtml, viewHeaderHtml } from "../ui/html";
 import { renderShadow } from "./shadow";
 
 export class StatsView extends HTMLElement {
@@ -43,6 +44,10 @@ export class StatsView extends HTMLElement {
       this,
       `
         <section class="view-grid">
+          ${viewHeaderHtml({
+            actions: `<button ${buttonAttrs({ tone: "ghost", data: { action: "export-csv" }, disabled: workspace.sessions.length === 0 })}>Экспорт CSV</button>`,
+          })}
+
           ${metricBarHtml([
             { label: "Всего", value: formatDuration(totalMinutes), hint: `${workspace.sessions.length} сессий` },
             {
@@ -256,6 +261,20 @@ export class StatsView extends HTMLElement {
         }
       `,
     );
+
+    this.shadowRoot
+      ?.querySelector<HTMLButtonElement>('[data-action="export-csv"]')
+      ?.addEventListener("click", () => {
+        const current = appStore.getWorkspace();
+        const csv = sessionsToCsv(current.sessions, current.tasks, current.projects);
+        const blob = new Blob([`﻿${csv}`], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `prodnote-sessions-${new Date().toISOString().slice(0, 10)}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+      });
   }
 
   private renderPlanActual(items: PlanActualStat[]): string {

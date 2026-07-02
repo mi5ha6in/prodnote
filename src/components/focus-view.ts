@@ -63,6 +63,7 @@ export class FocusView extends HTMLElement {
                   <p class="eyebrow">Активная сессия</p>
                   <h2>${active.mode === "pomodoro" ? "Помодоро" : "Таймер"}</h2>
                 </div>
+                ${active.goal ? `<p class="session-goal">Цель: ${escapeHtml(active.goal)}</p>` : ""}
                 <label>
                   Заметка к сессии
                   <textarea name="sessionNote" data-session-note placeholder="Что сделано за эту сессию">${escapeHtml(this.sessionNote)}</textarea>
@@ -89,6 +90,10 @@ export class FocusView extends HTMLElement {
                   <select name="taskId" required ${canStart ? "" : "disabled"}>
                     ${renderTaskOptions(focusableTasks, startTaskId)}
                   </select>
+                </label>
+                <label>
+                  Цель сессии (необязательно)
+                  <input name="goal" placeholder="Что хочу сделать за эту сессию" autocomplete="off" ${canStart ? "" : "disabled"} />
                 </label>
                 <div class="row-actions">
                   <button type="submit" name="mode" value="timer" ${canStart ? "" : "disabled"}>Запустить таймер</button>
@@ -187,6 +192,14 @@ export class FocusView extends HTMLElement {
           margin-top: var(--space-2);
         }
 
+        .session-goal {
+          background: var(--accent-soft);
+          border-radius: var(--radius-md);
+          color: var(--accent-strong);
+          font-weight: 600;
+          padding: var(--space-2) var(--space-3);
+        }
+
         .history-list {
           margin-top: var(--space-4);
         }
@@ -214,13 +227,15 @@ export class FocusView extends HTMLElement {
       }
 
       const taskId = requireSelect(form, "taskId").value;
+      const goalField = form.elements.namedItem("goal");
+      const goal = goalField instanceof HTMLInputElement ? goalField.value : null;
       this.selectedTaskId = taskId;
       if (submitter.value === "pomodoro") {
         void requestTimerNotificationPermission();
-        void appStore.startPomodoro(taskId);
+        void appStore.startPomodoro(taskId, goal);
       } else {
         void requestTimerNotificationPermission();
-        void appStore.startTimer(taskId);
+        void appStore.startTimer(taskId, goal);
       }
     });
 

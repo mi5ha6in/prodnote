@@ -1,6 +1,6 @@
 import type { RecurrenceRule } from "./recurrence";
 
-export const SCHEMA_VERSION = 12;
+export const SCHEMA_VERSION = 17;
 
 export type EntityId = string;
 
@@ -52,6 +52,8 @@ export interface Task {
   dueDate: string | null;
   plannedAt: string | null;
   estimateMinutes: number | null;
+  /** Manual kanban position within a column; smaller sorts first. */
+  boardOrder: number;
   subtasks: Subtask[];
   history: TaskHistoryEntry[];
   createdAt: string;
@@ -79,6 +81,8 @@ export interface ChecklistItem {
   templateId: EntityId | null;
   /** Day key this item was carried over from, when rolled forward. */
   rolledFrom: string | null;
+  /** Progress for quantity habits; `done` flips when count reaches the template target. */
+  count: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -91,6 +95,10 @@ export interface ChecklistTemplate {
   cadence: ChecklistCadence;
   /** Track this template as a habit in the habit tracker. */
   isHabit: boolean;
+  /** Repetitions per day for quantity habits («8 стаканов»); 1 = plain checkbox. */
+  targetCount: number;
+  /** Weekly goal in done-days («3 раза в неделю»); null = every scheduled day counts. */
+  targetPerWeek: number | null;
   archived: boolean;
   createdAt: string;
   updatedAt: string;
@@ -109,6 +117,8 @@ export interface Note {
   linkedTaskIds: EntityId[];
   tagIds: EntityId[];
   editHistory: NoteEditEntry[];
+  /** When set (YYYY-MM-DD), this is the day's journal note (shutdown reflections land here). */
+  dayKey: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -173,6 +183,12 @@ export interface Settings {
   weekStartsOn: 1 | 7;
   /** Weekly tracked-time target in minutes; 0 disables the goal. */
   weeklyTimeGoalMinutes: number;
+  /** Realistic plannable minutes per day for the day-budget check; 0 disables it. */
+  dailyCapacityMinutes: number;
+  /** Lead time for timed-event reminders in minutes; 0 disables them. Synced so the push server can schedule. */
+  eventReminderMinutes: number;
+  /** Morning hour for all-day/deadline reminders; -1 disables them. */
+  allDayReminderHour: number;
 }
 
 export interface WorkspaceExport {
@@ -202,4 +218,6 @@ export interface ActiveTimer {
   phaseEndsAt: string | null;
   pausedAt: string | null;
   pausedTotalMs: number;
+  /** Session intention («что хочу сделать»); device-local, shown while the timer runs. */
+  goal: string | null;
 }
