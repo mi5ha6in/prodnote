@@ -47,6 +47,8 @@ export class TasksView extends HTMLElement {
   private filter: TaskFilterCriteria = { ...DEFAULT_TASK_FILTER };
   private focusSearch = false;
   private captureFocus = false;
+  private selectMode = false;
+  private selectedIds = new Set<string>();
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
@@ -111,6 +113,7 @@ export class TasksView extends HTMLElement {
                 <button type="button" data-mode="kanban" aria-pressed="${this.mode === "kanban"}">Канбан</button>
                 <button type="button" data-mode="list" aria-pressed="${this.mode === "list"}">Список</button>
               </div>
+              <button ${buttonAttrs({ tone: "ghost", data: { action: "toggle-select" } })}>${this.selectMode ? "Готово" : "Выбрать"}</button>
               <button ${buttonAttrs({ data: { action: "open-create" } })}>+ Новая задача</button>
             `,
           })}
@@ -118,6 +121,8 @@ export class TasksView extends HTMLElement {
           ${this.renderQuickCapture()}
 
           ${this.renderFilterBar(workspace, visibleTasks.length)}
+
+          ${this.selectMode ? this.renderBatchBar(workspace) : ""}
 
           ${
             this.mode === "kanban"
@@ -231,6 +236,41 @@ export class TasksView extends HTMLElement {
           border-top: 1px solid var(--line);
           margin-top: var(--space-3);
           padding-top: var(--space-3);
+        }
+
+        .batch-bar {
+          align-items: center;
+          background: var(--accent-soft);
+          border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--paper));
+          border-radius: var(--radius-md);
+          display: flex;
+          flex-wrap: wrap;
+          gap: var(--space-2);
+          padding: var(--space-2) var(--space-3);
+        }
+
+        .batch-bar select {
+          min-height: 2.25rem;
+          width: auto;
+        }
+
+        .batch-count {
+          font-size: var(--text-sm);
+          font-weight: 600;
+        }
+
+        .select-box {
+          flex: none;
+          width: auto;
+        }
+
+        .task-card.is-selected {
+          border-color: var(--accent);
+          box-shadow: inset 0 0 0 1px var(--accent-soft);
+        }
+
+        .task-card.is-drop-before {
+          box-shadow: 0 -2px 0 0 var(--accent);
         }
 
         /* Touch devices cannot drag cards between columns — show arrow controls instead. */
@@ -534,6 +574,11 @@ export class TasksView extends HTMLElement {
           return;
         }
 
+        if (this.selectMode) {
+          this.toggleSelected(taskId);
+          return;
+        }
+
         this.openedTaskId = taskId;
         this.detailsMode = "view";
         this.render();
@@ -680,6 +725,53 @@ export class TasksView extends HTMLElement {
       window.location.hash = "#/work/focus";
     });
 
+    root.querySelector<HTMLButtonElement>('[data-action="toggle-select"]')?.addEventListener("click", () => {
+      this.selectMode = !this.selectMode;
+      this.selectedIds.clear();
+      this.render();
+    });
+
+    root.querySelectorAll<HTMLInputElement>("[data-select-task]").forEach((checkbox) => {
+      checkbox.addEventListener("change", () => {
+        const id = checkbox.dataset.selectTask;
+        if (id) {
+          this.toggleSelected(id);
+        }
+      });
+    });
+
+    root.querySelector<HTMLSelectElement>("[data-batch-status]")?.addEventListener("change", (event) => {
+      const value = (event.currentTarget as HTMLSelectElement).value as TaskStatus | "";
+      if (value) {
+        void this.applyBatch((id) => appStore.updateTaskStatus(id, value));
+      }
+    });
+
+    root.querySelector<HTMLSelectElement>("[data-batch-project]")?.addEventListener("change", (event) => {
+      const value = (event.currentTarget as HTMLSelectElement).value;
+      if (value) {
+        void this.applyBatch((id) => appStore.assignTaskProject(id, value === "none" ? null : value));
+      }
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="batch-done"]')?.addEventListener("click", () => {
+      void this.applyBatch((id) => appStore.updateTaskStatus(id, "done"));
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="batch-delete"]')?.addEventListener("click", () => {
+      const count = this.selectedIds.size;
+      if (!count) {
+        return;
+      }
+      const confirmed = confirmDestructive(
+        `Удалить выбранные задачи (${count})?\n\nВместе с ними удалятся их сессии и история; ссылки в чек-листе и календаре будут сняты.`,
+      );
+      if (!confirmed) {
+        return;
+      }
+      void this.applyBatch((id) => appStore.deleteTask(id));
+    });
+
     root.querySelectorAll<HTMLButtonElement>("[data-move-task]").forEach((button) => {
       button.addEventListener("click", () => {
         const taskId = button.dataset.moveTask;
@@ -715,6 +807,25 @@ export class TasksView extends HTMLElement {
       card.addEventListener("dragend", () => {
         this.draggingTaskId = null;
       });
+      // Drop на карточку — встать перед ней (ручной порядок в колонке).
+      card.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        card.classList.add("is-drop-before");
+      });
+      card.addEventListener("dragleave", () => card.classList.remove("is-drop-before"));
+      card.addEventListener("drop", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        card.classList.remove("is-drop-before");
+        const beforeId = card.dataset.dragTask;
+        const status = card.closest<HTMLElement>("[data-drop-status]")?.dataset.dropStatus as TaskStatus | undefined;
+        const taskId = this.draggingTaskId;
+        this.draggingTaskId = null;
+        if (status && taskId && beforeId && taskId !== beforeId) {
+          void appStore.reorderTask(taskId, status, beforeId);
+        }
+      });
     });
 
     root.querySelectorAll<HTMLElement>("[data-drop-status]").forEach((column) => {
@@ -730,7 +841,8 @@ export class TasksView extends HTMLElement {
         const taskId = this.draggingTaskId;
         this.draggingTaskId = null;
         if (status && taskId) {
-          void appStore.updateTaskStatus(taskId, status);
+          // Drop мимо карточек — в конец колонки.
+          void appStore.reorderTask(taskId, status, null);
         }
       });
     });
@@ -1212,27 +1324,72 @@ export class TasksView extends HTMLElement {
     `;
   }
 
+  private toggleSelected(taskId: string): void {
+    if (this.selectedIds.has(taskId)) {
+      this.selectedIds.delete(taskId);
+    } else {
+      this.selectedIds.add(taskId);
+    }
+    this.render();
+  }
+
+  private async applyBatch(operation: (taskId: string) => Promise<void>): Promise<void> {
+    const ids = [...this.selectedIds];
+    for (const id of ids) {
+      await operation(id);
+    }
+    this.selectedIds.clear();
+    this.render();
+  }
+
+  private renderBatchBar(workspace: ReturnType<typeof appStore.getWorkspace>): string {
+    const count = this.selectedIds.size;
+    return `
+      <div class="batch-bar" role="group" aria-label="Действия с выбранными">
+        <span class="batch-count">Выбрано: ${count}</span>
+        <select data-batch-status aria-label="Статус для выбранных" ${count ? "" : "disabled"}>
+          <option value="">Статус…</option>
+          ${STATUS_ORDER.map((status) => `<option value="${status}">${TASK_STATUS_LABELS[status]}</option>`).join("")}
+        </select>
+        <select data-batch-project aria-label="Проект для выбранных" ${count ? "" : "disabled"}>
+          <option value="">Проект…</option>
+          <option value="none">Без проекта</option>
+          ${workspace.projects
+            .map((project) => `<option value="${escapeHtml(project.id)}">${escapeHtml(project.name)}</option>`)
+            .join("")}
+        </select>
+        <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "batch-done" }, disabled: !count })}>Завершить</button>
+        <button ${buttonAttrs({ tone: "danger", size: "small", data: { action: "batch-delete" }, disabled: !count })}>Удалить</button>
+      </div>
+    `;
+  }
+
   private renderKanban(tasks: Task[], totalMinutesByTask: Map<string, number>): string {
+    // Дефолтная сортировка «Сначала новые» уступает ручному порядку доски;
+    // явно выбранная сортировка применяется и к канбану.
+    const columnTasks = (status: TaskStatus): Task[] => {
+      const column = tasks.filter((task) => task.status === status);
+      return this.filter.sort === "created" ? [...column].sort((a, b) => a.boardOrder - b.boardOrder) : column;
+    };
+
     return `
       <section class="kanban" aria-label="Канбан задач">
-        ${STATUS_ORDER.map(
-          (status) => `
+        ${STATUS_ORDER.map((status) => {
+          const column = columnTasks(status);
+          return `
             <div class="kanban-column" data-drop-status="${status}" role="group" aria-label="${TASK_STATUS_LABELS[status]}">
               <div class="card-header">
                 <h3>${TASK_STATUS_LABELS[status]}</h3>
-                ${badgeHtml(tasks.filter((task) => task.status === status).length)}
+                ${badgeHtml(column.length)}
               </div>
               ${
-                tasks.filter((task) => task.status === status).length
-                  ? tasks
-                      .filter((task) => task.status === status)
-                      .map((task) => this.renderTaskCard(task, totalMinutesByTask, "kanban"))
-                      .join("")
+                column.length
+                  ? column.map((task) => this.renderTaskCard(task, totalMinutesByTask, "kanban")).join("")
                   : emptyStateHtml("Нет задач")
               }
             </div>
-          `,
-        ).join("")}
+          `;
+        }).join("")}
       </section>
     `;
   }
@@ -1295,8 +1452,13 @@ export class TasksView extends HTMLElement {
         : "";
 
     return `
-      <article class="list-item task-card" data-open-task="${escapeHtml(task.id)}" ${dragAttrs} tabindex="0">
+      <article class="list-item task-card ${this.selectedIds.has(task.id) ? "is-selected" : ""}" data-open-task="${escapeHtml(task.id)}" ${dragAttrs} tabindex="0">
         <div class="card-header">
+          ${
+            this.selectMode
+              ? `<input type="checkbox" class="select-box" data-select-task="${escapeHtml(task.id)}" ${this.selectedIds.has(task.id) ? "checked" : ""} aria-label="Выбрать задачу" />`
+              : ""
+          }
           <div>
             <h3>${escapeHtml(task.title)}</h3>
             <div class="meta-row">

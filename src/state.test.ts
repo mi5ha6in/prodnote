@@ -197,6 +197,32 @@ describe("ProdNoteStore", () => {
     expect(store.getWorkspace().tasks.find((item) => item.id === task.id)?.projectId).toBeNull();
   });
 
+  it("reorders kanban tasks and moves them across columns keeping manual order", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+    const a = await store.addTask({ title: "A" });
+    const b = await store.addTask({ title: "B" });
+    const c = await store.addTask({ title: "C" });
+    // Новые добавляются наверх: порядок в бэклоге C, B, A.
+
+    const backlog = () =>
+      store
+        .getWorkspace()
+        .tasks.filter((task) => task.status === "backlog")
+        .sort((x, y) => x.boardOrder - y.boardOrder)
+        .map((task) => task.title);
+    expect(backlog()).toEqual(["C", "B", "A"]);
+
+    // A перед C → A, C, B.
+    await store.reorderTask(a.id, "backlog", c.id);
+    expect(backlog()).toEqual(["A", "C", "B"]);
+
+    // B в конец другой колонки со сменой статуса.
+    await store.reorderTask(b.id, "active", null);
+    expect(backlog()).toEqual(["A", "C"]);
+    expect(store.getWorkspace().tasks.find((task) => task.id === b.id)?.status).toBe("active");
+  });
+
   it("reconciles ICS subscription events: upsert by uid, drop vanished, keep manual", async () => {
     const store = new ProdNoteStore();
     await store.init();

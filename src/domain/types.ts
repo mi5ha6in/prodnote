@@ -1,6 +1,6 @@
 import type { RecurrenceRule } from "./recurrence";
 
-export const SCHEMA_VERSION = 15;
+export const SCHEMA_VERSION = 16;
 
 export type EntityId = string;
 
@@ -52,6 +52,8 @@ export interface Task {
   dueDate: string | null;
   plannedAt: string | null;
   estimateMinutes: number | null;
+  /** Manual kanban position within a column; smaller sorts first. */
+  boardOrder: number;
   subtasks: Subtask[];
   history: TaskHistoryEntry[];
   createdAt: string;
