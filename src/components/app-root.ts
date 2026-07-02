@@ -68,7 +68,11 @@ export class AppRoot extends HTMLElement {
         ? `<${tab.detailTag} entity-id="${escapeHtml(detailId)}"></${tab.detailTag}>`
         : `<${tab.tag}></${tab.tag}>`;
 
-    renderShadow(
+    const isMac = /mac|iphone|ipad/i.test(navigator.platform);
+    const paletteKey = isMac ? "⌘K" : "Ctrl+K";
+    const searchIcon = `<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m15.5 15.5 4.5 4.5"/></svg>`;
+
+    const root = renderShadow(
       this,
       `
       <div class="app-shell">
@@ -101,7 +105,12 @@ export class AppRoot extends HTMLElement {
               <h1>${tab.label}</h1>
               <p>${tab.description}</p>
             </div>
-            ${tab.tag === "pn-focus-view" ? "" : `<a class="focus-link" href="#/work/focus">${ICONS.focus}<span>Начать фокус</span></a>`}
+            <div class="topbar-actions">
+              <button type="button" class="palette-button" data-open-palette title="Поиск и команды (${paletteKey})">
+                ${searchIcon}<span class="palette-button-label">Поиск и команды</span><kbd class="palette-key">${paletteKey}</kbd>
+              </button>
+              ${tab.tag === "pn-focus-view" ? "" : `<a class="focus-link" href="#/work/focus">${ICONS.focus}<span>Начать фокус</span></a>`}
+            </div>
           </header>
           ${
             showSubnav
@@ -264,6 +273,53 @@ export class AppRoot extends HTMLElement {
           margin-top: 0.15rem;
         }
 
+        .topbar-actions {
+          align-items: center;
+          display: flex;
+          flex: none;
+          gap: var(--space-2);
+        }
+
+        .palette-button {
+          align-items: center;
+          background: var(--paper);
+          border: 1px solid var(--line);
+          border-radius: var(--radius-md);
+          color: var(--muted);
+          cursor: pointer;
+          display: flex;
+          font-size: var(--text-sm);
+          font-weight: 600;
+          gap: var(--space-2);
+          min-height: 2.5rem;
+          padding: 0 var(--space-3);
+          white-space: nowrap;
+        }
+
+        .palette-button:hover {
+          border-color: var(--line-strong);
+          color: var(--ink);
+        }
+
+        .palette-button svg {
+          fill: none;
+          height: 1.05rem;
+          stroke: currentColor;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+          stroke-width: 1.7;
+          width: 1.05rem;
+        }
+
+        .palette-key {
+          background: var(--surface);
+          border: 1px solid var(--line);
+          border-radius: var(--radius-sm);
+          font-family: inherit;
+          font-size: var(--text-xs);
+          padding: 0.05rem 0.35rem;
+        }
+
         .focus-link {
           align-items: center;
           background: var(--accent);
@@ -355,6 +411,11 @@ export class AppRoot extends HTMLElement {
             display: none;
           }
 
+          .palette-button-label,
+          .palette-key {
+            display: none;
+          }
+
           .nav-list {
             display: flex;
             justify-content: space-around;
@@ -397,6 +458,10 @@ export class AppRoot extends HTMLElement {
         }
       `,
     );
+
+    root.querySelector<HTMLButtonElement>("[data-open-palette]")?.addEventListener("click", () => {
+      document.dispatchEvent(new CustomEvent("pn:open-palette"));
+    });
   }
 }
 

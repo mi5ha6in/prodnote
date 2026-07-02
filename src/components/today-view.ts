@@ -58,6 +58,11 @@ export class TodayView extends HTMLElement {
   private shutdownStep = 0;
 
   connectedCallback(): void {
+    // Deep link `#/planner/today/<day>`: открыть конкретный день.
+    const entityId = this.getAttribute("entity-id");
+    if (entityId && /^\d{4}-\d{2}-\d{2}$/.test(entityId)) {
+      this.selectedDay = entityId;
+    }
     this.unsubscribe = appStore.subscribe(() => this.render());
     void appStore.ensureChecklistForDay(this.selectedDay);
     this.render();
@@ -98,6 +103,23 @@ export class TodayView extends HTMLElement {
     const isFreshWorkspace =
       !workspace.tasks.length && !workspace.notes.length && !workspace.sessions.length && !workspace.checklist.length;
 
+    // Бюджет дня: ёмкость из настроек против событий и оценок задач (прошлые дни — capacity 0, метрика скрыта).
+    const dayPlan = buildDayPlan(workspace, day);
+    const budgetUsed = dayPlan.busyMinutes + dayPlan.plannedEstimateMinutes;
+    const budgetMetric =
+      dayPlan.capacityMinutes > 0
+        ? [
+            {
+              label: "Бюджет дня",
+              value: `${formatDuration(budgetUsed)} / ${formatDuration(dayPlan.capacityMinutes)}`,
+              hint:
+                dayPlan.freeMinutes >= 0
+                  ? `свободно ${formatDuration(dayPlan.freeMinutes)}`
+                  : `перегруз ${formatDuration(-dayPlan.freeMinutes)}`,
+            },
+          ]
+        : [];
+
     const root = renderShadow(
       this,
       `
@@ -124,7 +146,13 @@ export class TodayView extends HTMLElement {
             { label: "Чек-лист", value: `${doneCount}/${dayItems.length}`, hint: formatDayHeading(day) },
             { label: "Время за день", value: formatDuration(dayMinutes), hint: "Завершённые сессии" },
             { label: "Серия дней", value: currentStreak(workspace.checklist, today), hint: "Дни подряд с отметками" },
+            ...budgetMetric,
           ])}
+          ${
+            dayPlan.capacityMinutes > 0
+              ? `<div class="bar budget-bar" title="Занято ${escapeHtml(formatDuration(budgetUsed))} из ${escapeHtml(formatDuration(dayPlan.capacityMinutes))}"><span style="width: ${Math.max(0, Math.min(100, Math.round((budgetUsed / dayPlan.capacityMinutes) * 100)))}%"></span></div>`
+              : ""
+          }
 
           ${isFreshWorkspace ? this.renderOnboarding() : ""}
 
@@ -628,7 +656,7 @@ export class TodayView extends HTMLElement {
     `;
 
     return `
-      <p class="muted">Отметьте, что берёте в день, и прикиньте время — без оценки бюджет слепой.</p>
+      <p class="muted">Отметьте, что берёте в день, и прикиньте время — без оценки бюджет слепой. Отметки и оценки сохраняются сразу.</p>
       ${plan.planned.length ? `<p class="eyebrow">Уже в плане</p><div class="item-list">${plan.planned.map((task) => row(task, true)).join("")}</div>` : ""}
       ${
         plan.candidates.length
@@ -661,6 +689,27 @@ export class TodayView extends HTMLElement {
     `;
   }
 
+  /**
+   * Оценки сохраняются на `change`, но недопечатанное значение без blur
+   * потерялось бы при закрытии/переходе — дожимаем инпуты вручную.
+   */
+  private flushPlanEstimates(root: ShadowRoot): void {
+    root.querySelectorAll<HTMLInputElement>("[data-plan-estimate]").forEach((input) => {
+      const id = input.dataset.planEstimate;
+      if (!id) {
+        return;
+      }
+      const value = input.value === "" ? null : Number(input.value);
+      if (value !== null && Number.isNaN(value)) {
+        return;
+      }
+      const task = appStore.getWorkspace().tasks.find((item) => item.id === id);
+      if (task && (task.estimateMinutes ?? null) !== value) {
+        void appStore.setTaskEstimate(id, value);
+      }
+    });
+  }
+
   private wirePlanWizard(root: ShadowRoot): void {
     if (this.planStep === 0) {
       return;
@@ -668,6 +717,7 @@ export class TodayView extends HTMLElement {
 
     wireModal(root, {
       onClose: () => {
+        this.flushPlanEstimates(root);
         this.planStep = 0;
         this.render();
       },
@@ -675,19 +725,23 @@ export class TodayView extends HTMLElement {
 
     root.querySelectorAll<HTMLButtonElement>('[data-action="close-wizard"]').forEach((button) => {
       button.addEventListener("click", () => {
+        this.flushPlanEstimates(root);
         this.planStep = 0;
         this.render();
       });
     });
     root.querySelector<HTMLButtonElement>('[data-action="wizard-next"]')?.addEventListener("click", () => {
+      this.flushPlanEstimates(root);
       this.planStep += 1;
       this.render();
     });
     root.querySelector<HTMLButtonElement>('[data-action="wizard-back"]')?.addEventListener("click", () => {
+      this.flushPlanEstimates(root);
       this.planStep -= 1;
       this.render();
     });
     root.querySelector<HTMLElement>("[data-plan-to-calendar]")?.addEventListener("click", () => {
+      this.flushPlanEstimates(root);
       this.planStep = 0;
       setBodyScrollLock(false);
     });

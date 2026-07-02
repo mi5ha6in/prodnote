@@ -46,7 +46,14 @@ export const HUBS: HubDef[] = [
     label: "Планер",
     icon: "today",
     tabs: [
-      { id: "today", label: "Сегодня", description: "Главное на день: чек-лист, события, задачи", tag: "pn-today-view", icon: "today" },
+      {
+        id: "today",
+        label: "Сегодня",
+        description: "Главное на день: чек-лист, события, задачи",
+        tag: "pn-today-view",
+        icon: "today",
+        detailTag: "pn-today-view",
+      },
       { id: "habits", label: "Привычки", description: "Трекер привычек и серии", tag: "pn-habits-view", icon: "habits" },
       {
         id: "calendar",

@@ -72,6 +72,42 @@ describe("today-view (DOM)", () => {
     expect(shadow(element).querySelector("[data-modal]")).toBeFalsy();
   });
 
+  it("opens a specific day from the entity-id deep link", () => {
+    const element = document.createElement("pn-today-view");
+    element.setAttribute("entity-id", "2026-03-05");
+    document.body.appendChild(element);
+
+    const input = shadow(element).querySelector<HTMLInputElement>(".day-input");
+    expect(input?.value).toBe("2026-03-05");
+  });
+
+  it("shows the day budget metric only when a daily capacity is set", async () => {
+    const settings = appStore.getWorkspace().settings;
+    expect(shadow(mount()).textContent).toContain("Бюджет дня");
+
+    await appStore.updateSettings({ ...settings, dailyCapacityMinutes: 0 });
+    expect(shadow(mount()).textContent).not.toContain("Бюджет дня");
+    await appStore.updateSettings({ ...settings, dailyCapacityMinutes: 480 });
+  });
+
+  it("flushes an untyped estimate when the planning wizard closes", async () => {
+    const task = await appStore.addTask({ title: "Оценка-без-blur", dueDate: dayKey(new Date()) });
+
+    const element = mount();
+    shadow(element).querySelector<HTMLButtonElement>('[data-action="start-plan"]')?.click();
+    shadow(element).querySelector<HTMLButtonElement>('[data-action="wizard-next"]')?.click();
+
+    const estimate = shadow(element).querySelector<HTMLInputElement>(`[data-plan-estimate="${task.id}"]`);
+    expect(estimate).toBeTruthy();
+    // Значение набрано, но change не сработал (нет blur) — закрытие должно его сохранить.
+    estimate!.value = "45";
+    shadow(element).querySelector<HTMLDialogElement>("[data-modal]")?.dispatchEvent(new Event("cancel"));
+    await Promise.resolve();
+
+    expect(appStore.getWorkspace().tasks.find((t) => t.id === task.id)?.estimateMinutes).toBe(45);
+    expect(shadow(element).querySelector("[data-modal]")).toBeFalsy();
+  });
+
   it("walks the shutdown wizard and writes the reflection into the day note", async () => {
     const today = dayKey(new Date());
     await appStore.addChecklistItem({ title: "Незакрытый пункт", day: today });

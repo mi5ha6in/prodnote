@@ -80,8 +80,13 @@ export class CalendarView extends HTMLElement {
     // Подтянуть протухшие ICS-подписки (не чаще раза в час на подписку).
     void refreshIcsSubscriptions();
     // Deep link `#/planner/calendar/<id>` (command palette): open that event's editor.
+    // A day key (`#/planner/calendar/2026-07-06`) opens the week containing that day.
     const entityId = this.getAttribute("entity-id");
-    if (entityId && appStore.getWorkspace().events.some((event) => event.id === entityId)) {
+    if (entityId && /^\d{4}-\d{2}-\d{2}$/.test(entityId)) {
+      const [year, month, day] = entityId.split("-").map(Number);
+      this.viewMode = "week";
+      this.weekAnchor = new Date(year, month - 1, day);
+    } else if (entityId && appStore.getWorkspace().events.some((event) => event.id === entityId)) {
       this.openEventModal(entityId, null);
       return;
     }
@@ -193,6 +198,7 @@ export class CalendarView extends HTMLElement {
                 <div class="agenda-head">
                   <h3>${escapeHtml(section.label)}</h3>
                   <span class="status-pill">${section.items.length}</span>
+                  ${section.key === "today" ? `<a class="button ghost small" href="#/planner/today">Сегодня в планере</a>` : ""}
                 </div>
                 <div class="item-list">
                   ${section.items.map((item) => this.renderAgendaItem(item, workspace)).join("")}
@@ -249,6 +255,7 @@ export class CalendarView extends HTMLElement {
           <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "prev-month" } })}>‹</button>
           <h2>${MONTH_LABELS[month]} ${year}</h2>
           <div class="row-actions">
+            <a class="button ghost small" href="#/planner/today">Сегодня в планере</a>
             <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "today-month" } })}>Сегодня</button>
             <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "next-month" } })}>›</button>
           </div>
@@ -375,6 +382,7 @@ export class CalendarView extends HTMLElement {
           <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "prev-week" } })}>‹</button>
           <h2>${escapeHtml(rangeLabel)}</h2>
           <div class="row-actions">
+            <a class="button ghost small" href="#/planner/today">Сегодня в планере</a>
             <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "today-week" } })}>Сегодня</button>
             <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "next-week" } })}>›</button>
           </div>
