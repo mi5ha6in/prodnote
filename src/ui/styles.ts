@@ -210,6 +210,17 @@ export const sharedStyles = `
   input[type="checkbox"],
   input[type="radio"] {
     accent-color: var(--accent);
+    /* Без padding: фокусные border/box-shadow выключают native appearance,
+       и чекбокс внезапно раздувается на унаследованный от input padding. */
+    padding: 0;
+  }
+
+  input[type="checkbox"]:focus,
+  input[type="radio"]:focus {
+    border-color: var(--line-strong);
+    box-shadow: none;
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
 
   label {
@@ -352,6 +363,8 @@ export const sharedStyles = `
     border: 1px solid var(--line);
     border-radius: var(--radius-md);
     display: inline-flex;
+    /* Узкие экраны: сегменты переносятся, а не распирают layout вширь. */
+    flex-wrap: wrap;
     gap: 0.15rem;
     padding: 0.2rem;
   }
