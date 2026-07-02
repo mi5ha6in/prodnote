@@ -218,4 +218,6 @@ export interface ActiveTimer {
   phaseEndsAt: string | null;
   pausedAt: string | null;
   pausedTotalMs: number;
+  /** Session intention («что хочу сделать»); device-local, shown while the timer runs. */
+  goal: string | null;
 }

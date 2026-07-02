@@ -33,6 +33,7 @@ describe("active timer storage", () => {
     phaseEndsAt: null,
     pausedAt: null,
     pausedTotalMs: 0,
+    goal: null,
   };
 
   beforeEach(() => {

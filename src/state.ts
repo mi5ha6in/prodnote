@@ -1107,7 +1107,7 @@ export class ProdNoteStore {
     this.emit();
   }
 
-  async startTimer(taskId: EntityId): Promise<void> {
+  async startTimer(taskId: EntityId, goal: string | null = null): Promise<void> {
     this.activeTimer = {
       taskId,
       startedAt: nowIso(),
@@ -1117,12 +1117,13 @@ export class ProdNoteStore {
       phaseEndsAt: null,
       pausedAt: null,
       pausedTotalMs: 0,
+      goal: goal?.trim() || null,
     };
     saveActiveTimer(this.activeTimer);
     this.emit();
   }
 
-  async startPomodoro(taskId: EntityId): Promise<void> {
+  async startPomodoro(taskId: EntityId, goal: string | null = null): Promise<void> {
     const cycle = createPomodoroCycle(taskId, this.workspace.settings);
 
     await this.commit((workspace) => {
@@ -1138,6 +1139,7 @@ export class ProdNoteStore {
       phaseEndsAt: addMinutesIso(cycle.startedAt, cycle.focusMinutes),
       pausedAt: null,
       pausedTotalMs: 0,
+      goal: goal?.trim() || null,
     };
     saveActiveTimer(this.activeTimer);
     this.emit();
@@ -1255,6 +1257,7 @@ export class ProdNoteStore {
         phaseEndsAt: addMinutesIso(nextStartedAt, getPhaseDurationMinutes(nextCycle, nextBreak)),
         pausedAt: null,
         pausedTotalMs: 0,
+        goal: active.goal,
       };
       saveActiveTimer(this.activeTimer);
       this.emit();
@@ -1282,6 +1285,7 @@ export class ProdNoteStore {
       phaseEndsAt: addMinutesIso(nextStartedAt, nextCycle.focusMinutes),
       pausedAt: null,
       pausedTotalMs: 0,
+      goal: active.goal,
     };
     saveActiveTimer(this.activeTimer);
     this.emit();
