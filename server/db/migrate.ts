@@ -305,6 +305,9 @@ export async function runMigrations(): Promise<void> {
     alter table if exists settings
       add column if not exists all_day_reminder_hour integer not null default 9;
 
+    alter table if exists tasks
+      add column if not exists board_order double precision;
+
     create table if not exists push_subscriptions (
       id uuid primary key,
       user_id uuid not null references users(id) on delete cascade,

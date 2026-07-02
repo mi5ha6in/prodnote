@@ -148,6 +148,8 @@ export function createTask(input: {
     dueDate: input.dueDate ?? null,
     plannedAt: null,
     estimateMinutes: null,
+    // Новые задачи встают наверх колонки: у более поздних меньший порядок.
+    boardOrder: -Date.now(),
     subtasks: [],
     history: [],
     createdAt,

@@ -827,6 +827,43 @@ export class ProdNoteStore {
     });
   }
 
+  /**
+   * Place a task before `beforeTaskId` in the kanban (same or another column);
+   * `beforeTaskId === null` drops it to the end of the target column.
+   */
+  async reorderTask(taskId: EntityId, status: TaskStatus, beforeTaskId: EntityId | null): Promise<void> {
+    await this.commit((workspace) => {
+      const task = workspace.tasks.find((item) => item.id === taskId);
+      if (!task || taskId === beforeTaskId) {
+        return;
+      }
+
+      const column = workspace.tasks
+        .filter((item) => item.status === status && item.id !== taskId)
+        .sort((a, b) => a.boardOrder - b.boardOrder);
+
+      let order: number;
+      if (beforeTaskId === null) {
+        order = column.length ? (column.at(-1)?.boardOrder ?? 0) + 1000 : 0;
+      } else {
+        const index = column.findIndex((item) => item.id === beforeTaskId);
+        if (index < 0) {
+          return;
+        }
+        const before = column[index - 1]?.boardOrder;
+        const target = column[index]?.boardOrder ?? 0;
+        order = before === undefined ? target - 1000 : (before + target) / 2;
+      }
+
+      task.boardOrder = order;
+      if (task.status !== status) {
+        task.status = status;
+        task.completedAt = status === "done" ? nowIso() : null;
+      }
+      task.updatedAt = nowIso();
+    });
+  }
+
   /** Commit a task to a day (YYYY-MM-DD) via plannedAt, or clear the commitment. */
   async planTaskForDay(taskId: EntityId, day: string | null): Promise<void> {
     await this.commit((workspace) => {

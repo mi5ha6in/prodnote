@@ -155,6 +155,7 @@ export async function getSyncedWorkspace(userId: string, sinceRevision = 0): Pro
         dueDate: asNullableString(task.due_date),
         plannedAt: asNullableString(task.planned_at),
         estimateMinutes: asNullableNumber(task.estimate_minutes),
+        boardOrder: Number(task.board_order ?? 0),
         subtasks: (taskSubtasksByTask.get(asString(task.entity_id)) ?? []).map((sub) => ({
           id: asString(sub.entity_id),
           title: asString(sub.title),
@@ -329,19 +330,20 @@ export async function putSyncedWorkspace(
       await transaction`
         insert into tasks (
           workspace_id, entity_id, title, description, project_id, status, priority, due_date, planned_at,
-          estimate_minutes, recurrence, recurrence_parent_id, created_at, updated_at, completed_at,
+          estimate_minutes, board_order, recurrence, recurrence_parent_id, created_at, updated_at, completed_at,
           client_updated_at, server_revision, deleted_at
         )
         values (
           ${workspaceId}, ${task.id}, ${task.title}, ${task.description}, ${task.projectId}, ${task.status}, ${task.priority},
-          ${task.dueDate}, ${task.plannedAt}, ${task.estimateMinutes}, ${task.recurrence ? JSON.stringify(task.recurrence) : null},
+          ${task.dueDate}, ${task.plannedAt}, ${task.estimateMinutes}, ${task.boardOrder ?? 0},
+          ${task.recurrence ? JSON.stringify(task.recurrence) : null},
           ${task.recurrenceParentId}, ${toSqlTimestamp(task.createdAt)}, ${toSqlTimestamp(task.updatedAt)},
           ${toSqlTimestamp(task.completedAt)}, ${toSqlTimestamp(task.updatedAt)}, ${nextRevision}, null
         )
         on conflict (workspace_id, entity_id) do update
         set title = excluded.title, description = excluded.description, project_id = excluded.project_id, status = excluded.status,
           priority = excluded.priority, due_date = excluded.due_date, planned_at = excluded.planned_at,
-          estimate_minutes = excluded.estimate_minutes, recurrence = excluded.recurrence,
+          estimate_minutes = excluded.estimate_minutes, board_order = excluded.board_order, recurrence = excluded.recurrence,
           recurrence_parent_id = excluded.recurrence_parent_id, created_at = excluded.created_at, updated_at = excluded.updated_at,
           completed_at = excluded.completed_at, client_updated_at = excluded.client_updated_at,
           server_revision = excluded.server_revision, deleted_at = null
