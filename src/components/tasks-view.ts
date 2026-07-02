@@ -124,9 +124,7 @@ export class TasksView extends HTMLElement {
             `,
           })}
 
-          ${this.renderQuickCapture()}
-
-          ${this.renderFilterBar(workspace, visibleTasks.length)}
+          ${this.renderToolbar(workspace, visibleTasks.length)}
 
           ${this.selectMode ? this.renderBatchBar(workspace) : ""}
 
@@ -376,6 +374,23 @@ export class TasksView extends HTMLElement {
           font-variant-numeric: tabular-nums;
         }
 
+        /* Capture + filters live in one panel so the top of the view reads
+           as a single toolbar instead of loose stacked strips. */
+        .task-toolbar {
+          background: var(--paper);
+          border: 1px solid var(--line);
+          border-radius: var(--radius-lg);
+          box-shadow: var(--shadow-sm);
+          display: grid;
+          gap: var(--space-3);
+          padding: var(--space-3);
+        }
+
+        .task-toolbar > * + * {
+          border-top: 1px solid var(--line);
+          padding-top: var(--space-3);
+        }
+
         .quick-capture {
           display: flex;
           gap: var(--space-2);
@@ -386,32 +401,50 @@ export class TasksView extends HTMLElement {
         }
 
         .task-filter {
+          display: grid;
+          gap: var(--space-2);
+        }
+
+        .filter-row {
           align-items: center;
-          background: var(--surface);
-          border: 1px solid var(--line);
-          border-radius: var(--radius-md);
           display: flex;
           flex-wrap: wrap;
           gap: var(--space-2);
-          padding: var(--space-3);
         }
 
-        .task-filter select,
         .task-filter-search {
+          flex: 1 1 13rem;
           min-height: 2.25rem;
+          padding-bottom: 0.4rem;
+          padding-top: 0.4rem;
           width: auto;
         }
 
-        .task-filter-search {
-          flex: 1 1 12rem;
-          min-width: 10rem;
+        /* Equal-width selects that wrap into tidy columns. */
+        .filter-selects {
+          display: grid;
+          gap: var(--space-2);
+          grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+        }
+
+        .filter-selects select {
+          min-height: 2.25rem;
+          padding-bottom: 0.4rem;
+          padding-left: 0.65rem;
+          padding-top: 0.4rem;
+        }
+
+        .filter-meta {
+          align-items: center;
+          display: flex;
+          gap: var(--space-2);
+          justify-content: space-between;
         }
 
         .task-filter-count {
           color: var(--muted);
           font-size: var(--text-xs);
           font-variant-numeric: tabular-nums;
-          margin-left: auto;
         }
 
         @media (max-width: 1100px) {
@@ -424,11 +457,6 @@ export class TasksView extends HTMLElement {
           }
         }
 
-        @media (max-width: 680px) {
-          .task-filter select {
-            flex: 1 1 42%;
-          }
-        }
       `,
     );
 
@@ -975,93 +1003,96 @@ export class TasksView extends HTMLElement {
     });
   }
 
-  private renderQuickCapture(): string {
-    return `
-      <form class="quick-capture" data-quick-capture>
-        <input
-          name="capture"
-          type="text"
-          autocomplete="off"
-          placeholder="Быстрый ввод: Купить молоко завтра #дом !высокий"
-          aria-label="Быстрое добавление задачи"
-        />
-        <button ${buttonAttrs({ type: "submit", size: "small" })}>Добавить</button>
-      </form>
-    `;
-  }
-
-  private renderFilterBar(workspace: ReturnType<typeof appStore.getWorkspace>, shownCount: number): string {
+  private renderToolbar(workspace: ReturnType<typeof appStore.getWorkspace>, shownCount: number): string {
     const { filter } = this;
     const priorities: TaskPriority[] = ["high", "medium", "low"];
 
     return `
-      <div class="task-filter" role="group" aria-label="Фильтры задач">
-        <div class="segmented" role="group" aria-label="Умные списки">
-          <button type="button" data-smart="" aria-pressed="${filter.smartList === null}">Все</button>
-          ${(Object.keys(TASK_SMART_LIST_LABELS) as TaskSmartList[])
-            .map(
-              (list) =>
-                `<button type="button" data-smart="${list}" aria-pressed="${filter.smartList === list}">${TASK_SMART_LIST_LABELS[list]}</button>`,
-            )
-            .join("")}
+      <div class="task-toolbar" role="group" aria-label="Добавление и фильтры задач">
+        <form class="quick-capture" data-quick-capture>
+          <input
+            name="capture"
+            type="text"
+            autocomplete="off"
+            placeholder="Быстрый ввод: Купить молоко завтра #дом !высокий"
+            aria-label="Быстрое добавление задачи"
+          />
+          <button ${buttonAttrs({ type: "submit", size: "small" })}>Добавить</button>
+        </form>
+        <div class="task-filter" role="group" aria-label="Фильтры задач">
+          <div class="filter-row">
+            <div class="segmented" role="group" aria-label="Умные списки">
+              <button type="button" data-smart="" aria-pressed="${filter.smartList === null}">Все</button>
+              ${(Object.keys(TASK_SMART_LIST_LABELS) as TaskSmartList[])
+                .map(
+                  (list) =>
+                    `<button type="button" data-smart="${list}" aria-pressed="${filter.smartList === list}">${TASK_SMART_LIST_LABELS[list]}</button>`,
+                )
+                .join("")}
+            </div>
+            <input
+              data-filter-search
+              type="search"
+              class="task-filter-search"
+              placeholder="Поиск по задачам…"
+              aria-label="Поиск по задачам"
+              value="${escapeHtml(filter.search)}"
+            />
+          </div>
+          <div class="filter-selects">
+            <select data-filter-project aria-label="Проект">
+              <option value="" ${filter.projectId === null ? "selected" : ""}>Все проекты</option>
+              <option value="none" ${filter.projectId === "none" ? "selected" : ""}>Без проекта</option>
+              ${workspace.projects
+                .map(
+                  (project) =>
+                    `<option value="${escapeHtml(project.id)}" ${filter.projectId === project.id ? "selected" : ""}>${escapeHtml(project.name)}</option>`,
+                )
+                .join("")}
+            </select>
+            <select data-filter-tag aria-label="Тег">
+              <option value="" ${filter.tagId === null ? "selected" : ""}>Все теги</option>
+              ${workspace.tags
+                .map(
+                  (tag) => `<option value="${escapeHtml(tag.id)}" ${filter.tagId === tag.id ? "selected" : ""}>${escapeHtml(tag.name)}</option>`,
+                )
+                .join("")}
+            </select>
+            <select data-filter-priority aria-label="Приоритет">
+              <option value="" ${filter.priority === null ? "selected" : ""}>Любой приоритет</option>
+              ${priorities
+                .map(
+                  (priority) =>
+                    `<option value="${priority}" ${filter.priority === priority ? "selected" : ""}>${TASK_PRIORITY_LABELS[priority]}</option>`,
+                )
+                .join("")}
+            </select>
+            ${
+              this.mode === "list"
+                ? `<select data-filter-status aria-label="Статус">
+                    <option value="" ${filter.status === null ? "selected" : ""}>Любой статус</option>
+                    ${STATUS_ORDER.map(
+                      (status) =>
+                        `<option value="${status}" ${filter.status === status ? "selected" : ""}>${TASK_STATUS_LABELS[status]}</option>`,
+                    ).join("")}
+                  </select>`
+                : ""
+            }
+            <select data-filter-sort aria-label="Сортировка">
+              ${(Object.keys(TASK_SORT_LABELS) as TaskSort[])
+                .map((sort) => `<option value="${sort}" ${filter.sort === sort ? "selected" : ""}>${TASK_SORT_LABELS[sort]}</option>`)
+                .join("")}
+            </select>
+          </div>
+          ${
+            isTaskFilterActive(filter)
+              ? `<div class="filter-meta">
+                  <span class="task-filter-count">Показано: ${shownCount} из ${workspace.tasks.length}</span>
+                  <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "reset-filter" } })}>Сбросить</button>
+                </div>`
+              : ""
+          }
         </div>
-        <input
-          data-filter-search
-          type="search"
-          class="task-filter-search"
-          placeholder="Поиск по задачам…"
-          aria-label="Поиск по задачам"
-          value="${escapeHtml(filter.search)}"
-        />
-        <select data-filter-project aria-label="Проект">
-          <option value="" ${filter.projectId === null ? "selected" : ""}>Все проекты</option>
-          <option value="none" ${filter.projectId === "none" ? "selected" : ""}>Без проекта</option>
-          ${workspace.projects
-            .map(
-              (project) =>
-                `<option value="${escapeHtml(project.id)}" ${filter.projectId === project.id ? "selected" : ""}>${escapeHtml(project.name)}</option>`,
-            )
-            .join("")}
-        </select>
-        <select data-filter-tag aria-label="Тег">
-          <option value="" ${filter.tagId === null ? "selected" : ""}>Все теги</option>
-          ${workspace.tags
-            .map(
-              (tag) => `<option value="${escapeHtml(tag.id)}" ${filter.tagId === tag.id ? "selected" : ""}>${escapeHtml(tag.name)}</option>`,
-            )
-            .join("")}
-        </select>
-        <select data-filter-priority aria-label="Приоритет">
-          <option value="" ${filter.priority === null ? "selected" : ""}>Любой приоритет</option>
-          ${priorities
-            .map(
-              (priority) =>
-                `<option value="${priority}" ${filter.priority === priority ? "selected" : ""}>${TASK_PRIORITY_LABELS[priority]}</option>`,
-            )
-            .join("")}
-        </select>
-        ${
-          this.mode === "list"
-            ? `<select data-filter-status aria-label="Статус">
-                <option value="" ${filter.status === null ? "selected" : ""}>Любой статус</option>
-                ${STATUS_ORDER.map(
-                  (status) =>
-                    `<option value="${status}" ${filter.status === status ? "selected" : ""}>${TASK_STATUS_LABELS[status]}</option>`,
-                ).join("")}
-              </select>`
-            : ""
-        }
-        <select data-filter-sort aria-label="Сортировка">
-          ${(Object.keys(TASK_SORT_LABELS) as TaskSort[])
-            .map((sort) => `<option value="${sort}" ${filter.sort === sort ? "selected" : ""}>${TASK_SORT_LABELS[sort]}</option>`)
-            .join("")}
-        </select>
-        ${
-          isTaskFilterActive(filter)
-            ? `<span class="task-filter-count">Показано: ${shownCount} из ${workspace.tasks.length}</span>
-               <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "reset-filter" } })}>Сбросить</button>`
-            : ""
-        }
       </div>
     `;
   }
