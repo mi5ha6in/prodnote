@@ -179,6 +179,16 @@ export const sharedStyles = `
     width: 100%;
   }
 
+  select {
+    appearance: none;
+    background-image: var(--select-arrow);
+    background-position: right 0.7rem center;
+    background-repeat: no-repeat;
+    background-size: 0.9rem;
+    cursor: pointer;
+    padding-right: 2.2rem;
+  }
+
   input::placeholder,
   textarea::placeholder {
     color: #a3a8a5;
