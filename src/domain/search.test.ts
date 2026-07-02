@@ -31,6 +31,33 @@ describe("searchAll", () => {
     expect(hits.map((hit) => hit.kind).sort()).toEqual(["event", "task"]);
   });
 
+  it("deep-links hits to the entity", () => {
+    const task = createTask({ title: "Ship release" });
+    const event = createCalendarEvent({
+      title: "Release review",
+      startsAt: "2026-07-01T09:00:00.000Z",
+      endsAt: "2026-07-01T10:00:00.000Z",
+    });
+    const note = notes[0];
+
+    const hits = searchAll("release", { tasks: [task], notes: [], events: [event] });
+    expect(hits.find((hit) => hit.kind === "task")?.hash).toBe(`#/work/tasks/${task.id}`);
+    expect(hits.find((hit) => hit.kind === "event")?.hash).toBe(`#/planner/calendar/${event.id}`);
+
+    const noteHits = searchAll("typescript", { tasks: [], notes: [note], events: [] });
+    expect(noteHits[0]?.hash).toBe(`#/notes/notes/${note.id}`);
+  });
+
+  it("matches tasks by journal entries and subtasks", () => {
+    const byHistory = createTask({ title: "Задача" });
+    byHistory.history = [{ id: "h1", at: "", kind: "note", markdown: "обсудили миграцию" }];
+    const bySubtask = createTask({ title: "Другая" });
+    bySubtask.subtasks = [{ id: "s1", title: "написать миграцию", done: false }];
+
+    const hits = searchAll("миграцию", { tasks: [byHistory, bySubtask], notes: [], events: [] });
+    expect(hits).toHaveLength(2);
+  });
+
   it("returns nothing for an empty query", () => {
     expect(searchAll("", { tasks: [], notes, events: [] })).toHaveLength(0);
   });

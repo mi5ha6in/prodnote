@@ -30,6 +30,11 @@ export class NotesView extends HTMLElement {
   private searchQuery = "";
 
   connectedCallback(): void {
+    // Deep link `#/notes/notes/<id>` (command palette): pre-open that note.
+    const entityId = this.getAttribute("entity-id");
+    if (entityId) {
+      this.openedNoteId = entityId;
+    }
     this.unsubscribe = appStore.subscribe(() => this.render());
     document.addEventListener("keydown", this.onHotkey);
     this.render();
@@ -75,6 +80,10 @@ export class NotesView extends HTMLElement {
     this.creating = false;
     this.openedNoteId = null;
     this.openedNoteMode = "preview";
+    // Drop a stale deep-link hash so the same note can be reopened from the palette.
+    if (window.location.hash.startsWith("#/notes/notes/")) {
+      history.replaceState(null, "", "#/notes/notes");
+    }
     this.render();
   }
 

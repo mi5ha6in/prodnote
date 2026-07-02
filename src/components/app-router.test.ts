@@ -19,6 +19,9 @@ describe("resolveRoute", () => {
       detailId: "task_123",
       canonical: "#/work/tasks/task_123",
     });
+    // Palette deep links: notes and calendar open their entity in place.
+    expect(resolveRoute("#/notes/notes/note_1")).toMatchObject({ detailId: "note_1", canonical: "#/notes/notes/note_1" });
+    expect(resolveRoute("#/planner/calendar/event_1")).toMatchObject({ detailId: "event_1" });
     // Tabs without a detail view drop the extra segment.
     expect(resolveRoute("#/planner/today/whatever")).toMatchObject({ detailId: "", canonical: "#/planner/today" });
   });
