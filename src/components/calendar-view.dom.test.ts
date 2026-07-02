@@ -48,6 +48,17 @@ describe("calendar-view (DOM)", () => {
     expect(shadow(element).querySelector(".week-grid")).toBeTruthy();
   });
 
+  it("opens the week containing a day-key deep link", () => {
+    const element = document.createElement("pn-calendar-view");
+    element.setAttribute("entity-id", "2026-07-06");
+    document.body.appendChild(element);
+
+    const root = shadow(element);
+    expect(root.querySelector(".week-grid")).toBeTruthy();
+    expect(root.querySelector('form[data-form="event"]')).toBeNull();
+    expect(root.querySelector('[data-week-col="2026-07-06"]')).toBeTruthy();
+  });
+
   it("opens the event modal and locks background scroll", () => {
     const element = mount();
     shadow(element).querySelector<HTMLButtonElement>('[data-action="open-event"]')?.click();

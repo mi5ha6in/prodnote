@@ -183,7 +183,7 @@ export class ReviewView extends HTMLElement {
         ? this.renderWizardInbox(workspace)
         : this.wizardStep === 2
           ? this.renderWizardOverdue(workspace)
-          : this.renderWizardSummary(score);
+          : this.renderWizardSummary(workspace, score);
 
     return wizardStepHtml({
       label: "Недельное ревью",
@@ -255,12 +255,13 @@ export class ReviewView extends HTMLElement {
     `;
   }
 
-  private renderWizardSummary(score: number): string {
+  private renderWizardSummary(workspace: Workspace, score: number): string {
+    const nextWeek = shiftDayKey(weekStartKey(new Date(), workspace.settings.weekStartsOn), 7);
     return `
       <div class="wizard-summary">
         <p>Индекс продуктивности этой недели — <strong>${score}/100</strong> (${escapeHtml(scoreLabel(score))}).</p>
         <p class="muted">Входящие разобраны, просроченное решено. Остался последний шаг — распланировать следующую неделю в календаре.</p>
-        <a class="button ghost" href="#/planner/calendar" data-action-close-on-follow>Запланировать неделю</a>
+        <a class="button ghost" href="#/planner/calendar/${escapeHtml(nextWeek)}" data-action-close-on-follow>Запланировать следующую неделю</a>
       </div>
     `;
   }

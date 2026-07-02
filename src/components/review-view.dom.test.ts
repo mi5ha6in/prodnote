@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
+import { shiftDayKey } from "../domain/checklist";
+import { weekStartKey } from "../domain/review";
 import { appStore } from "../state";
 import "./review-view";
 
@@ -60,6 +62,11 @@ describe("review-view (DOM)", () => {
 
     shadow(element).querySelector<HTMLButtonElement>('[data-action="wizard-next"]')?.click();
     expect(shadow(element).textContent).toContain("Шаг 3 из 3");
+
+    // Итоговый CTA ведёт в неделю календаря, начинающуюся со следующего понедельника.
+    const nextWeek = shiftDayKey(weekStartKey(new Date(), appStore.getWorkspace().settings.weekStartsOn), 7);
+    const cta = shadow(element).querySelector<HTMLAnchorElement>("[data-action-close-on-follow]");
+    expect(cta?.getAttribute("href")).toBe(`#/planner/calendar/${nextWeek}`);
 
     shadow(element).querySelector<HTMLButtonElement>('[data-action="close-wizard"]')?.click();
     expect(shadow(element).querySelector("[data-modal]")).toBeFalsy();

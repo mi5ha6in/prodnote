@@ -34,6 +34,16 @@ afterEach(() => {
 });
 
 describe("command-palette (DOM)", () => {
+  it("opens on the pn:open-palette event (topbar button)", () => {
+    const element = mount();
+    document.dispatchEvent(new CustomEvent("pn:open-palette"));
+    expect(shadow(element).querySelector("[data-palette-input]")).toBeTruthy();
+
+    // Повторное событие не закрывает уже открытую палитру.
+    document.dispatchEvent(new CustomEvent("pn:open-palette"));
+    expect(shadow(element).querySelector("[data-palette-input]")).toBeTruthy();
+  });
+
   it("offers query-driven create actions", () => {
     const element = mount();
     const root = openWith(element, "Купить молоко");

@@ -32,14 +32,18 @@ export class CommandPalette extends HTMLElement {
   private query = "";
   private selected = 0;
   private onKeydown = (event: KeyboardEvent) => this.handleGlobalKey(event);
+  private onOpenRequest = () => this.openPalette();
 
   connectedCallback(): void {
     document.addEventListener("keydown", this.onKeydown);
+    // Кнопка в топбаре (и любой другой UI) открывает палитру этим событием.
+    document.addEventListener("pn:open-palette", this.onOpenRequest);
     this.render();
   }
 
   disconnectedCallback(): void {
     document.removeEventListener("keydown", this.onKeydown);
+    document.removeEventListener("pn:open-palette", this.onOpenRequest);
     setBodyScrollLock(false);
   }
 
@@ -59,6 +63,13 @@ export class CommandPalette extends HTMLElement {
     this.query = "";
     this.selected = 0;
     this.render();
+  }
+
+  /** Открыть (не переключить) — для внешних вызовов вроде кнопки в топбаре. */
+  private openPalette(): void {
+    if (!this.open) {
+      this.toggle();
+    }
   }
 
   private close(): void {
@@ -153,7 +164,7 @@ export class CommandPalette extends HTMLElement {
               class="palette-input"
               data-palette-input
               type="text"
-              placeholder="Поиск и команды…"
+              placeholder="Найти или создать… (!приоритет #проект @тег завтра)"
               value="${escapeHtml(this.query)}"
               aria-label="Поиск и команды"
             />

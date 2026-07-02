@@ -22,8 +22,14 @@ describe("resolveRoute", () => {
     // Palette deep links: notes and calendar open their entity in place.
     expect(resolveRoute("#/notes/notes/note_1")).toMatchObject({ detailId: "note_1", canonical: "#/notes/notes/note_1" });
     expect(resolveRoute("#/planner/calendar/event_1")).toMatchObject({ detailId: "event_1" });
+    // Day deep links: today opens the given day, calendar opens that week.
+    expect(resolveRoute("#/planner/today/2026-07-02")).toMatchObject({
+      detailId: "2026-07-02",
+      canonical: "#/planner/today/2026-07-02",
+    });
+    expect(resolveRoute("#/planner/calendar/2026-07-06")).toMatchObject({ detailId: "2026-07-06" });
     // Tabs without a detail view drop the extra segment.
-    expect(resolveRoute("#/planner/today/whatever")).toMatchObject({ detailId: "", canonical: "#/planner/today" });
+    expect(resolveRoute("#/work/focus/whatever")).toMatchObject({ detailId: "", canonical: "#/work/focus" });
   });
 
   it("normalizes legacy single-segment routes to their hub/tab pair", () => {
