@@ -23,8 +23,9 @@ type LegacyNoteEditEntry =
       durationMinutes?: number;
     };
 
-type LegacyNote = Omit<Note, "editHistory"> & {
+type LegacyNote = Omit<Note, "editHistory" | "dayKey"> & {
   editHistory?: LegacyNoteEditEntry[];
+  dayKey?: string | null;
 };
 
 type LegacyPomodoroCycle = Omit<PomodoroCycle, "completedShortBreakCount" | "completedLongBreakCount"> &
@@ -144,6 +145,7 @@ function normalizeChecklistItem(item: LegacyChecklistItem): ChecklistItem {
 function normalizeNote(note: LegacyNote): Note {
   return {
     ...note,
+    dayKey: note.dayKey ?? null,
     editHistory: Array.isArray(note.editHistory)
       ? note.editHistory.map((entry) => normalizeNoteEditEntry(entry, note.updatedAt))
       : [],

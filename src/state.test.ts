@@ -197,6 +197,43 @@ describe("ProdNoteStore", () => {
     expect(store.getWorkspace().tasks.find((item) => item.id === task.id)?.projectId).toBeNull();
   });
 
+  it("appends reflections to a per-day journal note, creating it once", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+
+    const first = await store.appendToDayNote("2026-07-02", "Утро прошло в фокусе.");
+    expect(first?.title).toBe("День 02.07.2026");
+    expect(first?.dayKey).toBe("2026-07-02");
+
+    const second = await store.appendToDayNote("2026-07-02", "Вечером закрыл хвосты.");
+    expect(second?.id).toBe(first?.id);
+    expect(second?.markdown).toBe("Утро прошло в фокусе.\n\nВечером закрыл хвосты.");
+    // Запись через updateNote — история правок растёт.
+    expect(second?.editHistory.length).toBe(1);
+
+    expect(await store.appendToDayNote("2026-07-02", "   ")).toBeNull();
+    expect(store.getWorkspace().notes.filter((note) => note.dayKey === "2026-07-02")).toHaveLength(1);
+  });
+
+  it("extracts unchecked note checkboxes into linked inbox tasks without duplicates", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+    await store.addTask({ title: "Уже есть" });
+    const note = await store.addNote({
+      title: "План встречи",
+      markdown: "- [ ] Написать протокол\n- [x] Сделано\n- [ ] Уже есть",
+    });
+
+    const created = await store.extractTasksFromNote(note.id);
+    expect(created.map((task) => task.title)).toEqual(["Написать протокол"]);
+
+    const updatedNote = store.getWorkspace().notes.find((item) => item.id === note.id);
+    expect(updatedNote?.linkedTaskIds).toContain(created[0]?.id);
+
+    // Повторное извлечение не плодит дубли.
+    expect(await store.extractTasksFromNote(note.id)).toHaveLength(0);
+  });
+
   it("plans a task for a day and sets its estimate independently", async () => {
     const store = new ProdNoteStore();
     await store.init();

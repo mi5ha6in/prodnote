@@ -13,6 +13,7 @@ import {
   createTask,
   nowIso,
 } from "./domain/defaults";
+import { dayNoteTitle, extractOpenCheckboxes } from "./domain/note-tasks";
 import { nextRecurrenceDate, type RecurrenceRule } from "./domain/recurrence";
 import {
   getActiveTimerDurationMinutes,
@@ -483,6 +484,66 @@ export class ProdNoteStore {
       workspace.notes = workspace.notes.filter((note) => note.id !== noteId);
     });
     recordSyncDeletion("note", noteId);
+  }
+
+  /** Append markdown to the day's journal note, creating it on first write. */
+  async appendToDayNote(day: string, markdown: string): Promise<Note | null> {
+    const text = markdown.trim();
+    if (!text) {
+      return null;
+    }
+
+    const existing = this.workspace.notes.find((note) => note.dayKey === day);
+    if (!existing) {
+      const note = createNote({ title: dayNoteTitle(day), markdown: text, dayKey: day });
+      await this.commit((workspace) => {
+        workspace.notes.unshift(note);
+      });
+      return note;
+    }
+
+    await this.updateNote({
+      noteId: existing.id,
+      title: existing.title,
+      markdown: existing.markdown ? `${existing.markdown}\n\n${text}` : text,
+      projectId: existing.projectId,
+      linkedTaskIds: existing.linkedTaskIds,
+      tagIds: existing.tagIds,
+    });
+    return this.workspace.notes.find((note) => note.id === existing.id) ?? null;
+  }
+
+  /**
+   * Turn every unchecked `- [ ]` line of a note into an inbox task and link
+   * the created tasks back to the note. Returns the created tasks.
+   */
+  async extractTasksFromNote(noteId: EntityId): Promise<Task[]> {
+    const note = this.workspace.notes.find((item) => item.id === noteId);
+    if (!note) {
+      return [];
+    }
+
+    const titles = extractOpenCheckboxes(note.markdown);
+    // Не создавать дубли: пропускаем строки, уже существующие открытыми задачами.
+    const openTitles = new Set(
+      this.workspace.tasks.filter((task) => task.status !== "done").map((task) => task.title.toLowerCase()),
+    );
+    const created = titles
+      .filter((title) => !openTitles.has(title.toLowerCase()))
+      .map((title) => createTask({ title, projectId: note.projectId }));
+    if (!created.length) {
+      return [];
+    }
+
+    await this.commit((workspace) => {
+      workspace.tasks.unshift(...created);
+      const target = workspace.notes.find((item) => item.id === noteId);
+      if (target) {
+        target.linkedTaskIds = [...new Set([...target.linkedTaskIds, ...created.map((task) => task.id)])];
+        target.updatedAt = nowIso();
+      }
+    });
+    return created;
   }
 
   async addEvent(input: {

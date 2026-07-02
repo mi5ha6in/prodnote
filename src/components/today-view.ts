@@ -54,6 +54,8 @@ export class TodayView extends HTMLElement {
   private draggingId: string | null = null;
   /** 0 — мастер планирования закрыт; 1..3 — текущий шаг. */
   private planStep = 0;
+  /** 0 — мастер закрытия дня закрыт; 1..3 — текущий шаг. */
+  private shutdownStep = 0;
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
@@ -101,6 +103,7 @@ export class TodayView extends HTMLElement {
       `
         <section class="view-grid">
           ${this.planStep > 0 ? this.renderPlanWizard(workspace, day) : ""}
+          ${this.shutdownStep > 0 ? this.renderShutdownWizard(workspace, day) : ""}
 
           ${viewHeaderHtml({
             eyebrow: "День",
@@ -113,6 +116,7 @@ export class TodayView extends HTMLElement {
                 ${day !== today ? `<button ${buttonAttrs({ size: "small", data: { action: "go-today" } })}>Сегодня</button>` : ""}
               </div>
               ${day >= today ? `<button ${buttonAttrs({ data: { action: "start-plan" } })}>Спланировать день</button>` : ""}
+              ${day <= today ? `<button ${buttonAttrs({ tone: "ghost", data: { action: "start-shutdown" } })}>Закрыть день</button>` : ""}
             `,
           })}
 
@@ -456,7 +460,8 @@ export class TodayView extends HTMLElement {
 
     this.wire(root);
     this.wirePlanWizard(root);
-    setBodyScrollLock(this.planStep > 0);
+    this.wireShutdownWizard(root);
+    setBodyScrollLock(this.planStep > 0 || this.shutdownStep > 0);
   }
 
   private renderItem(item: ChecklistItem): string {
@@ -707,6 +712,184 @@ export class TodayView extends HTMLElement {
     });
   }
 
+  private renderShutdownWizard(workspace: Workspace, day: string): string {
+    const steps = ["Итог дня", "Незакрытое", "Рефлексия"];
+    const stepBody =
+      this.shutdownStep === 1
+        ? this.renderShutdownSummary(workspace, day)
+        : this.shutdownStep === 2
+          ? this.renderShutdownLeftovers(workspace, day)
+          : this.renderShutdownReflection();
+
+    return wizardStepHtml({
+      label: "Закрытие дня",
+      step: this.shutdownStep,
+      totalSteps: steps.length,
+      title: steps[this.shutdownStep - 1] ?? "",
+      body: stepBody,
+      showBack: this.shutdownStep > 1,
+      footer:
+        this.shutdownStep < steps.length
+          ? `<button ${buttonAttrs({ data: { action: "wizard-next" } })}>Далее</button>`
+          : `<button ${buttonAttrs({ data: { action: "shutdown-finish" } })}>Записать и закрыть</button>`,
+    });
+  }
+
+  private renderShutdownSummary(workspace: Workspace, day: string): string {
+    const items = workspace.checklist.filter((item) => item.day === day);
+    const minutes = workspace.sessions
+      .filter((session) => session.startedAt.slice(0, 10) === day)
+      .reduce((sum, session) => sum + session.durationMinutes, 0);
+    const closedTasks = workspace.tasks.filter((task) => task.completedAt?.slice(0, 10) === day);
+
+    return `
+      ${metricBarHtml([
+        { label: "Время в фокусе", value: formatDuration(minutes), hint: "Завершённые сессии" },
+        { label: "Чек-лист", value: `${items.filter((item) => item.done).length}/${items.length}`, hint: formatDayHeading(day) },
+        { label: "Задач закрыто", value: closedTasks.length, hint: "За этот день" },
+      ])}
+      ${
+        closedTasks.length
+          ? `<div class="item-list">${closedTasks
+              .slice(0, 6)
+              .map((task) => `<div class="list-item"><strong>${escapeHtml(task.title)}</strong></div>`)
+              .join("")}</div>`
+          : `<p class="muted">Сегодня без закрытых задач — бывает; посмотрите, что перенести.</p>`
+      }
+    `;
+  }
+
+  private renderShutdownLeftovers(workspace: Workspace, day: string): string {
+    const tomorrow = shiftDayKey(day, 1);
+    const undoneItems = workspace.checklist.filter((item) => item.day === day && !item.done);
+    const openTasks = this.tasksForDay(workspace, day).filter((task) => task.status !== "done");
+
+    if (!undoneItems.length && !openTasks.length) {
+      return emptyStateHtml("Всё закрыто. Идеальный вечер.");
+    }
+
+    return `
+      ${
+        undoneItems.length
+          ? `
+            <div class="card-header" style="margin-bottom: 0;">
+              <p class="eyebrow">Чек-лист: ${undoneItems.length} не закрыто</p>
+              <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "shutdown-rollover" } })}>Перенести всё на завтра</button>
+            </div>
+            <div class="item-list">
+              ${undoneItems.map((item) => `<div class="list-item">${escapeHtml(item.title)}</div>`).join("")}
+            </div>
+          `
+          : ""
+      }
+      ${
+        openTasks.length
+          ? `
+            <p class="eyebrow">Задачи дня</p>
+            <div class="item-list">
+              ${openTasks
+                .map(
+                  (task) => `
+                    <div class="list-item">
+                      <strong>${escapeHtml(task.title)}</strong>
+                      <div class="row-actions">
+                        <button ${buttonAttrs({ tone: "ghost", size: "small", data: { shutdownTomorrow: task.id, taskDue: task.dueDate === day ? "1" : "" } })}>На завтра (${escapeHtml(formatDate(tomorrow))})</button>
+                        <button ${buttonAttrs({ tone: "ghost", size: "small", data: { shutdownRelease: task.id } })}>Отпустить</button>
+                        <button ${buttonAttrs({ tone: "ghost", size: "small", data: { shutdownDone: task.id } })}>Завершить</button>
+                      </div>
+                    </div>
+                  `,
+                )
+                .join("")}
+            </div>
+          `
+          : ""
+      }
+    `;
+  }
+
+  private renderShutdownReflection(): string {
+    return `
+      <p class="muted">Пара строк о дне — запись попадёт в заметку дня и останется в базе знаний.</p>
+      <textarea data-shutdown-reflection placeholder="Что получилось, что мешало, что понял…" aria-label="Рефлексия дня"></textarea>
+    `;
+  }
+
+  private wireShutdownWizard(root: ShadowRoot): void {
+    if (this.shutdownStep === 0) {
+      return;
+    }
+
+    wireModal(root, {
+      onClose: () => {
+        this.shutdownStep = 0;
+        this.render();
+      },
+    });
+
+    root.querySelectorAll<HTMLButtonElement>('[data-action="close-wizard"]').forEach((button) => {
+      button.addEventListener("click", () => {
+        this.shutdownStep = 0;
+        this.render();
+      });
+    });
+    root.querySelector<HTMLButtonElement>('[data-action="wizard-next"]')?.addEventListener("click", () => {
+      this.shutdownStep += 1;
+      this.render();
+    });
+    root.querySelector<HTMLButtonElement>('[data-action="wizard-back"]')?.addEventListener("click", () => {
+      this.shutdownStep -= 1;
+      this.render();
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="shutdown-rollover"]')?.addEventListener("click", () => {
+      void appStore.rolloverChecklist(this.selectedDay, shiftDayKey(this.selectedDay, 1));
+    });
+
+    root.querySelectorAll<HTMLButtonElement>("[data-shutdown-tomorrow]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.dataset.shutdownTomorrow;
+        if (!id) {
+          return;
+        }
+        const tomorrow = shiftDayKey(this.selectedDay, 1);
+        // Дедлайн двигаем дедлайном, план — планом.
+        if (button.dataset.taskDue === "1") {
+          void appStore.rescheduleTask(id, tomorrow);
+        } else {
+          void appStore.planTaskForDay(id, tomorrow);
+        }
+      });
+    });
+    root.querySelectorAll<HTMLButtonElement>("[data-shutdown-release]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.dataset.shutdownRelease;
+        if (!id) {
+          return;
+        }
+        void appStore.rescheduleTask(id, null);
+        void appStore.planTaskForDay(id, null);
+      });
+    });
+    root.querySelectorAll<HTMLButtonElement>("[data-shutdown-done]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.dataset.shutdownDone;
+        if (id) {
+          void appStore.updateTaskStatus(id, "done");
+        }
+      });
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="shutdown-finish"]')?.addEventListener("click", () => {
+      const reflection = root.querySelector<HTMLTextAreaElement>("[data-shutdown-reflection]")?.value ?? "";
+      if (reflection.trim()) {
+        void appStore.appendToDayNote(this.selectedDay, `**Рефлексия:** ${reflection.trim()}`);
+      }
+      this.shutdownStep = 0;
+      this.render();
+    });
+  }
+
   private renderOnboarding(): string {
     return `
       <article class="card">
@@ -756,6 +939,11 @@ export class TodayView extends HTMLElement {
 
     root.querySelector<HTMLButtonElement>('[data-action="start-plan"]')?.addEventListener("click", () => {
       this.planStep = 1;
+      this.render();
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="start-shutdown"]')?.addEventListener("click", () => {
+      this.shutdownStep = 1;
       this.render();
     });
 

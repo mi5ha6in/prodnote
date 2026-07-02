@@ -237,6 +237,7 @@ export function createNote(input: {
   projectId?: string | null;
   linkedTaskIds?: string[];
   tagIds?: string[];
+  dayKey?: string | null;
 }): Note {
   const createdAt = nowIso();
 
@@ -248,6 +249,7 @@ export function createNote(input: {
     linkedTaskIds: input.linkedTaskIds ?? [],
     tagIds: input.tagIds ?? [],
     editHistory: [],
+    dayKey: input.dayKey ?? null,
     createdAt,
     updatedAt: createdAt,
   };

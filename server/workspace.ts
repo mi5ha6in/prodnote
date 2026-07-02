@@ -183,6 +183,7 @@ export async function getSyncedWorkspace(userId: string, sinceRevision = 0): Pro
           id: asString(entry.entity_id),
           editedAt: toIso(entry.edited_at),
         })),
+        dayKey: asNullableString(note.day_key),
         createdAt: toIso(note.created_at),
         updatedAt: toIso(note.updated_at),
       })),
@@ -408,14 +409,14 @@ export async function putSyncedWorkspace(
     for (const note of workspace.notes) {
       await transaction`
         insert into notes (
-          workspace_id, entity_id, title, markdown, project_id, created_at, updated_at, client_updated_at, server_revision, deleted_at
+          workspace_id, entity_id, title, markdown, project_id, day_key, created_at, updated_at, client_updated_at, server_revision, deleted_at
         )
         values (
-          ${workspaceId}, ${note.id}, ${note.title}, ${note.markdown}, ${note.projectId}, ${toSqlTimestamp(note.createdAt)},
+          ${workspaceId}, ${note.id}, ${note.title}, ${note.markdown}, ${note.projectId}, ${note.dayKey ?? null}, ${toSqlTimestamp(note.createdAt)},
           ${toSqlTimestamp(note.updatedAt)}, ${toSqlTimestamp(note.updatedAt)}, ${nextRevision}, null
         )
         on conflict (workspace_id, entity_id) do update
-        set title = excluded.title, markdown = excluded.markdown, project_id = excluded.project_id,
+        set title = excluded.title, markdown = excluded.markdown, project_id = excluded.project_id, day_key = excluded.day_key,
           created_at = excluded.created_at, updated_at = excluded.updated_at, client_updated_at = excluded.client_updated_at,
           server_revision = excluded.server_revision, deleted_at = null
         where notes.client_updated_at < excluded.client_updated_at or notes.deleted_at is not null
