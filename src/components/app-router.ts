@@ -48,7 +48,14 @@ export const HUBS: HubDef[] = [
     tabs: [
       { id: "today", label: "Сегодня", description: "Главное на день: чек-лист, события, задачи", tag: "pn-today-view", icon: "today" },
       { id: "habits", label: "Привычки", description: "Трекер привычек и серии", tag: "pn-habits-view", icon: "habits" },
-      { id: "calendar", label: "Календарь", description: "План и история времени", tag: "pn-calendar-view", icon: "calendar" },
+      {
+        id: "calendar",
+        label: "Календарь",
+        description: "План и история времени",
+        tag: "pn-calendar-view",
+        icon: "calendar",
+        detailTag: "pn-calendar-view",
+      },
     ],
   },
   {
@@ -72,7 +79,14 @@ export const HUBS: HubDef[] = [
     label: "Заметки",
     icon: "notes",
     tabs: [
-      { id: "notes", label: "Заметки", description: "Markdown-заметки и база знаний", tag: "pn-notes-view", icon: "notes" },
+      {
+        id: "notes",
+        label: "Заметки",
+        description: "Markdown-заметки и база знаний",
+        tag: "pn-notes-view",
+        icon: "notes",
+        detailTag: "pn-notes-view",
+      },
     ],
   },
   {

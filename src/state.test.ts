@@ -197,6 +197,145 @@ describe("ProdNoteStore", () => {
     expect(store.getWorkspace().tasks.find((item) => item.id === task.id)?.projectId).toBeNull();
   });
 
+  it("steps quantity habits by count and flips done at the daily target", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+    const template = await store.addChecklistTemplate({ title: "Вода", isHabit: true, targetCount: 3 });
+    const today = dayKey(new Date());
+    await store.ensureChecklistForDay(today);
+    const item = store.getWorkspace().checklist.find((entry) => entry.templateId === template!.id && entry.day === today);
+    expect(item).toBeTruthy();
+
+    await store.incrementChecklistItem(item!.id, 1);
+    await store.incrementChecklistItem(item!.id, 1);
+    let current = store.getWorkspace().checklist.find((entry) => entry.id === item!.id);
+    expect(current?.count).toBe(2);
+    expect(current?.done).toBe(false);
+
+    await store.incrementChecklistItem(item!.id, 1);
+    current = store.getWorkspace().checklist.find((entry) => entry.id === item!.id);
+    expect(current?.done).toBe(true);
+    expect(current?.doneAt).toBeTruthy();
+
+    await store.incrementChecklistItem(item!.id, -1);
+    current = store.getWorkspace().checklist.find((entry) => entry.id === item!.id);
+    expect(current?.done).toBe(false);
+    expect(current?.count).toBe(2);
+  });
+
+  it("reorders kanban tasks and moves them across columns keeping manual order", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+    const a = await store.addTask({ title: "A" });
+    const b = await store.addTask({ title: "B" });
+    const c = await store.addTask({ title: "C" });
+    // Новые добавляются наверх: порядок в бэклоге C, B, A.
+
+    const backlog = () =>
+      store
+        .getWorkspace()
+        .tasks.filter((task) => task.status === "backlog")
+        .sort((x, y) => x.boardOrder - y.boardOrder)
+        .map((task) => task.title);
+    expect(backlog()).toEqual(["C", "B", "A"]);
+
+    // A перед C → A, C, B.
+    await store.reorderTask(a.id, "backlog", c.id);
+    expect(backlog()).toEqual(["A", "C", "B"]);
+
+    // B в конец другой колонки со сменой статуса.
+    await store.reorderTask(b.id, "active", null);
+    expect(backlog()).toEqual(["A", "C"]);
+    expect(store.getWorkspace().tasks.find((task) => task.id === b.id)?.status).toBe("active");
+  });
+
+  it("reconciles ICS subscription events: upsert by uid, drop vanished, keep manual", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+    const manual = await store.addEvent({
+      title: "Ручное",
+      startsAt: "2026-07-03T10:00:00",
+      endsAt: "2026-07-03T11:00:00",
+    });
+
+    const first = await store.syncSubscribedEvents("sub1", [
+      { title: "Встреча A", startsAt: "2026-07-03T12:00:00", endsAt: "2026-07-03T13:00:00", allDay: false, externalUid: "a" },
+      { title: "Встреча B", startsAt: "2026-07-04T12:00:00", endsAt: "2026-07-04T13:00:00", allDay: false, externalUid: "b" },
+    ]);
+    expect(first).toEqual({ imported: 2, removed: 0 });
+    expect(store.getWorkspace().events).toHaveLength(3);
+
+    const second = await store.syncSubscribedEvents("sub1", [
+      { title: "Встреча A (новое время)", startsAt: "2026-07-03T14:00:00", endsAt: "2026-07-03T15:00:00", allDay: false, externalUid: "a" },
+    ]);
+    expect(second.removed).toBe(1);
+
+    const events = store.getWorkspace().events;
+    expect(events).toHaveLength(2);
+    expect(events.some((event) => event.id === manual.id)).toBe(true);
+    const updated = events.find((event) => event.externalUid === "ics-sub:sub1:a");
+    expect(updated?.title).toBe("Встреча A (новое время)");
+    expect(updated?.startsAt).toBe("2026-07-03T14:00:00");
+  });
+
+  it("appends reflections to a per-day journal note, creating it once", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+
+    const first = await store.appendToDayNote("2026-07-02", "Утро прошло в фокусе.");
+    expect(first?.title).toBe("День 02.07.2026");
+    expect(first?.dayKey).toBe("2026-07-02");
+
+    const second = await store.appendToDayNote("2026-07-02", "Вечером закрыл хвосты.");
+    expect(second?.id).toBe(first?.id);
+    expect(second?.markdown).toBe("Утро прошло в фокусе.\n\nВечером закрыл хвосты.");
+    // Запись через updateNote — история правок растёт.
+    expect(second?.editHistory.length).toBe(1);
+
+    expect(await store.appendToDayNote("2026-07-02", "   ")).toBeNull();
+    expect(store.getWorkspace().notes.filter((note) => note.dayKey === "2026-07-02")).toHaveLength(1);
+  });
+
+  it("extracts unchecked note checkboxes into linked inbox tasks without duplicates", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+    await store.addTask({ title: "Уже есть" });
+    const note = await store.addNote({
+      title: "План встречи",
+      markdown: "- [ ] Написать протокол\n- [x] Сделано\n- [ ] Уже есть",
+    });
+
+    const created = await store.extractTasksFromNote(note.id);
+    expect(created.map((task) => task.title)).toEqual(["Написать протокол"]);
+
+    const updatedNote = store.getWorkspace().notes.find((item) => item.id === note.id);
+    expect(updatedNote?.linkedTaskIds).toContain(created[0]?.id);
+
+    // Повторное извлечение не плодит дубли.
+    expect(await store.extractTasksFromNote(note.id)).toHaveLength(0);
+  });
+
+  it("plans a task for a day and sets its estimate independently", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+    const task = await store.addTask({ title: "Планируемая" });
+
+    await store.planTaskForDay(task.id, "2026-07-02");
+    let updated = store.getWorkspace().tasks.find((item) => item.id === task.id);
+    expect(updated?.plannedAt).toBe("2026-07-02T00:00:00");
+
+    await store.setTaskEstimate(task.id, 90);
+    updated = store.getWorkspace().tasks.find((item) => item.id === task.id);
+    expect(updated?.estimateMinutes).toBe(90);
+    expect(updated?.plannedAt).toBe("2026-07-02T00:00:00");
+
+    await store.setTaskEstimate(task.id, 0);
+    expect(store.getWorkspace().tasks.find((item) => item.id === task.id)?.estimateMinutes).toBeNull();
+
+    await store.planTaskForDay(task.id, null);
+    expect(store.getWorkspace().tasks.find((item) => item.id === task.id)?.plannedAt).toBeNull();
+  });
+
   it("deletes projects without deleting linked tasks and notes", async () => {
     const store = new ProdNoteStore();
     await store.init();

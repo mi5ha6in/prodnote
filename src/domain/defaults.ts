@@ -75,8 +75,17 @@ export function createDefaultSettings(): Settings {
     pomodoroLongBreakEvery: 4,
     weekStartsOn: 1,
     weeklyTimeGoalMinutes: 0,
+    dailyCapacityMinutes: 480,
+    eventReminderMinutes: 15,
+    allDayReminderHour: 9,
   };
 }
+
+/** Lead-time choices for timed-event reminders (minutes; 0 = off). */
+export const REMINDER_OPTIONS = [0, 5, 10, 15, 30, 60] as const;
+
+/** Morning-hour choices for all-day/deadline reminders (-1 = off). */
+export const ALLDAY_REMINDER_OPTIONS = [-1, 7, 8, 9, 10, 12] as const;
 
 export function createStarterWorkspace(): Workspace {
   const createdAt = nowIso();
@@ -139,6 +148,8 @@ export function createTask(input: {
     dueDate: input.dueDate ?? null,
     plannedAt: null,
     estimateMinutes: null,
+    // Новые задачи встают наверх колонки: у более поздних меньший порядок.
+    boardOrder: -Date.now(),
     subtasks: [],
     history: [],
     createdAt,
@@ -185,6 +196,7 @@ export function createChecklistItem(input: {
     taskId: input.taskId ?? null,
     templateId: input.templateId ?? null,
     rolledFrom: input.rolledFrom ?? null,
+    count: 0,
     createdAt,
     updatedAt: createdAt,
   };
@@ -194,6 +206,8 @@ export function createChecklistTemplate(input: {
   title: string;
   cadence?: ChecklistCadence;
   isHabit?: boolean;
+  targetCount?: number;
+  targetPerWeek?: number | null;
 }): ChecklistTemplate {
   const createdAt = nowIso();
 
@@ -202,6 +216,8 @@ export function createChecklistTemplate(input: {
     title: input.title.trim(),
     cadence: input.cadence ?? "daily",
     isHabit: input.isHabit ?? false,
+    targetCount: Math.max(1, Math.round(input.targetCount ?? 1)),
+    targetPerWeek: input.targetPerWeek ?? null,
     archived: false,
     createdAt,
     updatedAt: createdAt,
@@ -236,6 +252,7 @@ export function createNote(input: {
   projectId?: string | null;
   linkedTaskIds?: string[];
   tagIds?: string[];
+  dayKey?: string | null;
 }): Note {
   const createdAt = nowIso();
 
@@ -247,6 +264,7 @@ export function createNote(input: {
     linkedTaskIds: input.linkedTaskIds ?? [],
     tagIds: input.tagIds ?? [],
     editHistory: [],
+    dayKey: input.dayKey ?? null,
     createdAt,
     updatedAt: createdAt,
   };

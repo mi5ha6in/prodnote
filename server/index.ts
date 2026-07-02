@@ -17,6 +17,8 @@ import {
 } from "./auth";
 import { getServerConfig, isAllowedOrigin } from "./config";
 import { runMigrations } from "./db/migrate";
+import { ICS_MAX_BYTES, ICS_TIMEOUT_MS, isSafeIcsUrl } from "./ics-proxy";
+import { configureWebPush, deletePushSubscription, isPushConfigured, runPushTick, savePushSubscription } from "./push";
 import { getSyncedWorkspace, putSyncedWorkspace, type DeletedEntityType } from "./workspace";
 
 const config = getServerConfig();
@@ -136,6 +138,53 @@ app.put("/api/workspace", requireAuth, async (context) => {
   return context.json(result);
 });
 
+app.get("/api/ics-proxy", requireAuth, async (context) => {
+  const url = context.req.query("url") ?? "";
+  if (!isSafeIcsUrl(url)) {
+    return context.json({ error: "Недопустимый URL календаря." }, 400);
+  }
+
+  try {
+    const response = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(ICS_TIMEOUT_MS) });
+    if (!response.ok) {
+      return context.json({ error: `Источник ответил ${response.status}.` }, 502);
+    }
+    const text = await response.text();
+    if (text.length > ICS_MAX_BYTES) {
+      return context.json({ error: "Файл календаря слишком большой." }, 413);
+    }
+    return context.text(text);
+  } catch {
+    return context.json({ error: "Не удалось получить календарь по URL." }, 502);
+  }
+});
+
+const pushSubscriptionSchema = z.object({
+  endpoint: z.string().url(),
+  keys: z.object({ p256dh: z.string().min(1), auth: z.string().min(1) }),
+});
+
+app.get("/api/push/public-key", requireAuth, (context) => {
+  return context.json({ publicKey: config.vapidPublicKey, enabled: isPushConfigured(config) });
+});
+
+app.post("/api/push/subscription", requireAuth, async (context) => {
+  if (!isPushConfigured(config)) {
+    return context.json({ error: "Push не настроен на сервере (нет VAPID-ключей)." }, 501);
+  }
+  const user = context.get("user");
+  const parsed = pushSubscriptionSchema.parse(await readJson(context.req));
+  await savePushSubscription(user.id, parsed);
+  return context.json({ ok: true });
+});
+
+app.delete("/api/push/subscription", requireAuth, async (context) => {
+  const user = context.get("user");
+  const parsed = z.object({ endpoint: z.string().url() }).parse(await readJson(context.req));
+  await deletePushSubscription(user.id, parsed.endpoint);
+  return context.json({ ok: true });
+});
+
 app.onError((error, context) => {
   const status = error instanceof z.ZodError ? 400 : 500;
   console.error("[api:error]", {
@@ -162,6 +211,17 @@ app.get("*", serveStatic({ path: "./dist/index.html" }));
 
 if (process.env.NODE_ENV !== "test") {
   await runMigrations();
+
+  if (isPushConfigured(config)) {
+    configureWebPush(config);
+    setInterval(() => {
+      void runPushTick().catch((error: unknown) => console.error("[push:tick]", error));
+    }, 60_000);
+    console.log("Web Push scheduler started (tick: 60s).");
+  } else {
+    console.log("Web Push disabled: set VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY to enable.");
+  }
+
   serve(
     {
       fetch: app.fetch,

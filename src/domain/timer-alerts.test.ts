@@ -17,6 +17,7 @@ const active: ActiveTimer = {
   phaseEndsAt: "2026-05-29T10:25:00.000Z",
   pausedAt: null,
   pausedTotalMs: 0,
+  goal: null,
 };
 
 describe("timer alerts", () => {

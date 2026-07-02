@@ -13,6 +13,7 @@ import {
   createTask,
   nowIso,
 } from "./domain/defaults";
+import { dayNoteTitle, extractOpenCheckboxes } from "./domain/note-tasks";
 import { nextRecurrenceDate, type RecurrenceRule } from "./domain/recurrence";
 import {
   getActiveTimerDurationMinutes,
@@ -48,6 +49,7 @@ import type {
   Workspace,
 } from "./domain/types";
 import { clearActiveTimer, isActiveTimerStorageEvent, loadActiveTimer, saveActiveTimer } from "./storage/active-timer";
+import { maybeWriteBackup } from "./storage/backups";
 import { loadWorkspace, replaceWorkspace, saveWorkspace } from "./storage/idb";
 import {
   getSyncState,
@@ -87,10 +89,38 @@ export class ProdNoteStore {
     this.workspace = await loadWorkspace();
     this.activeTimer = loadActiveTimer(this.workspace);
     this.initialized = true;
+    await this.adoptLegacyReminderPrefs();
     await this.prepareToday();
     this.emit();
     void this.pullRemoteWorkspace();
     this.startAutoPull();
+  }
+
+  /**
+   * One-time adoption of the pre-v15 per-device reminder prefs (localStorage)
+   * into synced settings, so upgrading users keep their lead times.
+   */
+  private async adoptLegacyReminderPrefs(): Promise<void> {
+    if (typeof localStorage === "undefined") {
+      return;
+    }
+
+    const lead = localStorage.getItem("prodnote-event-reminder-minutes");
+    const hour = localStorage.getItem("prodnote-allday-reminder-hour");
+    if (lead === null && hour === null) {
+      return;
+    }
+
+    await this.commit((workspace) => {
+      if (lead !== null && Number.isFinite(Number(lead))) {
+        workspace.settings.eventReminderMinutes = Math.max(0, Math.round(Number(lead)));
+      }
+      if (hour !== null && Number.isFinite(Number(hour))) {
+        workspace.settings.allDayReminderHour = Math.max(-1, Math.min(23, Math.round(Number(hour))));
+      }
+    });
+    localStorage.removeItem("prodnote-event-reminder-minutes");
+    localStorage.removeItem("prodnote-allday-reminder-hour");
   }
 
   /** Keep other devices' changes flowing in: pull every minute and on window focus. */
@@ -270,10 +300,39 @@ export class ProdNoteStore {
       if (!item) {
         return;
       }
+      const target = this.checklistItemTarget(workspace, item);
       item.done = !item.done;
+      item.count = item.done ? target : 0;
       item.doneAt = item.done ? nowIso() : null;
       item.updatedAt = nowIso();
     });
+  }
+
+  /** Step a quantity habit's progress; `done` flips when the daily target is reached. */
+  async incrementChecklistItem(itemId: EntityId, delta: 1 | -1): Promise<void> {
+    await this.commit((workspace) => {
+      const item = workspace.checklist.find((entry) => entry.id === itemId);
+      if (!item) {
+        return;
+      }
+      const target = this.checklistItemTarget(workspace, item);
+      item.count = Math.max(0, Math.min(target, item.count + delta));
+      const wasDone = item.done;
+      item.done = item.count >= target;
+      if (item.done && !wasDone) {
+        item.doneAt = nowIso();
+      } else if (!item.done) {
+        item.doneAt = null;
+      }
+      item.updatedAt = nowIso();
+    });
+  }
+
+  private checklistItemTarget(workspace: Workspace, item: ChecklistItem): number {
+    const template = item.templateId
+      ? workspace.checklistTemplates.find((entry) => entry.id === item.templateId)
+      : undefined;
+    return Math.max(1, template?.targetCount ?? 1);
   }
 
   async renameChecklistItem(itemId: EntityId, title: string): Promise<void> {
@@ -389,13 +448,25 @@ export class ProdNoteStore {
     });
   }
 
-  async addChecklistTemplate(input: { title: string; cadence?: ChecklistCadence; isHabit?: boolean }): Promise<ChecklistTemplate | null> {
+  async addChecklistTemplate(input: {
+    title: string;
+    cadence?: ChecklistCadence;
+    isHabit?: boolean;
+    targetCount?: number;
+    targetPerWeek?: number | null;
+  }): Promise<ChecklistTemplate | null> {
     const trimmed = input.title.trim();
     if (!trimmed) {
       return null;
     }
 
-    const template = createChecklistTemplate({ title: trimmed, cadence: input.cadence, isHabit: input.isHabit });
+    const template = createChecklistTemplate({
+      title: trimmed,
+      cadence: input.cadence,
+      isHabit: input.isHabit,
+      targetCount: input.targetCount,
+      targetPerWeek: input.targetPerWeek,
+    });
     await this.commit((workspace) => {
       workspace.checklistTemplates.push(template);
     });
@@ -408,6 +479,8 @@ export class ProdNoteStore {
     title?: string;
     cadence?: ChecklistCadence;
     isHabit?: boolean;
+    targetCount?: number;
+    targetPerWeek?: number | null;
   }): Promise<void> {
     await this.commit((workspace) => {
       const template = workspace.checklistTemplates.find((entry) => entry.id === input.templateId);
@@ -419,6 +492,13 @@ export class ProdNoteStore {
       }
       if (input.cadence !== undefined) {
         template.cadence = input.cadence;
+      }
+      if (input.targetCount !== undefined) {
+        template.targetCount = Math.max(1, Math.round(input.targetCount));
+      }
+      if (input.targetPerWeek !== undefined) {
+        template.targetPerWeek =
+          input.targetPerWeek !== null && input.targetPerWeek > 0 ? Math.round(input.targetPerWeek) : null;
       }
       if (input.isHabit !== undefined) {
         template.isHabit = input.isHabit;
@@ -483,6 +563,66 @@ export class ProdNoteStore {
       workspace.notes = workspace.notes.filter((note) => note.id !== noteId);
     });
     recordSyncDeletion("note", noteId);
+  }
+
+  /** Append markdown to the day's journal note, creating it on first write. */
+  async appendToDayNote(day: string, markdown: string): Promise<Note | null> {
+    const text = markdown.trim();
+    if (!text) {
+      return null;
+    }
+
+    const existing = this.workspace.notes.find((note) => note.dayKey === day);
+    if (!existing) {
+      const note = createNote({ title: dayNoteTitle(day), markdown: text, dayKey: day });
+      await this.commit((workspace) => {
+        workspace.notes.unshift(note);
+      });
+      return note;
+    }
+
+    await this.updateNote({
+      noteId: existing.id,
+      title: existing.title,
+      markdown: existing.markdown ? `${existing.markdown}\n\n${text}` : text,
+      projectId: existing.projectId,
+      linkedTaskIds: existing.linkedTaskIds,
+      tagIds: existing.tagIds,
+    });
+    return this.workspace.notes.find((note) => note.id === existing.id) ?? null;
+  }
+
+  /**
+   * Turn every unchecked `- [ ]` line of a note into an inbox task and link
+   * the created tasks back to the note. Returns the created tasks.
+   */
+  async extractTasksFromNote(noteId: EntityId): Promise<Task[]> {
+    const note = this.workspace.notes.find((item) => item.id === noteId);
+    if (!note) {
+      return [];
+    }
+
+    const titles = extractOpenCheckboxes(note.markdown);
+    // Не создавать дубли: пропускаем строки, уже существующие открытыми задачами.
+    const openTitles = new Set(
+      this.workspace.tasks.filter((task) => task.status !== "done").map((task) => task.title.toLowerCase()),
+    );
+    const created = titles
+      .filter((title) => !openTitles.has(title.toLowerCase()))
+      .map((title) => createTask({ title, projectId: note.projectId }));
+    if (!created.length) {
+      return [];
+    }
+
+    await this.commit((workspace) => {
+      workspace.tasks.unshift(...created);
+      const target = workspace.notes.find((item) => item.id === noteId);
+      if (target) {
+        target.linkedTaskIds = [...new Set([...target.linkedTaskIds, ...created.map((task) => task.id)])];
+        target.updatedAt = nowIso();
+      }
+    });
+    return created;
   }
 
   async addEvent(input: {
@@ -602,6 +742,61 @@ export class ProdNoteStore {
     return imported;
   }
 
+  /**
+   * Reconcile events of one ICS subscription: upsert by prefixed externalUid,
+   * remove events that vanished from the feed. Manual/other events untouched.
+   */
+  async syncSubscribedEvents(
+    subscriptionId: string,
+    events: Array<{
+      title: string;
+      startsAt: string;
+      endsAt: string;
+      allDay: boolean;
+      description?: string;
+      location?: string;
+      externalUid: string | null;
+    }>,
+  ): Promise<{ imported: number; removed: number }> {
+    const prefix = `ics-sub:${subscriptionId}:`;
+    const incoming = events.map((event) => ({
+      ...event,
+      externalUid: `${prefix}${event.externalUid ?? `${event.startsAt}|${event.title}`}`,
+    }));
+    const incomingUids = new Set(incoming.map((event) => event.externalUid));
+    const removedIds: EntityId[] = [];
+
+    await this.commit((workspace) => {
+      workspace.events = workspace.events.filter((event) => {
+        const stale = event.externalUid?.startsWith(prefix) && !incomingUids.has(event.externalUid);
+        if (stale) {
+          removedIds.push(event.id);
+        }
+        return !stale;
+      });
+
+      for (const item of incoming) {
+        const existing = workspace.events.find((event) => event.externalUid === item.externalUid);
+        if (existing) {
+          existing.title = item.title.trim();
+          existing.startsAt = item.startsAt;
+          existing.endsAt = item.endsAt;
+          existing.allDay = item.allDay;
+          existing.description = item.description?.trim() ?? "";
+          existing.location = item.location?.trim() ?? "";
+          existing.updatedAt = nowIso();
+        } else {
+          workspace.events.unshift(createCalendarEvent({ ...item, source: "import" }));
+        }
+      }
+    });
+
+    for (const id of removedIds) {
+      recordSyncDeletion("event", id);
+    }
+    return { imported: incoming.length, removed: removedIds.length };
+  }
+
   async updateTask(input: {
     taskId: EntityId;
     title: string;
@@ -678,6 +873,67 @@ export class ProdNoteStore {
         return;
       }
       task.dueDate = dueDate;
+      task.updatedAt = nowIso();
+    });
+  }
+
+  /**
+   * Place a task before `beforeTaskId` in the kanban (same or another column);
+   * `beforeTaskId === null` drops it to the end of the target column.
+   */
+  async reorderTask(taskId: EntityId, status: TaskStatus, beforeTaskId: EntityId | null): Promise<void> {
+    await this.commit((workspace) => {
+      const task = workspace.tasks.find((item) => item.id === taskId);
+      if (!task || taskId === beforeTaskId) {
+        return;
+      }
+
+      const column = workspace.tasks
+        .filter((item) => item.status === status && item.id !== taskId)
+        .sort((a, b) => a.boardOrder - b.boardOrder);
+
+      let order: number;
+      if (beforeTaskId === null) {
+        order = column.length ? (column.at(-1)?.boardOrder ?? 0) + 1000 : 0;
+      } else {
+        const index = column.findIndex((item) => item.id === beforeTaskId);
+        if (index < 0) {
+          return;
+        }
+        const before = column[index - 1]?.boardOrder;
+        const target = column[index]?.boardOrder ?? 0;
+        order = before === undefined ? target - 1000 : (before + target) / 2;
+      }
+
+      task.boardOrder = order;
+      if (task.status !== status) {
+        task.status = status;
+        task.completedAt = status === "done" ? nowIso() : null;
+      }
+      task.updatedAt = nowIso();
+    });
+  }
+
+  /** Commit a task to a day (YYYY-MM-DD) via plannedAt, or clear the commitment. */
+  async planTaskForDay(taskId: EntityId, day: string | null): Promise<void> {
+    await this.commit((workspace) => {
+      const task = workspace.tasks.find((item) => item.id === taskId);
+      if (!task) {
+        return;
+      }
+      task.plannedAt = day ? `${day}T00:00:00` : null;
+      task.updatedAt = nowIso();
+    });
+  }
+
+  /** Change only the effort estimate (minutes; null clears it). */
+  async setTaskEstimate(taskId: EntityId, estimateMinutes: number | null): Promise<void> {
+    await this.commit((workspace) => {
+      const task = workspace.tasks.find((item) => item.id === taskId);
+      if (!task) {
+        return;
+      }
+      task.estimateMinutes = estimateMinutes !== null && estimateMinutes > 0 ? Math.round(estimateMinutes) : null;
       task.updatedAt = nowIso();
     });
   }
@@ -851,7 +1107,7 @@ export class ProdNoteStore {
     this.emit();
   }
 
-  async startTimer(taskId: EntityId): Promise<void> {
+  async startTimer(taskId: EntityId, goal: string | null = null): Promise<void> {
     this.activeTimer = {
       taskId,
       startedAt: nowIso(),
@@ -861,12 +1117,13 @@ export class ProdNoteStore {
       phaseEndsAt: null,
       pausedAt: null,
       pausedTotalMs: 0,
+      goal: goal?.trim() || null,
     };
     saveActiveTimer(this.activeTimer);
     this.emit();
   }
 
-  async startPomodoro(taskId: EntityId): Promise<void> {
+  async startPomodoro(taskId: EntityId, goal: string | null = null): Promise<void> {
     const cycle = createPomodoroCycle(taskId, this.workspace.settings);
 
     await this.commit((workspace) => {
@@ -882,6 +1139,7 @@ export class ProdNoteStore {
       phaseEndsAt: addMinutesIso(cycle.startedAt, cycle.focusMinutes),
       pausedAt: null,
       pausedTotalMs: 0,
+      goal: goal?.trim() || null,
     };
     saveActiveTimer(this.activeTimer);
     this.emit();
@@ -999,6 +1257,7 @@ export class ProdNoteStore {
         phaseEndsAt: addMinutesIso(nextStartedAt, getPhaseDurationMinutes(nextCycle, nextBreak)),
         pausedAt: null,
         pausedTotalMs: 0,
+        goal: active.goal,
       };
       saveActiveTimer(this.activeTimer);
       this.emit();
@@ -1026,6 +1285,7 @@ export class ProdNoteStore {
       phaseEndsAt: addMinutesIso(nextStartedAt, nextCycle.focusMinutes),
       pausedAt: null,
       pausedTotalMs: 0,
+      goal: active.goal,
     };
     saveActiveTimer(this.activeTimer);
     this.emit();
@@ -1042,6 +1302,8 @@ export class ProdNoteStore {
     await saveWorkspace(this.workspace);
     this.emit();
     queueWorkspacePush(this.workspace);
+    // Fire-and-forget: hourly-throttled local snapshot for disaster recovery.
+    void maybeWriteBackup(this.workspace).catch(() => undefined);
   }
 
   private emit(): void {

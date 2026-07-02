@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { habitStreak, lastNDays, materializeTemplates, shiftDayKey, templateAppliesToDay, weekdayOf } from "./checklist";
+import {
+  habitStreak,
+  habitWeekProgress,
+  habitWeekStreak,
+  lastNDays,
+  materializeTemplates,
+  shiftDayKey,
+  templateAppliesToDay,
+  weekdayOf,
+} from "./checklist";
 import { createChecklistItem, createChecklistTemplate } from "./defaults";
 import type { ChecklistItem, ChecklistTemplate } from "./types";
 
@@ -68,5 +77,31 @@ describe("checklist recurrence", () => {
     // Completing today extends the streak.
     const withToday = items.map((item) => (item.day === MONDAY ? { ...item, done: true } : item));
     expect(habitStreak(habit, withToday, MONDAY)).toBe(3);
+  });
+
+  it("tracks weekly-goal habits: week progress and consecutive-week streak", () => {
+    const habit = createChecklistTemplate({ title: "Спортзал", cadence: "daily", isHabit: true, targetPerWeek: 3 });
+    const doneOn = (day: string): ChecklistItem => ({
+      ...createChecklistItem({ title: habit.title, day, templateId: habit.id }),
+      done: true,
+      doneAt: `${day}T09:00:00.000Z`,
+    });
+
+    // Прошлая неделя (22–28 июня): 3 раза — норма. Текущая (с 29-го): пока 2.
+    const items = [
+      doneOn("2026-06-22"),
+      doneOn("2026-06-24"),
+      doneOn("2026-06-26"),
+      doneOn(MONDAY),
+      doneOn("2026-06-30"),
+    ];
+
+    expect(habitWeekProgress(habit, items, MONDAY)).toBe(2);
+    // Текущая неделя не добрана — не ломает серию, но и не считается.
+    expect(habitWeekStreak(habit, items, MONDAY)).toBe(1);
+
+    // Добор третьего дня в текущей неделе продлевает серию недель.
+    const withThird = [...items, doneOn("2026-07-01")];
+    expect(habitWeekStreak(habit, withThird, MONDAY)).toBe(2);
   });
 });

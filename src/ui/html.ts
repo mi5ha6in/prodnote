@@ -91,6 +91,41 @@ export function metricBarHtml(items: Array<{ label: string; value: string | numb
   `;
 }
 
+/**
+ * One step of a modal wizard (weekly review, day planning): header with a
+ * step counter and close button, the step body, and a footer with back/next.
+ * Wire `[data-action=...]` handlers in the host component.
+ */
+export function wizardStepHtml(options: {
+  step: number;
+  totalSteps: number;
+  title: string;
+  eyebrow?: string;
+  body: string;
+  /** Markup for the footer's primary actions (next/done buttons). */
+  footer: string;
+  showBack: boolean;
+  label: string;
+}): string {
+  return modalHtml({
+    label: options.label,
+    body: `
+      <div class="card-header" style="margin-bottom: 0;">
+        <div>
+          <p class="eyebrow">${escapeHtml(options.eyebrow ?? `Шаг ${options.step} из ${options.totalSteps}`)}</p>
+          <h2>${escapeHtml(options.title)}</h2>
+        </div>
+        <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-wizard" } })}>Закрыть</button>
+      </div>
+      ${options.body}
+      <div class="row-actions" style="justify-content: flex-end;">
+        ${options.showBack ? `<button ${buttonAttrs({ tone: "ghost", data: { action: "wizard-back" } })}>Назад</button>` : ""}
+        ${options.footer}
+      </div>
+    `,
+  });
+}
+
 export function modalHtml(options: { body: string; wide?: boolean; label?: string }): string {
   const labelAttr = options.label ? ` aria-label="${escapeHtml(options.label)}"` : "";
   return `

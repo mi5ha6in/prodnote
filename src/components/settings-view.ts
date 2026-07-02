@@ -1,16 +1,11 @@
 import { SCHEMA_VERSION } from "../domain/types";
 import { escapeHtml } from "../domain/markdown";
 import { getTimerNotificationStatus, requestTimerNotificationPermission } from "../platform/notifications";
+import { disablePush, enablePush, getPushStatus, type PushStatus } from "../platform/push";
+import { listBackups, readBackup, type BackupSummary } from "../storage/backups";
 import { appStore } from "../state";
 import { parseWorkspaceExport, stringifyExport, validateImportSnapshot } from "../storage/export";
-import {
-  ALLDAY_REMINDER_OPTIONS,
-  getAllDayReminderHour,
-  getEventReminderMinutes,
-  REMINDER_OPTIONS,
-  setAllDayReminderHour,
-  setEventReminderMinutes,
-} from "../storage/reminder-prefs";
+import { ALLDAY_REMINDER_OPTIONS, REMINDER_OPTIONS } from "../domain/defaults";
 import { getThemePreference, setThemePreference, type ThemePreference } from "../storage/theme";
 import {
   getSyncState,
@@ -32,11 +27,33 @@ export class SettingsView extends HTMLElement {
   private syncUnsubscribe: (() => void) | null = null;
   private creating: "project" | "tag" | null = null;
   private editing: { type: "project" | "tag"; id: string } | null = null;
+  private pushStatus: PushStatus = "unsupported";
+  private backups: BackupSummary[] = [];
+
+  private refreshPushStatus(): void {
+    void getPushStatus().then((status) => {
+      if (status !== this.pushStatus) {
+        this.pushStatus = status;
+        this.render();
+      }
+    });
+  }
+
+  private refreshBackups(): void {
+    void listBackups().then((backups) => {
+      if (backups.length !== this.backups.length || backups[0]?.id !== this.backups[0]?.id) {
+        this.backups = backups;
+        this.render();
+      }
+    });
+  }
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
     this.syncUnsubscribe = subscribeSync(() => this.render());
     void refreshSyncSession();
+    this.refreshPushStatus();
+    this.refreshBackups();
     this.render();
   }
 
@@ -44,6 +61,21 @@ export class SettingsView extends HTMLElement {
     this.unsubscribe?.();
     this.syncUnsubscribe?.();
     setBodyScrollLock(false);
+  }
+
+  private pushHint(): string {
+    switch (this.pushStatus) {
+      case "on":
+        return "Push включён: напоминания приходят на это устройство даже при закрытом приложении.";
+      case "off":
+        return "Push доступен: сервер доставит напоминания, даже когда вкладка закрыта.";
+      case "denied":
+        return "Push заблокирован браузером — измените разрешение уведомлений для сайта.";
+      case "server-off":
+        return "Push не настроен: нужен вход на сервер синхронизации с VAPID-ключами (см. документацию).";
+      default:
+        return "Этот браузер не поддерживает Web Push; напоминания работают только при открытом приложении.";
+    }
   }
 
   private renderCreateModal(): string {
@@ -181,8 +213,8 @@ export class SettingsView extends HTMLElement {
     const workspace = appStore.getWorkspace();
     const settings = workspace.settings;
     const notificationStatus = getTimerNotificationStatus();
-    const reminderMinutes = getEventReminderMinutes();
-    const allDayHour = getAllDayReminderHour();
+    const reminderMinutes = settings.eventReminderMinutes;
+    const allDayHour = settings.allDayReminderHour;
     const themePreference = getThemePreference();
     const syncState = getSyncState();
     const isSyncing = syncState.status === "syncing";
@@ -251,6 +283,10 @@ export class SettingsView extends HTMLElement {
                 label: "Цель по времени в неделю, часов (0 — выключено)",
                 control: `<input name="weeklyGoalHours" type="number" min="0" max="120" step="0.5" value="${settings.weeklyTimeGoalMinutes / 60}" />`,
               })}
+              ${fieldHtml({
+                label: "Ёмкость дня для планирования, часов (0 — выключено)",
+                control: `<input name="dayCapacityHours" type="number" min="0" max="24" step="0.5" value="${settings.dailyCapacityMinutes / 60}" />`,
+              })}
               <button ${buttonAttrs({ type: "submit" })}>Сохранить настройки</button>
             </form>
 
@@ -266,6 +302,27 @@ export class SettingsView extends HTMLElement {
                   Импортировать файл
                   <input type="file" accept=".json,.prodnote.json,application/json" data-import />
                 </label>
+              </div>
+              <div>
+                <p class="eyebrow" style="margin-bottom: var(--space-2);">Снапшоты</p>
+                <p class="muted">Автобэкапы пишутся раз в час: 7 дневных + 4 недельных.</p>
+                <div class="item-list" style="margin-top: var(--space-2);">
+                  ${
+                    this.backups.length
+                      ? this.backups
+                          .map(
+                            (backup) => `
+                              <div class="list-item backup-row">
+                                <span>${escapeHtml(formatBackupDate(backup.createdAt))}</span>
+                                <span class="muted">${Math.max(1, Math.round(backup.sizeBytes / 1024))} КБ</span>
+                                <button ${buttonAttrs({ tone: "ghost", size: "small", data: { restoreBackup: backup.id } })}>Восстановить</button>
+                              </div>
+                            `,
+                          )
+                          .join("")
+                      : emptyStateHtml("Снапшоты появятся после первого часа работы.")
+                  }
+                </div>
               </div>
             </article>
           </div>
@@ -296,7 +353,7 @@ export class SettingsView extends HTMLElement {
                 ).join("")}
               </select>`,
             })}
-            <p class="muted">Напоминание срабатывает один раз перед началом события (только когда приложение открыто).</p>
+            <p class="muted">Напоминание срабатывает один раз перед началом события; с включённым push — и при закрытом приложении.</p>
             ${fieldHtml({
               label: "Напоминание о делах на весь день и дедлайнах",
               control: `<select data-allday-hour>
@@ -308,6 +365,17 @@ export class SettingsView extends HTMLElement {
                 ).join("")}
               </select>`,
             })}
+            <p class="muted">${this.pushHint()}</p>
+            <div class="row-actions">
+              ${
+                this.pushStatus === "on"
+                  ? `<button ${buttonAttrs({ tone: "ghost", data: { action: "disable-push" } })}>Отключить push на этом устройстве</button>`
+                  : `<button ${buttonAttrs({
+                      data: { action: "enable-push" },
+                      disabled: this.pushStatus !== "off",
+                    })}>Включить push на этом устройстве</button>`
+              }
+            </div>
           </article>
 
           <form class="card form-grid" data-form="sync">
@@ -451,6 +519,14 @@ export class SettingsView extends HTMLElement {
           padding: 0.05rem 0.3rem;
         }
 
+        .backup-row {
+          align-items: center;
+          display: flex;
+          flex-wrap: wrap;
+          gap: var(--space-3);
+          justify-content: space-between;
+        }
+
         .file-label {
           align-items: center;
           background: var(--surface);
@@ -500,12 +576,14 @@ export class SettingsView extends HTMLElement {
       }
 
       void appStore.updateSettings({
+        ...appStore.getWorkspace().settings,
         pomodoroFocusMinutes: Number(requireInput(form, "focus").value),
         pomodoroShortBreakMinutes: Number(requireInput(form, "shortBreak").value),
         pomodoroLongBreakMinutes: Number(requireInput(form, "longBreak").value),
         pomodoroLongBreakEvery: Number(requireInput(form, "longBreakEvery").value),
         weekStartsOn: Number(requireSelect(form, "weekStartsOn").value) === 7 ? 7 : 1,
         weeklyTimeGoalMinutes: Math.max(0, Math.round(Number(requireInput(form, "weeklyGoalHours").value) * 60)),
+        dailyCapacityMinutes: Math.max(0, Math.round(Number(requireInput(form, "dayCapacityHours").value) * 60)),
       });
     });
 
@@ -686,15 +764,37 @@ export class SettingsView extends HTMLElement {
       void requestTimerNotificationPermission().then(() => this.render());
     });
 
+    root.querySelector<HTMLButtonElement>('[data-action="enable-push"]')?.addEventListener("click", () => {
+      void enablePush()
+        .catch(() => "server-off" as const)
+        .then((status) => {
+          this.pushStatus = status;
+          this.render();
+        });
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="disable-push"]')?.addEventListener("click", () => {
+      void disablePush().then((status) => {
+        this.pushStatus = status;
+        this.render();
+      });
+    });
+
     root.querySelector<HTMLSelectElement>("[data-reminder-minutes]")?.addEventListener("change", (event) => {
       if (event.currentTarget instanceof HTMLSelectElement) {
-        setEventReminderMinutes(Number(event.currentTarget.value));
+        void appStore.updateSettings({
+          ...appStore.getWorkspace().settings,
+          eventReminderMinutes: Math.max(0, Number(event.currentTarget.value)),
+        });
       }
     });
 
     root.querySelector<HTMLSelectElement>("[data-allday-hour]")?.addEventListener("change", (event) => {
       if (event.currentTarget instanceof HTMLSelectElement) {
-        setAllDayReminderHour(Number(event.currentTarget.value));
+        void appStore.updateSettings({
+          ...appStore.getWorkspace().settings,
+          allDayReminderHour: Math.max(-1, Math.min(23, Number(event.currentTarget.value))),
+        });
       }
     });
 
@@ -733,6 +833,34 @@ export class SettingsView extends HTMLElement {
 
     root.querySelector<HTMLButtonElement>('[data-action="logout-sync"]')?.addEventListener("click", () => {
       void logoutSync().catch((error: unknown) => window.alert(`Не удалось выйти: ${String(error)}`));
+    });
+
+    root.querySelectorAll<HTMLButtonElement>("[data-restore-backup]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.dataset.restoreBackup;
+        const summary = this.backups.find((backup) => backup.id === id);
+        if (!id || !summary) {
+          return;
+        }
+
+        void readBackup(id)
+          .then((payload) => {
+            if (!payload) {
+              throw new Error("снапшот не найден");
+            }
+            const preview = validateImportSnapshot(JSON.parse(payload) as unknown);
+            const confirmed = confirmDestructive(
+              `Восстановить снапшот от ${formatBackupDate(summary.createdAt)}?\n\nПроекты: ${preview.projects}\nЗадачи: ${preview.tasks}\nЗаметки: ${preview.notes}\nСессии: ${preview.sessions}\n\nТекущие локальные данные будут заменены.`,
+            );
+            if (!confirmed) {
+              return;
+            }
+            return appStore.importWorkspace(parseWorkspaceExport(payload));
+          })
+          .catch((error: unknown) => {
+            window.alert(`Не удалось восстановить снапшот: ${String(error)}`);
+          });
+      });
     });
 
     root.querySelector<HTMLInputElement>("[data-import]")?.addEventListener("change", (event) => {
@@ -821,4 +949,13 @@ function formatSyncStatus(syncState: ReturnType<typeof getSyncState>): string {
 
 function formatNullableDate(value: string | null): string {
   return value ? new Date(value).toLocaleString("ru-RU") : "ещё не было";
+}
+
+function formatBackupDate(value: string): string {
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }

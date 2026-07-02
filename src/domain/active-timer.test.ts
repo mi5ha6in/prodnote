@@ -20,6 +20,7 @@ describe("active timer helpers", () => {
       phaseEndsAt: null,
       pausedAt: "2026-06-05T10:10:00.000Z",
       pausedTotalMs: 0,
+      goal: null,
     };
 
     expect(isActiveTimerPaused(active)).toBe(true);
@@ -37,6 +38,7 @@ describe("active timer helpers", () => {
       phaseEndsAt: "2026-06-05T10:25:00.000Z",
       pausedAt: null,
       pausedTotalMs: 0,
+      goal: null,
     };
 
     expect(getActiveTimerRemainingSeconds(active, Date.parse("2026-06-05T10:40:00.000Z"))).toBe(0);

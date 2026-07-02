@@ -3,7 +3,7 @@ import { migrateWorkspace } from "../domain/migrations";
 import type { Workspace } from "../domain/types";
 
 const DB_NAME = "prodnote-db";
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const META_KEY = "workspace";
 const SETTINGS_KEY = "settings";
 
@@ -22,18 +22,18 @@ const ENTITY_STORES = [
 
 type EntityStoreName = (typeof ENTITY_STORES)[number];
 
-function isIndexedDbAvailable(): boolean {
+export function isIndexedDbAvailable(): boolean {
   return typeof indexedDB !== "undefined";
 }
 
-function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
+export function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error ?? new Error("IndexedDB request failed"));
   });
 }
 
-function openDatabase(): Promise<IDBDatabase> {
+export function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
@@ -53,6 +53,10 @@ function openDatabase(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains("meta")) {
         db.createObjectStore("meta");
       }
+
+      if (!db.objectStoreNames.contains("backups")) {
+        db.createObjectStore("backups", { keyPath: "id" });
+      }
     };
 
     request.onsuccess = () => resolve(request.result);
@@ -66,7 +70,7 @@ async function readStore<T>(db: IDBDatabase, storeName: EntityStoreName): Promis
   return requestToPromise<T[]>(store.getAll());
 }
 
-function transactionDone(transaction: IDBTransaction): Promise<void> {
+export function transactionDone(transaction: IDBTransaction): Promise<void> {
   return new Promise((resolve, reject) => {
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error ?? new Error("IndexedDB transaction failed"));
