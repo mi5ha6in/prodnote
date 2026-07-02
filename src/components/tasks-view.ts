@@ -8,6 +8,7 @@ import {
   ruleToPreset,
 } from "../domain/recurrence";
 import { parseQuickAdd } from "../domain/quick-add";
+import { PENDING_ACTION_KEY } from "../platform/launch-params";
 import {
   DEFAULT_TASK_FILTER,
   filterAndSortTasks,
@@ -53,6 +54,11 @@ export class TasksView extends HTMLElement {
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
     document.addEventListener("keydown", this.onHotkey);
+    // Ярлык PWA «Новая задача» оставляет отложенное действие.
+    if (typeof sessionStorage !== "undefined" && sessionStorage.getItem(PENDING_ACTION_KEY) === "new-task") {
+      sessionStorage.removeItem(PENDING_ACTION_KEY);
+      this.creating = true;
+    }
     this.render();
   }
 

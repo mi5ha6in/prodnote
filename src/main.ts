@@ -1,4 +1,5 @@
 import "./styles/global.css";
+import { handleLaunchParams } from "./platform/launch-params";
 import { initTheme } from "./storage/theme";
 import "./components/mini-timer";
 import "./components/phase-alert";
@@ -17,6 +18,7 @@ import "./components/settings-view";
 import "./components/app-root";
 
 initTheme();
+handleLaunchParams();
 
 function openAppUrlFromServiceWorker(url: string, hash?: string | null): void {
   try {

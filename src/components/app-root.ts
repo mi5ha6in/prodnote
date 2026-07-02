@@ -17,6 +17,7 @@ const ICONS = {
 
 export class AppRoot extends HTMLElement {
   private onHashChange = () => this.render();
+  private unsubscribeBadge: (() => void) | null = null;
 
   connectedCallback(): void {
     window.addEventListener("hashchange", this.onHashChange);
@@ -26,11 +27,30 @@ export class AppRoot extends HTMLElement {
         `<main class="app-error"><h1>Не удалось открыть ProdNote</h1><p>${String(error)}</p></main>`,
       );
     });
+    this.unsubscribeBadge = appStore.subscribe(() => this.updateAppBadge());
     this.render();
   }
 
   disconnectedCallback(): void {
     window.removeEventListener("hashchange", this.onHashChange);
+    this.unsubscribeBadge?.();
+  }
+
+  /** Число просроченных задач на иконке приложения (Badging API, если есть). */
+  private updateAppBadge(): void {
+    const nav = navigator as Navigator & {
+      setAppBadge?: (count: number) => Promise<void>;
+      clearAppBadge?: () => Promise<void>;
+    };
+    if (!nav.setAppBadge || !nav.clearAppBadge) {
+      return;
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const overdue = appStore
+      .getWorkspace()
+      .tasks.filter((task) => task.status !== "done" && task.dueDate !== null && task.dueDate < today).length;
+    void (overdue > 0 ? nav.setAppBadge(overdue) : nav.clearAppBadge()).catch(() => undefined);
   }
 
   private render(): void {
