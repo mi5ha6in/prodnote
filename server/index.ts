@@ -17,6 +17,7 @@ import {
 } from "./auth";
 import { getServerConfig, isAllowedOrigin } from "./config";
 import { runMigrations } from "./db/migrate";
+import { ICS_MAX_BYTES, ICS_TIMEOUT_MS, isSafeIcsUrl } from "./ics-proxy";
 import { configureWebPush, deletePushSubscription, isPushConfigured, runPushTick, savePushSubscription } from "./push";
 import { getSyncedWorkspace, putSyncedWorkspace, type DeletedEntityType } from "./workspace";
 
@@ -135,6 +136,27 @@ app.put("/api/workspace", requireAuth, async (context) => {
   const parsed = putWorkspaceSchema.parse(body);
   const result = await putSyncedWorkspace(user.id, parsed.workspace as never, parsed.deletedEntities);
   return context.json(result);
+});
+
+app.get("/api/ics-proxy", requireAuth, async (context) => {
+  const url = context.req.query("url") ?? "";
+  if (!isSafeIcsUrl(url)) {
+    return context.json({ error: "Недопустимый URL календаря." }, 400);
+  }
+
+  try {
+    const response = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(ICS_TIMEOUT_MS) });
+    if (!response.ok) {
+      return context.json({ error: `Источник ответил ${response.status}.` }, 502);
+    }
+    const text = await response.text();
+    if (text.length > ICS_MAX_BYTES) {
+      return context.json({ error: "Файл календаря слишком большой." }, 413);
+    }
+    return context.text(text);
+  } catch {
+    return context.json({ error: "Не удалось получить календарь по URL." }, 502);
+  }
 });
 
 const pushSubscriptionSchema = z.object({
