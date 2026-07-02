@@ -391,7 +391,7 @@ export class NotesView extends HTMLElement {
         <form class="form-grid" data-markdown-editor data-form="${isEdit ? "edit-note" : "note"}">
           <div class="card-header" style="margin-bottom: 0;">
             <div>
-              <p class="eyebrow">${isEdit ? "Редактирование" : "Markdown"}</p>
+              <p class="eyebrow">${isEdit ? "Редактирование" : "Заметки"}</p>
               <h2>${isEdit ? escapeHtml(note.title) : "Новая заметка"}</h2>
             </div>
             <div class="row-actions">

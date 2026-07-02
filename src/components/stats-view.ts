@@ -13,7 +13,7 @@ import {
 } from "../domain/stats";
 import { appStore } from "../state";
 import { sessionsToCsv } from "../domain/csv";
-import { buttonAttrs, metricBarHtml, viewHeaderHtml } from "../ui/html";
+import { barRowHtml, buttonAttrs, metricBarHtml, viewHeaderHtml } from "../ui/html";
 import { renderShadow } from "./shadow";
 
 export class StatsView extends HTMLElement {
@@ -155,50 +155,6 @@ export class StatsView extends HTMLElement {
           justify-content: space-between;
         }
 
-        .plan-actual-bars {
-          display: grid;
-          gap: 0.3rem;
-        }
-
-        .pa-track {
-          align-items: center;
-          display: grid;
-          gap: var(--space-2);
-          grid-template-columns: 3rem minmax(0, 1fr) auto;
-        }
-
-        .pa-track .pa-label {
-          color: var(--muted);
-          font-size: var(--text-xs);
-        }
-
-        .pa-track .pa-value {
-          color: var(--muted);
-          font-size: var(--text-xs);
-          font-variant-numeric: tabular-nums;
-        }
-
-        .pa-bar {
-          background: var(--line);
-          border-radius: var(--radius-pill);
-          height: 0.5rem;
-          overflow: hidden;
-        }
-
-        .pa-bar > span {
-          border-radius: inherit;
-          display: block;
-          height: 100%;
-        }
-
-        .pa-bar.plan > span {
-          background: var(--ink-soft);
-        }
-
-        .pa-bar.actual > span {
-          background: var(--accent);
-        }
-
         .heatmap {
           display: grid;
           gap: var(--space-2);
@@ -287,29 +243,26 @@ export class StatsView extends HTMLElement {
     return `
       <div class="plan-actual">
         ${items
-          .map((item) => {
-            const planWidth = Math.round((item.plannedMinutes / max) * 100);
-            const actualWidth = Math.round((item.actualMinutes / max) * 100);
-            return `
+          .map(
+            (item) => `
               <div class="plan-actual-row">
                 <div class="plan-actual-head">
                   <strong>${escapeHtml(item.name)}</strong>
                 </div>
-                <div class="plan-actual-bars">
-                  <div class="pa-track">
-                    <span class="pa-label">План</span>
-                    <div class="pa-bar plan"><span style="width: ${planWidth}%"></span></div>
-                    <span class="pa-value">${formatDuration(item.plannedMinutes)}</span>
-                  </div>
-                  <div class="pa-track">
-                    <span class="pa-label">Факт</span>
-                    <div class="pa-bar actual"><span style="width: ${actualWidth}%"></span></div>
-                    <span class="pa-value">${formatDuration(item.actualMinutes)}</span>
-                  </div>
-                </div>
+                ${barRowHtml({
+                  label: "План",
+                  value: formatDuration(item.plannedMinutes),
+                  percent: (item.plannedMinutes / max) * 100,
+                  tone: "muted",
+                })}
+                ${barRowHtml({
+                  label: "Факт",
+                  value: formatDuration(item.actualMinutes),
+                  percent: (item.actualMinutes / max) * 100,
+                })}
               </div>
-            `;
-          })
+            `,
+          )
           .join("")}
       </div>
     `;
@@ -317,24 +270,19 @@ export class StatsView extends HTMLElement {
 
   private renderBars(items: Array<{ id: string; name: string; minutes: number }>, totalMinutes: number): string {
     if (!items.length) {
-      return `<div class="empty">Недостаточно данных для графика.</div>`;
+      return `<div class="empty">Пока нет завершённых сессий — поработайте по таймеру в «Работа → Фокус», и график появится.</div>`;
     }
 
     return `
       <div class="bars">
         ${items
-          .map((item) => {
-            const width = Math.max(4, Math.round((item.minutes / Math.max(1, totalMinutes)) * 100));
-            return `
-              <div class="list-item">
-                <div class="meta-row">
-                  <strong>${escapeHtml(item.name)}</strong>
-                  <span>${formatDuration(item.minutes)}</span>
-                </div>
-                <div class="bar"><span style="width: ${width}%"></span></div>
-              </div>
-            `;
-          })
+          .map((item) =>
+            barRowHtml({
+              label: item.name,
+              value: formatDuration(item.minutes),
+              percent: Math.max(4, Math.round((item.minutes / Math.max(1, totalMinutes)) * 100)),
+            }),
+          )
           .join("")}
       </div>
     `;

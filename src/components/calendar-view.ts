@@ -167,7 +167,7 @@ export class CalendarView extends HTMLElement {
                         `,
                       )
                       .join("")
-                  : `<div class="empty">Остановите таймер или добавьте ручную сессию.</div>`
+                  : `<div class="empty">Сессий пока нет. Поработайте по таймеру в Работа → Фокус или запишите время вручную кнопкой выше.</div>`
               }
             </div>
           </article>

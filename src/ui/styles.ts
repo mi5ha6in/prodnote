@@ -511,6 +511,44 @@ export const sharedStyles = `
     height: 100%;
   }
 
+  .bar.muted > span {
+    background: var(--ink-soft);
+  }
+
+  .bar.vertical {
+    align-items: end;
+    background: var(--surface);
+    border-radius: var(--radius-sm);
+    display: flex;
+    height: 100%;
+  }
+
+  .bar.vertical > span {
+    border-radius: var(--radius-sm);
+    height: auto;
+    min-height: 2px;
+    width: 100%;
+  }
+
+  .bar-row {
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .bar-row-head {
+    align-items: baseline;
+    display: flex;
+    gap: var(--space-3);
+    justify-content: space-between;
+  }
+
+  .bar-row-head span {
+    color: var(--muted);
+    font-size: var(--text-sm);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
   .quick-create {
     display: grid;
     gap: var(--space-2);
