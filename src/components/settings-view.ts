@@ -2,6 +2,7 @@ import { SCHEMA_VERSION } from "../domain/types";
 import { escapeHtml } from "../domain/markdown";
 import { getTimerNotificationStatus, requestTimerNotificationPermission } from "../platform/notifications";
 import { disablePush, enablePush, getPushStatus, type PushStatus } from "../platform/push";
+import { listBackups, readBackup, type BackupSummary } from "../storage/backups";
 import { appStore } from "../state";
 import { parseWorkspaceExport, stringifyExport, validateImportSnapshot } from "../storage/export";
 import { ALLDAY_REMINDER_OPTIONS, REMINDER_OPTIONS } from "../domain/defaults";
@@ -27,6 +28,7 @@ export class SettingsView extends HTMLElement {
   private creating: "project" | "tag" | null = null;
   private editing: { type: "project" | "tag"; id: string } | null = null;
   private pushStatus: PushStatus = "unsupported";
+  private backups: BackupSummary[] = [];
 
   private refreshPushStatus(): void {
     void getPushStatus().then((status) => {
@@ -37,11 +39,21 @@ export class SettingsView extends HTMLElement {
     });
   }
 
+  private refreshBackups(): void {
+    void listBackups().then((backups) => {
+      if (backups.length !== this.backups.length || backups[0]?.id !== this.backups[0]?.id) {
+        this.backups = backups;
+        this.render();
+      }
+    });
+  }
+
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
     this.syncUnsubscribe = subscribeSync(() => this.render());
     void refreshSyncSession();
     this.refreshPushStatus();
+    this.refreshBackups();
     this.render();
   }
 
@@ -291,6 +303,27 @@ export class SettingsView extends HTMLElement {
                   <input type="file" accept=".json,.prodnote.json,application/json" data-import />
                 </label>
               </div>
+              <div>
+                <p class="eyebrow" style="margin-bottom: var(--space-2);">Снапшоты</p>
+                <p class="muted">Автобэкапы пишутся раз в час: 7 дневных + 4 недельных.</p>
+                <div class="item-list" style="margin-top: var(--space-2);">
+                  ${
+                    this.backups.length
+                      ? this.backups
+                          .map(
+                            (backup) => `
+                              <div class="list-item backup-row">
+                                <span>${escapeHtml(formatBackupDate(backup.createdAt))}</span>
+                                <span class="muted">${Math.max(1, Math.round(backup.sizeBytes / 1024))} КБ</span>
+                                <button ${buttonAttrs({ tone: "ghost", size: "small", data: { restoreBackup: backup.id } })}>Восстановить</button>
+                              </div>
+                            `,
+                          )
+                          .join("")
+                      : emptyStateHtml("Снапшоты появятся после первого часа работы.")
+                  }
+                </div>
+              </div>
             </article>
           </div>
 
@@ -484,6 +517,14 @@ export class SettingsView extends HTMLElement {
           background: var(--paper-strong);
           border-radius: var(--radius-sm);
           padding: 0.05rem 0.3rem;
+        }
+
+        .backup-row {
+          align-items: center;
+          display: flex;
+          flex-wrap: wrap;
+          gap: var(--space-3);
+          justify-content: space-between;
         }
 
         .file-label {
@@ -794,6 +835,34 @@ export class SettingsView extends HTMLElement {
       void logoutSync().catch((error: unknown) => window.alert(`Не удалось выйти: ${String(error)}`));
     });
 
+    root.querySelectorAll<HTMLButtonElement>("[data-restore-backup]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.dataset.restoreBackup;
+        const summary = this.backups.find((backup) => backup.id === id);
+        if (!id || !summary) {
+          return;
+        }
+
+        void readBackup(id)
+          .then((payload) => {
+            if (!payload) {
+              throw new Error("снапшот не найден");
+            }
+            const preview = validateImportSnapshot(JSON.parse(payload) as unknown);
+            const confirmed = confirmDestructive(
+              `Восстановить снапшот от ${formatBackupDate(summary.createdAt)}?\n\nПроекты: ${preview.projects}\nЗадачи: ${preview.tasks}\nЗаметки: ${preview.notes}\nСессии: ${preview.sessions}\n\nТекущие локальные данные будут заменены.`,
+            );
+            if (!confirmed) {
+              return;
+            }
+            return appStore.importWorkspace(parseWorkspaceExport(payload));
+          })
+          .catch((error: unknown) => {
+            window.alert(`Не удалось восстановить снапшот: ${String(error)}`);
+          });
+      });
+    });
+
     root.querySelector<HTMLInputElement>("[data-import]")?.addEventListener("change", (event) => {
       const input = event.currentTarget;
       if (!(input instanceof HTMLInputElement)) {
@@ -880,4 +949,13 @@ function formatSyncStatus(syncState: ReturnType<typeof getSyncState>): string {
 
 function formatNullableDate(value: string | null): string {
   return value ? new Date(value).toLocaleString("ru-RU") : "ещё не было";
+}
+
+function formatBackupDate(value: string): string {
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }

@@ -49,6 +49,7 @@ import type {
   Workspace,
 } from "./domain/types";
 import { clearActiveTimer, isActiveTimerStorageEvent, loadActiveTimer, saveActiveTimer } from "./storage/active-timer";
+import { maybeWriteBackup } from "./storage/backups";
 import { loadWorkspace, replaceWorkspace, saveWorkspace } from "./storage/idb";
 import {
   getSyncState,
@@ -1155,6 +1156,8 @@ export class ProdNoteStore {
     await saveWorkspace(this.workspace);
     this.emit();
     queueWorkspacePush(this.workspace);
+    // Fire-and-forget: hourly-throttled local snapshot for disaster recovery.
+    void maybeWriteBackup(this.workspace).catch(() => undefined);
   }
 
   private emit(): void {
