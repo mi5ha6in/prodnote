@@ -1,16 +1,10 @@
 import { SCHEMA_VERSION } from "../domain/types";
 import { escapeHtml } from "../domain/markdown";
 import { getTimerNotificationStatus, requestTimerNotificationPermission } from "../platform/notifications";
+import { disablePush, enablePush, getPushStatus, type PushStatus } from "../platform/push";
 import { appStore } from "../state";
 import { parseWorkspaceExport, stringifyExport, validateImportSnapshot } from "../storage/export";
-import {
-  ALLDAY_REMINDER_OPTIONS,
-  getAllDayReminderHour,
-  getEventReminderMinutes,
-  REMINDER_OPTIONS,
-  setAllDayReminderHour,
-  setEventReminderMinutes,
-} from "../storage/reminder-prefs";
+import { ALLDAY_REMINDER_OPTIONS, REMINDER_OPTIONS } from "../domain/defaults";
 import { getThemePreference, setThemePreference, type ThemePreference } from "../storage/theme";
 import {
   getSyncState,
@@ -32,11 +26,22 @@ export class SettingsView extends HTMLElement {
   private syncUnsubscribe: (() => void) | null = null;
   private creating: "project" | "tag" | null = null;
   private editing: { type: "project" | "tag"; id: string } | null = null;
+  private pushStatus: PushStatus = "unsupported";
+
+  private refreshPushStatus(): void {
+    void getPushStatus().then((status) => {
+      if (status !== this.pushStatus) {
+        this.pushStatus = status;
+        this.render();
+      }
+    });
+  }
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
     this.syncUnsubscribe = subscribeSync(() => this.render());
     void refreshSyncSession();
+    this.refreshPushStatus();
     this.render();
   }
 
@@ -44,6 +49,21 @@ export class SettingsView extends HTMLElement {
     this.unsubscribe?.();
     this.syncUnsubscribe?.();
     setBodyScrollLock(false);
+  }
+
+  private pushHint(): string {
+    switch (this.pushStatus) {
+      case "on":
+        return "Push включён: напоминания приходят на это устройство даже при закрытом приложении.";
+      case "off":
+        return "Push доступен: сервер доставит напоминания, даже когда вкладка закрыта.";
+      case "denied":
+        return "Push заблокирован браузером — измените разрешение уведомлений для сайта.";
+      case "server-off":
+        return "Push не настроен: нужен вход на сервер синхронизации с VAPID-ключами (см. документацию).";
+      default:
+        return "Этот браузер не поддерживает Web Push; напоминания работают только при открытом приложении.";
+    }
   }
 
   private renderCreateModal(): string {
@@ -181,8 +201,8 @@ export class SettingsView extends HTMLElement {
     const workspace = appStore.getWorkspace();
     const settings = workspace.settings;
     const notificationStatus = getTimerNotificationStatus();
-    const reminderMinutes = getEventReminderMinutes();
-    const allDayHour = getAllDayReminderHour();
+    const reminderMinutes = settings.eventReminderMinutes;
+    const allDayHour = settings.allDayReminderHour;
     const themePreference = getThemePreference();
     const syncState = getSyncState();
     const isSyncing = syncState.status === "syncing";
@@ -300,7 +320,7 @@ export class SettingsView extends HTMLElement {
                 ).join("")}
               </select>`,
             })}
-            <p class="muted">Напоминание срабатывает один раз перед началом события (только когда приложение открыто).</p>
+            <p class="muted">Напоминание срабатывает один раз перед началом события; с включённым push — и при закрытом приложении.</p>
             ${fieldHtml({
               label: "Напоминание о делах на весь день и дедлайнах",
               control: `<select data-allday-hour>
@@ -312,6 +332,17 @@ export class SettingsView extends HTMLElement {
                 ).join("")}
               </select>`,
             })}
+            <p class="muted">${this.pushHint()}</p>
+            <div class="row-actions">
+              ${
+                this.pushStatus === "on"
+                  ? `<button ${buttonAttrs({ tone: "ghost", data: { action: "disable-push" } })}>Отключить push на этом устройстве</button>`
+                  : `<button ${buttonAttrs({
+                      data: { action: "enable-push" },
+                      disabled: this.pushStatus !== "off",
+                    })}>Включить push на этом устройстве</button>`
+              }
+            </div>
           </article>
 
           <form class="card form-grid" data-form="sync">
@@ -504,6 +535,7 @@ export class SettingsView extends HTMLElement {
       }
 
       void appStore.updateSettings({
+        ...appStore.getWorkspace().settings,
         pomodoroFocusMinutes: Number(requireInput(form, "focus").value),
         pomodoroShortBreakMinutes: Number(requireInput(form, "shortBreak").value),
         pomodoroLongBreakMinutes: Number(requireInput(form, "longBreak").value),
@@ -691,15 +723,37 @@ export class SettingsView extends HTMLElement {
       void requestTimerNotificationPermission().then(() => this.render());
     });
 
+    root.querySelector<HTMLButtonElement>('[data-action="enable-push"]')?.addEventListener("click", () => {
+      void enablePush()
+        .catch(() => "server-off" as const)
+        .then((status) => {
+          this.pushStatus = status;
+          this.render();
+        });
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="disable-push"]')?.addEventListener("click", () => {
+      void disablePush().then((status) => {
+        this.pushStatus = status;
+        this.render();
+      });
+    });
+
     root.querySelector<HTMLSelectElement>("[data-reminder-minutes]")?.addEventListener("change", (event) => {
       if (event.currentTarget instanceof HTMLSelectElement) {
-        setEventReminderMinutes(Number(event.currentTarget.value));
+        void appStore.updateSettings({
+          ...appStore.getWorkspace().settings,
+          eventReminderMinutes: Math.max(0, Number(event.currentTarget.value)),
+        });
       }
     });
 
     root.querySelector<HTMLSelectElement>("[data-allday-hour]")?.addEventListener("change", (event) => {
       if (event.currentTarget instanceof HTMLSelectElement) {
-        setAllDayReminderHour(Number(event.currentTarget.value));
+        void appStore.updateSettings({
+          ...appStore.getWorkspace().settings,
+          allDayReminderHour: Math.max(-1, Math.min(23, Number(event.currentTarget.value))),
+        });
       }
     });
 

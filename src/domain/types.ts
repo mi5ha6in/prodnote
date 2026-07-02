@@ -1,6 +1,6 @@
 import type { RecurrenceRule } from "./recurrence";
 
-export const SCHEMA_VERSION = 14;
+export const SCHEMA_VERSION = 15;
 
 export type EntityId = string;
 
@@ -177,6 +177,10 @@ export interface Settings {
   weeklyTimeGoalMinutes: number;
   /** Realistic plannable minutes per day for the day-budget check; 0 disables it. */
   dailyCapacityMinutes: number;
+  /** Lead time for timed-event reminders in minutes; 0 disables them. Synced so the push server can schedule. */
+  eventReminderMinutes: number;
+  /** Morning hour for all-day/deadline reminders; -1 disables them. */
+  allDayReminderHour: number;
 }
 
 export interface WorkspaceExport {

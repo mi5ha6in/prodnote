@@ -10,7 +10,6 @@ import { escapeHtml } from "../domain/markdown";
 import type { CalendarEventKind } from "../domain/types";
 import { showTimerNotification } from "../platform/notifications";
 import { appStore } from "../state";
-import { getAllDayReminderHour, getEventReminderMinutes } from "../storage/reminder-prefs";
 import { buttonAttrs } from "../ui/html";
 import { renderShadow } from "./shadow";
 
@@ -42,7 +41,7 @@ export class EventReminderToast extends HTMLElement {
     const workspace = appStore.getWorkspace();
     const now = Date.now();
 
-    const dueTimed = getDueEventReminders(workspace.events, now, getEventReminderMinutes());
+    const dueTimed = getDueEventReminders(workspace.events, now, workspace.settings.eventReminderMinutes);
     for (const reminder of dueTimed) {
       if (shouldNotifyEventReminder(reminder.key)) {
         this.fire(`Скоро: ${reminder.event.title}`, reminderBody(reminder), "#/calendar");
@@ -61,7 +60,7 @@ export class EventReminderToast extends HTMLElement {
         startsAt: item.startsAt,
       })),
     ];
-    const dueAllDay = getDueAllDayReminders(allDayItems, now, getAllDayReminderHour());
+    const dueAllDay = getDueAllDayReminders(allDayItems, now, workspace.settings.allDayReminderHour);
     for (const reminder of dueAllDay) {
       if (shouldNotifyEventReminder(reminder.key)) {
         const kindLabel = EVENT_KIND_LABELS[reminder.kind as CalendarEventKind] ?? reminder.kind;
@@ -76,7 +75,7 @@ export class EventReminderToast extends HTMLElement {
       const dueChecklist = getDueAllDayReminders(
         [{ id: "checklist", title: "Чек-лист на сегодня", kind: "checklist", startsAt: new Date(now).toISOString() }],
         now,
-        getAllDayReminderHour(),
+        workspace.settings.allDayReminderHour,
       );
       for (const reminder of dueChecklist) {
         if (shouldNotifyEventReminder(reminder.key)) {

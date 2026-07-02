@@ -45,6 +45,26 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(networkFirst(event.request));
 });
 
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: "ProdNote", body: event.data ? event.data.text() : "" };
+  }
+
+  const hash = typeof data.hash === "string" ? data.hash : "#/planner/today";
+  event.waitUntil(
+    self.registration.showNotification(data.title ?? "ProdNote", {
+      body: data.body ?? "",
+      tag: data.tag ?? "prodnote-push",
+      icon: new URL("icons/icon-192.png", self.registration.scope).pathname,
+      badge: new URL("icons/icon-192.png", self.registration.scope).pathname,
+      data: { url: `${INDEX_URL}${hash}` },
+    }),
+  );
+});
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
