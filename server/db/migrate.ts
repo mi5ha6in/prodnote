@@ -292,5 +292,8 @@ export async function runMigrations(): Promise<void> {
 
     alter table if exists tasks
       add column if not exists recurrence_parent_id text;
+
+    alter table if exists settings
+      add column if not exists daily_capacity_minutes integer not null default 480;
   `);
 }

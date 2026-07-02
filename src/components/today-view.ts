@@ -1,5 +1,6 @@
 import { dayKey, isMultiDay, itemsForDay, taskDeadlineItems, toCalendarItems, type CalendarItem } from "../domain/calendar";
 import { shiftDayKey } from "../domain/checklist";
+import { buildDayPlan, type DayPlan } from "../domain/day-plan";
 import { CHECKLIST_CADENCE_LABELS, EVENT_KIND_LABELS, TASK_STATUS_LABELS } from "../domain/defaults";
 import { escapeHtml } from "../domain/markdown";
 import { formatDuration, groupChecklistByDay } from "../domain/stats";
@@ -13,7 +14,8 @@ import type {
 } from "../domain/types";
 import { requestTimerNotificationPermission } from "../platform/notifications";
 import { appStore } from "../state";
-import { badgeHtml, buttonAttrs, emptyStateHtml, metricBarHtml, viewHeaderHtml } from "../ui/html";
+import { badgeHtml, buttonAttrs, emptyStateHtml, metricBarHtml, viewHeaderHtml, wizardStepHtml } from "../ui/html";
+import { setBodyScrollLock, wireModal } from "./modal";
 import { renderShadow } from "./shadow";
 import { formatDate, getProjectName, getTaskName } from "./view-utils";
 
@@ -50,6 +52,8 @@ export class TodayView extends HTMLElement {
   private focusAddInput = false;
   private editing: { kind: "item" | "template"; id: string } | null = null;
   private draggingId: string | null = null;
+  /** 0 — мастер планирования закрыт; 1..3 — текущий шаг. */
+  private planStep = 0;
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
@@ -59,6 +63,7 @@ export class TodayView extends HTMLElement {
 
   disconnectedCallback(): void {
     this.unsubscribe?.();
+    setBodyScrollLock(false);
   }
 
   private selectDay(day: string): void {
@@ -95,6 +100,8 @@ export class TodayView extends HTMLElement {
       this,
       `
         <section class="view-grid">
+          ${this.planStep > 0 ? this.renderPlanWizard(workspace, day) : ""}
+
           ${viewHeaderHtml({
             eyebrow: "День",
             title: "Чек-лист дня",
@@ -105,6 +112,7 @@ export class TodayView extends HTMLElement {
                 <button ${buttonAttrs({ tone: "ghost", size: "small", data: { dayShift: 1 } })} aria-label="Следующий день">›</button>
                 ${day !== today ? `<button ${buttonAttrs({ size: "small", data: { action: "go-today" } })}>Сегодня</button>` : ""}
               </div>
+              ${day >= today ? `<button ${buttonAttrs({ data: { action: "start-plan" } })}>Спланировать день</button>` : ""}
             `,
           })}
 
@@ -413,10 +421,42 @@ export class TodayView extends HTMLElement {
         .history-cell strong {
           font-variant-numeric: tabular-nums;
         }
+
+        .plan-row {
+          align-items: center;
+          display: flex;
+          gap: var(--space-3);
+          justify-content: space-between;
+        }
+
+        .plan-pick {
+          align-items: center;
+          display: flex;
+          flex: 1;
+          gap: var(--space-2);
+          min-width: 0;
+        }
+
+        .plan-pick input {
+          width: auto;
+        }
+
+        .plan-estimate {
+          align-items: center;
+          display: flex;
+          flex: none;
+          gap: var(--space-2);
+        }
+
+        .plan-estimate input {
+          width: 5rem;
+        }
       `,
     );
 
     this.wire(root);
+    this.wirePlanWizard(root);
+    setBodyScrollLock(this.planStep > 0);
   }
 
   private renderItem(item: ChecklistItem): string {
@@ -486,6 +526,187 @@ export class TodayView extends HTMLElement {
     `;
   }
 
+  private renderPlanWizard(workspace: Workspace, day: string): string {
+    const steps = ["Хвосты", "Задачи на день", "Бюджет дня"];
+    const plan = buildDayPlan(workspace, day);
+    const stepBody =
+      this.planStep === 1
+        ? this.renderPlanOverdue(plan)
+        : this.planStep === 2
+          ? this.renderPlanPick(plan)
+          : this.renderPlanBudget(plan);
+
+    return wizardStepHtml({
+      label: "Планирование дня",
+      step: this.planStep,
+      totalSteps: steps.length,
+      title: steps[this.planStep - 1] ?? "",
+      body: stepBody,
+      showBack: this.planStep > 1,
+      footer:
+        this.planStep < steps.length
+          ? `<button ${buttonAttrs({ data: { action: "wizard-next" } })}>Далее</button>`
+          : `<button ${buttonAttrs({ data: { action: "close-wizard" } })}>Готово</button>`,
+    });
+  }
+
+  private renderPlanOverdue(plan: DayPlan): string {
+    if (!plan.overdue.length) {
+      return emptyStateHtml("Хвостов нет — чистый старт.");
+    }
+
+    return `
+      <p class="muted">Просроченные дедлайны: заберите в этот день, перенесите или закройте.</p>
+      <div class="item-list">
+        ${plan.overdue
+          .map(
+            (task) => `
+              <div class="list-item">
+                <strong>${escapeHtml(task.title)}</strong>
+                <div class="meta-row"><span>дедлайн: ${formatDate(task.dueDate)}</span></div>
+                <div class="row-actions">
+                  <button ${buttonAttrs({ tone: "ghost", size: "small", data: { planTake: task.id } })}>Взять в день</button>
+                  <button ${buttonAttrs({ tone: "ghost", size: "small", data: { planPostpone: task.id } })}>+7 дней</button>
+                  <button ${buttonAttrs({ tone: "ghost", size: "small", data: { planDone: task.id } })}>Завершить</button>
+                </div>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
+    `;
+  }
+
+  private renderPlanPick(plan: DayPlan): string {
+    const row = (task: Task, planned: boolean): string => `
+      <div class="list-item plan-row">
+        <label class="plan-pick">
+          <input type="checkbox" data-plan-pick="${escapeHtml(task.id)}" ${planned ? "checked" : ""} />
+          <span>${escapeHtml(task.title)}</span>
+        </label>
+        <label class="plan-estimate">
+          мин
+          <input
+            type="number"
+            min="0"
+            step="5"
+            data-plan-estimate="${escapeHtml(task.id)}"
+            value="${task.estimateMinutes ?? ""}"
+            placeholder="—"
+            aria-label="Оценка, минут"
+          />
+        </label>
+      </div>
+    `;
+
+    return `
+      <p class="muted">Отметьте, что берёте в день, и прикиньте время — без оценки бюджет слепой.</p>
+      ${plan.planned.length ? `<p class="eyebrow">Уже в плане</p><div class="item-list">${plan.planned.map((task) => row(task, true)).join("")}</div>` : ""}
+      ${
+        plan.candidates.length
+          ? `<p class="eyebrow">Кандидаты (неделя и входящие)</p><div class="item-list">${plan.candidates.map((task) => row(task, false)).join("")}</div>`
+          : ""
+      }
+      ${!plan.planned.length && !plan.candidates.length ? emptyStateHtml("Открытых задач нет.") : ""}
+    `;
+  }
+
+  private renderPlanBudget(plan: DayPlan): string {
+    const planned = plan.plannedEstimateMinutes;
+    const noEstimates = plan.planned.filter((task) => !task.estimateMinutes).length;
+    const verdict =
+      plan.capacityMinutes === 0
+        ? `<p class="muted">Бюджет выключен — задайте ёмкость дня в настройках, чтобы видеть перегруз.</p>`
+        : plan.freeMinutes >= 0
+          ? `<p>Остаётся свободных <strong>${formatDuration(plan.freeMinutes)}</strong> — план реалистичен.</p>`
+          : `<p>План превышает день на <strong>${formatDuration(-plan.freeMinutes)}</strong> — уберите что-то или срежьте оценки.</p>`;
+
+    return `
+      ${metricBarHtml([
+        { label: "Ёмкость дня", value: plan.capacityMinutes ? formatDuration(plan.capacityMinutes) : "—", hint: "Из настроек" },
+        { label: "Занято событиями", value: formatDuration(plan.busyMinutes), hint: "Календарь дня" },
+        { label: "Задачи по оценкам", value: formatDuration(planned), hint: `${plan.planned.length} в плане` },
+      ])}
+      ${verdict}
+      ${noEstimates > 0 ? `<p class="muted">Без оценки: ${noEstimates} — они не учтены в бюджете.</p>` : ""}
+      <a class="button ghost" href="#/planner/calendar" data-plan-to-calendar>Разложить по сетке</a>
+    `;
+  }
+
+  private wirePlanWizard(root: ShadowRoot): void {
+    if (this.planStep === 0) {
+      return;
+    }
+
+    wireModal(root, {
+      onClose: () => {
+        this.planStep = 0;
+        this.render();
+      },
+    });
+
+    root.querySelectorAll<HTMLButtonElement>('[data-action="close-wizard"]').forEach((button) => {
+      button.addEventListener("click", () => {
+        this.planStep = 0;
+        this.render();
+      });
+    });
+    root.querySelector<HTMLButtonElement>('[data-action="wizard-next"]')?.addEventListener("click", () => {
+      this.planStep += 1;
+      this.render();
+    });
+    root.querySelector<HTMLButtonElement>('[data-action="wizard-back"]')?.addEventListener("click", () => {
+      this.planStep -= 1;
+      this.render();
+    });
+    root.querySelector<HTMLElement>("[data-plan-to-calendar]")?.addEventListener("click", () => {
+      this.planStep = 0;
+      setBodyScrollLock(false);
+    });
+
+    root.querySelectorAll<HTMLButtonElement>("[data-plan-take]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.dataset.planTake;
+        if (id) {
+          void appStore.rescheduleTask(id, this.selectedDay);
+        }
+      });
+    });
+    root.querySelectorAll<HTMLButtonElement>("[data-plan-postpone]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.dataset.planPostpone;
+        if (id) {
+          void appStore.rescheduleTask(id, shiftDayKey(dayKey(new Date()), 7));
+        }
+      });
+    });
+    root.querySelectorAll<HTMLButtonElement>("[data-plan-done]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.dataset.planDone;
+        if (id) {
+          void appStore.updateTaskStatus(id, "done");
+        }
+      });
+    });
+
+    root.querySelectorAll<HTMLInputElement>("[data-plan-pick]").forEach((checkbox) => {
+      checkbox.addEventListener("change", () => {
+        const id = checkbox.dataset.planPick;
+        if (id) {
+          void appStore.planTaskForDay(id, checkbox.checked ? this.selectedDay : null);
+        }
+      });
+    });
+    root.querySelectorAll<HTMLInputElement>("[data-plan-estimate]").forEach((input) => {
+      input.addEventListener("change", () => {
+        const id = input.dataset.planEstimate;
+        if (id) {
+          void appStore.setTaskEstimate(id, input.value === "" ? null : Number(input.value));
+        }
+      });
+    });
+  }
+
   private renderOnboarding(): string {
     return `
       <article class="card">
@@ -531,6 +752,11 @@ export class TodayView extends HTMLElement {
 
     root.querySelector<HTMLButtonElement>('[data-action="go-today"]')?.addEventListener("click", () => {
       this.selectDay(dayKey(new Date()));
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="start-plan"]')?.addEventListener("click", () => {
+      this.planStep = 1;
+      this.render();
     });
 
     root.querySelector<HTMLInputElement>(".day-input")?.addEventListener("change", (event) => {

@@ -682,6 +682,30 @@ export class ProdNoteStore {
     });
   }
 
+  /** Commit a task to a day (YYYY-MM-DD) via plannedAt, or clear the commitment. */
+  async planTaskForDay(taskId: EntityId, day: string | null): Promise<void> {
+    await this.commit((workspace) => {
+      const task = workspace.tasks.find((item) => item.id === taskId);
+      if (!task) {
+        return;
+      }
+      task.plannedAt = day ? `${day}T00:00:00` : null;
+      task.updatedAt = nowIso();
+    });
+  }
+
+  /** Change only the effort estimate (minutes; null clears it). */
+  async setTaskEstimate(taskId: EntityId, estimateMinutes: number | null): Promise<void> {
+    await this.commit((workspace) => {
+      const task = workspace.tasks.find((item) => item.id === taskId);
+      if (!task) {
+        return;
+      }
+      task.estimateMinutes = estimateMinutes !== null && estimateMinutes > 0 ? Math.round(estimateMinutes) : null;
+      task.updatedAt = nowIso();
+    });
+  }
+
   /**
    * Delete a task and its dependent time data (sessions, pomodoro cycles, plans),
    * unlink it from checklist items and calendar events, and stop a running timer for it.
