@@ -18,12 +18,15 @@ import { EVENT_KIND_LABELS, SESSION_MODE_LABELS } from "../domain/defaults";
 import { buildIcs, parseIcs } from "../domain/ics";
 import { expandRecurrence, type RecurrenceRule } from "../domain/recurrence";
 import { escapeHtml } from "../domain/markdown";
+import { refreshIcsSubscriptions } from "../platform/ics-sync";
 import { requestTimerNotificationPermission } from "../platform/notifications";
 import { formatDuration } from "../domain/stats";
 import type { CalendarEvent, CalendarEventKind, Workspace } from "../domain/types";
 import { appStore } from "../state";
+import { addIcsSubscription, listIcsSubscriptions, removeIcsSubscription } from "../storage/ics-subscriptions";
+import { getSyncServerUrl } from "../sync/client";
 import { confirmDestructive } from "../ui/actions";
-import { buttonAttrs, fieldHtml, metricBarHtml, modalHtml, viewHeaderHtml } from "../ui/html";
+import { buttonAttrs, emptyStateHtml, fieldHtml, metricBarHtml, modalHtml, viewHeaderHtml } from "../ui/html";
 import { setBodyScrollLock, wireModal } from "./modal";
 import { renderShadow } from "./shadow";
 import {
@@ -60,7 +63,8 @@ const MONTH_LABELS = [
 export class CalendarView extends HTMLElement {
   private unsubscribe: (() => void) | null = null;
   private viewMode: "agenda" | "month" | "week" = "agenda";
-  private modal: "event" | "manual" | null = null;
+  private modal: "event" | "manual" | "subscriptions" | null = null;
+  private subscriptionsError: string | null = null;
   private editingEventId: string | null = null;
   private draftAllDay = false;
   private draftStart: string | null = null;
@@ -73,6 +77,8 @@ export class CalendarView extends HTMLElement {
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
+    // Подтянуть протухшие ICS-подписки (не чаще раза в час на подписку).
+    void refreshIcsSubscriptions();
     // Deep link `#/planner/calendar/<id>` (command palette): open that event's editor.
     const entityId = this.getAttribute("entity-id");
     if (entityId && appStore.getWorkspace().events.some((event) => event.id === entityId)) {
@@ -109,6 +115,7 @@ export class CalendarView extends HTMLElement {
                 <button type="button" data-view="month" aria-pressed="${this.viewMode === "month"}">Месяц</button>
               </div>
               <button ${buttonAttrs({ tone: "ghost", data: { action: "import-ics" } })}>Импорт .ics</button>
+              <button ${buttonAttrs({ tone: "ghost", data: { action: "open-subscriptions" } })}>Подписки</button>
               <button ${buttonAttrs({ tone: "ghost", data: { action: "export-ics" }, disabled: workspace.events.length === 0 })}>Экспорт .ics</button>
               <button ${buttonAttrs({ tone: "ghost", data: { action: "open-manual" }, disabled: workspace.tasks.length === 0 })}>+ Записать время</button>
               <button ${buttonAttrs({ data: { action: "open-event" } })}>+ Событие</button>
@@ -472,7 +479,67 @@ export class CalendarView extends HTMLElement {
       return this.renderManualModal(workspace);
     }
 
+    if (this.modal === "subscriptions") {
+      return this.renderSubscriptionsModal();
+    }
+
     return "";
+  }
+
+  private renderSubscriptionsModal(): string {
+    const subscriptions = listIcsSubscriptions();
+    const hasServer = Boolean(getSyncServerUrl());
+
+    return modalHtml({
+      label: "Подписки на календари",
+      body: `
+        <div class="card-header" style="margin-bottom: 0;">
+          <div>
+            <p class="eyebrow">Календарь</p>
+            <h2>Подписки ICS</h2>
+          </div>
+          <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-modal" } })}>Закрыть</button>
+        </div>
+        <p class="muted">
+          Внешние календари (Google, Outlook и др.) по «секретному адресу в формате iCal».
+          Обновляются раз в час через сервер синхронизации; подписки хранятся на этом устройстве.
+        </p>
+        ${hasServer ? "" : `<p class="muted">Задайте адрес сервера в настройках — без него фиды недоступны (CORS).</p>`}
+        ${this.subscriptionsError ? `<p class="muted">Ошибка: ${escapeHtml(this.subscriptionsError)}</p>` : ""}
+        <form class="form-grid" data-form="ics-subscription">
+          <div class="inline-grid">
+            ${fieldHtml({ label: "Название", control: `<input name="name" placeholder="Рабочий календарь" />` })}
+            ${fieldHtml({ label: "URL .ics", control: `<input name="url" required type="url" placeholder="https://calendar.google.com/…/basic.ics" />` })}
+          </div>
+          <button ${buttonAttrs({ type: "submit", disabled: !hasServer })}>Добавить и синхронизировать</button>
+        </form>
+        <div class="item-list">
+          ${
+            subscriptions.length
+              ? subscriptions
+                  .map(
+                    (subscription) => `
+                      <div class="list-item subscription-row">
+                        <div>
+                          <strong>${escapeHtml(subscription.name)}</strong>
+                          <div class="meta-row">
+                            <span>${escapeHtml(subscription.url)}</span>
+                            <span>синк: ${subscription.lastSyncedAt ? formatDateTime(subscription.lastSyncedAt) : "ещё не было"}</span>
+                          </div>
+                        </div>
+                        <div class="row-actions">
+                          <button ${buttonAttrs({ tone: "ghost", size: "small", data: { subscriptionRefresh: subscription.id }, disabled: !hasServer })}>Обновить</button>
+                          <button ${buttonAttrs({ tone: "danger", size: "small", data: { subscriptionRemove: subscription.id } })}>Удалить</button>
+                        </div>
+                      </div>
+                    `,
+                  )
+                  .join("")
+              : emptyStateHtml("Подписок нет. Добавьте URL внешнего календаря.")
+          }
+        </div>
+      `,
+    });
   }
 
   private renderEventModal(workspace: Workspace): string {
@@ -651,6 +718,62 @@ export class CalendarView extends HTMLElement {
 
     root.querySelector<HTMLButtonElement>('[data-action="close-modal"]')?.addEventListener("click", () => {
       this.closeModal();
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-action="open-subscriptions"]')?.addEventListener("click", () => {
+      this.modal = "subscriptions";
+      this.subscriptionsError = null;
+      this.render();
+    });
+
+    root.querySelector<HTMLFormElement>('[data-form="ics-subscription"]')?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!(form instanceof HTMLFormElement)) {
+        return;
+      }
+      const url = requireInput(form, "url").value.trim();
+      const name = requireInput(form, "name").value;
+      if (!url) {
+        return;
+      }
+
+      const subscription = addIcsSubscription(name, url);
+      this.subscriptionsError = null;
+      void refreshIcsSubscriptions(true).then((result) => {
+        if (result.errors.length) {
+          this.subscriptionsError = result.errors.join("; ");
+          removeIcsSubscription(subscription.id);
+        }
+        this.render();
+      });
+      this.render();
+    });
+
+    root.querySelectorAll<HTMLButtonElement>("[data-subscription-refresh]").forEach((button) => {
+      button.addEventListener("click", () => {
+        this.subscriptionsError = null;
+        void refreshIcsSubscriptions(true).then((result) => {
+          this.subscriptionsError = result.errors.length ? result.errors.join("; ") : null;
+          this.render();
+        });
+      });
+    });
+
+    root.querySelectorAll<HTMLButtonElement>("[data-subscription-remove]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.dataset.subscriptionRemove;
+        if (!id) {
+          return;
+        }
+        if (!confirmDestructive("Удалить подписку? Её события будут удалены из календаря.")) {
+          return;
+        }
+        removeIcsSubscription(id);
+        // Reconcile with an empty feed → drops the subscription's events.
+        void appStore.syncSubscribedEvents(id, []);
+        this.render();
+      });
     });
 
     root.querySelector<HTMLButtonElement>('[data-action="start-focus"]')?.addEventListener("click", (event) => {
@@ -1283,6 +1406,18 @@ export class CalendarView extends HTMLElement {
         background: var(--accent-soft);
         border-color: var(--accent);
         color: var(--accent-strong);
+      }
+
+      .subscription-row {
+        align-items: center;
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-3);
+        justify-content: space-between;
+      }
+
+      .subscription-row > div:first-child {
+        min-width: 0;
       }
 
       .month-day {

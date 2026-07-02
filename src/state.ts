@@ -692,6 +692,61 @@ export class ProdNoteStore {
     return imported;
   }
 
+  /**
+   * Reconcile events of one ICS subscription: upsert by prefixed externalUid,
+   * remove events that vanished from the feed. Manual/other events untouched.
+   */
+  async syncSubscribedEvents(
+    subscriptionId: string,
+    events: Array<{
+      title: string;
+      startsAt: string;
+      endsAt: string;
+      allDay: boolean;
+      description?: string;
+      location?: string;
+      externalUid: string | null;
+    }>,
+  ): Promise<{ imported: number; removed: number }> {
+    const prefix = `ics-sub:${subscriptionId}:`;
+    const incoming = events.map((event) => ({
+      ...event,
+      externalUid: `${prefix}${event.externalUid ?? `${event.startsAt}|${event.title}`}`,
+    }));
+    const incomingUids = new Set(incoming.map((event) => event.externalUid));
+    const removedIds: EntityId[] = [];
+
+    await this.commit((workspace) => {
+      workspace.events = workspace.events.filter((event) => {
+        const stale = event.externalUid?.startsWith(prefix) && !incomingUids.has(event.externalUid);
+        if (stale) {
+          removedIds.push(event.id);
+        }
+        return !stale;
+      });
+
+      for (const item of incoming) {
+        const existing = workspace.events.find((event) => event.externalUid === item.externalUid);
+        if (existing) {
+          existing.title = item.title.trim();
+          existing.startsAt = item.startsAt;
+          existing.endsAt = item.endsAt;
+          existing.allDay = item.allDay;
+          existing.description = item.description?.trim() ?? "";
+          existing.location = item.location?.trim() ?? "";
+          existing.updatedAt = nowIso();
+        } else {
+          workspace.events.unshift(createCalendarEvent({ ...item, source: "import" }));
+        }
+      }
+    });
+
+    for (const id of removedIds) {
+      recordSyncDeletion("event", id);
+    }
+    return { imported: incoming.length, removed: removedIds.length };
+  }
+
   async updateTask(input: {
     taskId: EntityId;
     title: string;

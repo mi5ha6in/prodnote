@@ -197,6 +197,35 @@ describe("ProdNoteStore", () => {
     expect(store.getWorkspace().tasks.find((item) => item.id === task.id)?.projectId).toBeNull();
   });
 
+  it("reconciles ICS subscription events: upsert by uid, drop vanished, keep manual", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+    const manual = await store.addEvent({
+      title: "Ручное",
+      startsAt: "2026-07-03T10:00:00",
+      endsAt: "2026-07-03T11:00:00",
+    });
+
+    const first = await store.syncSubscribedEvents("sub1", [
+      { title: "Встреча A", startsAt: "2026-07-03T12:00:00", endsAt: "2026-07-03T13:00:00", allDay: false, externalUid: "a" },
+      { title: "Встреча B", startsAt: "2026-07-04T12:00:00", endsAt: "2026-07-04T13:00:00", allDay: false, externalUid: "b" },
+    ]);
+    expect(first).toEqual({ imported: 2, removed: 0 });
+    expect(store.getWorkspace().events).toHaveLength(3);
+
+    const second = await store.syncSubscribedEvents("sub1", [
+      { title: "Встреча A (новое время)", startsAt: "2026-07-03T14:00:00", endsAt: "2026-07-03T15:00:00", allDay: false, externalUid: "a" },
+    ]);
+    expect(second.removed).toBe(1);
+
+    const events = store.getWorkspace().events;
+    expect(events).toHaveLength(2);
+    expect(events.some((event) => event.id === manual.id)).toBe(true);
+    const updated = events.find((event) => event.externalUid === "ics-sub:sub1:a");
+    expect(updated?.title).toBe("Встреча A (новое время)");
+    expect(updated?.startsAt).toBe("2026-07-03T14:00:00");
+  });
+
   it("appends reflections to a per-day journal note, creating it once", async () => {
     const store = new ProdNoteStore();
     await store.init();
