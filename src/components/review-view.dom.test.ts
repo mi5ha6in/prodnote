@@ -28,6 +28,14 @@ describe("review-view (DOM)", () => {
     expect(root.querySelector(".score-value")).toBeTruthy();
     expect(root.querySelectorAll("[data-week-shift]")).toHaveLength(2);
     expect(root.querySelectorAll(".week-col")).toHaveLength(7);
+    expect(root.querySelectorAll(".week-chart .bar.vertical")).toHaveLength(7);
+  });
+
+  it("explains the productivity index with the actual score terms", () => {
+    const root = shadow(mount());
+    const details = root.querySelector(".score-details");
+    expect(details?.textContent).toContain("Активные дни (40%)");
+    expect(details?.textContent).toContain("нормируются");
   });
 
   it("reflects a completed checklist item in the score", async () => {

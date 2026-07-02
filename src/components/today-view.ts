@@ -187,7 +187,7 @@ export class TodayView extends HTMLElement {
               ${
                 dayEvents.length
                   ? dayEvents.map((item) => this.renderEventRow(item, workspace)).join("")
-                  : emptyStateHtml("Событий нет. Добавьте их в календаре.")
+                  : emptyStateHtml("Событий нет. Добавьте их в Планер → Календарь.")
               }
             </div>
           </article>
@@ -204,7 +204,7 @@ export class TodayView extends HTMLElement {
               ${
                 dayTasks.length
                   ? dayTasks.map((task) => this.renderTaskRow(task)).join("")
-                  : emptyStateHtml("Задач с дедлайном на этот день нет.")
+                  : emptyStateHtml("Задач на день нет. Возьмите их через «Спланировать день» или создайте в Работа → Задачи.")
               }
             </div>
             ${

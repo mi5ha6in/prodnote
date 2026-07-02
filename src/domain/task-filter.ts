@@ -13,8 +13,9 @@ export const TASK_SORT_LABELS: Record<TaskSort, string> = {
 /** Preset views over due dates and the inbox, like TickTick/Todoist smart lists. */
 export type TaskSmartList = "today" | "week" | "overdue" | "inbox";
 
+// «На сегодня», не «Сегодня» — чтобы не путать с одноимённым табом планера.
 export const TASK_SMART_LIST_LABELS: Record<TaskSmartList, string> = {
-  today: "Сегодня",
+  today: "На сегодня",
   week: "Неделя",
   overdue: "Просрочено",
   inbox: "Входящие",

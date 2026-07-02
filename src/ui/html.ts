@@ -41,6 +41,38 @@ export function emptyStateHtml(message: string): string {
   return `<div class="empty">${escapeHtml(message)}</div>`;
 }
 
+/** Thin progress bar (horizontal by default); percent is clamped to 0–100. */
+export function barHtml(
+  percent: number,
+  options: { tone?: "accent" | "muted"; vertical?: boolean; title?: string } = {},
+): string {
+  const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+  const classes = ["bar", options.tone === "muted" ? "muted" : "", options.vertical ? "vertical" : ""]
+    .filter(Boolean)
+    .join(" ");
+  const titleAttr = options.title ? ` title="${escapeHtml(options.title)}"` : "";
+  const size = options.vertical ? `height: ${clamped}%` : `width: ${clamped}%`;
+  return `<div class="${classes}"${titleAttr}><span style="${size}"></span></div>`;
+}
+
+/** Labeled stat row: name and value above a horizontal bar. */
+export function barRowHtml(options: {
+  label: string;
+  value: string;
+  percent: number;
+  tone?: "accent" | "muted";
+}): string {
+  return `
+    <div class="bar-row">
+      <div class="bar-row-head">
+        <strong>${escapeHtml(options.label)}</strong>
+        <span>${escapeHtml(options.value)}</span>
+      </div>
+      ${barHtml(options.percent, { tone: options.tone })}
+    </div>
+  `;
+}
+
 export function fieldHtml(options: {
   label: string;
   control: string;

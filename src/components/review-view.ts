@@ -6,7 +6,7 @@ import { formatDuration } from "../domain/stats";
 import { DEFAULT_TASK_FILTER, filterAndSortTasks } from "../domain/task-filter";
 import type { Task, Workspace } from "../domain/types";
 import { appStore } from "../state";
-import { badgeHtml, buttonAttrs, emptyStateHtml, metricBarHtml, viewHeaderHtml, wizardStepHtml } from "../ui/html";
+import { badgeHtml, barHtml, buttonAttrs, emptyStateHtml, metricBarHtml, viewHeaderHtml, wizardStepHtml } from "../ui/html";
 import { setBodyScrollLock, wireModal } from "./modal";
 import { renderShadow } from "./shadow";
 import { formatDate, renderProjectOptions } from "./view-utils";
@@ -81,7 +81,20 @@ export class ReviewView extends HTMLElement {
               ${badgeHtml(scoreLabel(review.score))}
             </div>
             <div class="score-bar"><span style="width: ${review.score}%"></span></div>
-            <p class="muted">Складывается из активных дней (40%), выполнения чек-листа (30%) и привычек (30%).</p>
+            <details class="score-details">
+              <summary>Как считается индекс</summary>
+              <ul class="muted">
+                <li>Активные дни (40%): ${review.activeDays}/7</li>
+                ${review.checklistPlanned > 0 ? `<li>Чек-лист (30%): ${review.checklistDone}/${review.checklistPlanned}</li>` : ""}
+                ${review.habitsScheduled > 0 ? `<li>Привычки (30%): ${review.habitsDone}/${review.habitsScheduled}</li>` : ""}
+                ${
+                  review.goalMinutes > 0
+                    ? `<li>Цель по времени (30%): ${escapeHtml(formatDuration(review.totalMinutes))} из ${escapeHtml(formatDuration(review.goalMinutes))}</li>`
+                    : ""
+                }
+              </ul>
+              <p class="muted">Слагаемые без данных пропускаются, веса нормируются по оставшимся.</p>
+            </details>
           </article>
 
           ${metricBarHtml([
@@ -132,9 +145,7 @@ export class ReviewView extends HTMLElement {
                 .map(
                   (day, index) => `
                     <div class="week-col">
-                      <div class="week-bar" title="${escapeHtml(formatDuration(day.minutes))}">
-                        <span style="height: ${Math.round((day.minutes / maxMinutes) * 100)}%"></span>
-                      </div>
+                      ${barHtml((day.minutes / maxMinutes) * 100, { vertical: true, title: formatDuration(day.minutes) })}
                       <span class="week-label">${escapeHtml(labels[index] ?? "")}</span>
                     </div>
                   `,
@@ -385,6 +396,19 @@ const styles = `
     height: 100%;
   }
 
+  .score-details summary {
+    color: var(--muted);
+    cursor: pointer;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    width: fit-content;
+  }
+
+  .score-details ul {
+    margin: var(--space-2) 0;
+    padding-left: 1.2rem;
+  }
+
   .week-chart {
     align-items: end;
     display: grid;
@@ -398,22 +422,6 @@ const styles = `
     gap: var(--space-1);
     height: 100%;
     grid-template-rows: 1fr auto;
-  }
-
-  .week-bar {
-    align-items: end;
-    background: var(--surface);
-    border-radius: var(--radius-sm);
-    display: flex;
-    overflow: hidden;
-  }
-
-  .week-bar span {
-    background: var(--accent);
-    border-radius: var(--radius-sm);
-    display: block;
-    min-height: 2px;
-    width: 100%;
   }
 
   .week-label {

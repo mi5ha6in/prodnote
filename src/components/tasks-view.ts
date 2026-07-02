@@ -235,13 +235,6 @@ export class TasksView extends HTMLElement {
           line-height: 1.2;
         }
 
-        .task-history {
-          background: var(--surface);
-          border-radius: var(--radius-md);
-          min-width: 0;
-          padding: var(--space-3);
-        }
-
         .kanban-column.is-drop-target {
           border-color: var(--accent);
           box-shadow: inset 0 0 0 2px var(--accent-soft);
@@ -266,12 +259,6 @@ export class TasksView extends HTMLElement {
           -webkit-box-orient: vertical;
           -webkit-line-clamp: 5;
           overflow: hidden;
-        }
-
-        .history-entry {
-          border-top: 1px solid var(--line);
-          margin-top: var(--space-3);
-          padding-top: var(--space-3);
         }
 
         .batch-bar {
@@ -1584,7 +1571,6 @@ export class TasksView extends HTMLElement {
 
   private renderTaskCard(task: Task, totalMinutesByTask: Map<string, number>, variant: "kanban" | "list"): string {
     const workspace = appStore.getWorkspace();
-    const recentHistory = task.history.slice(0, 2);
 
     const dragAttrs = variant === "kanban" ? `draggable="true" data-drag-task="${escapeHtml(task.id)}"` : "";
     const statusIndex = STATUS_ORDER.indexOf(task.status);
@@ -1614,6 +1600,7 @@ export class TasksView extends HTMLElement {
               <span>${escapeHtml(getProjectName(workspace.projects, task.projectId))}</span>
               ${task.dueDate ? `<span>дедлайн: ${formatDate(task.dueDate)}</span>` : ""}
               ${(totalMinutesByTask.get(task.id) ?? 0) > 0 ? `<span>время: ${formatDuration(totalMinutesByTask.get(task.id) ?? 0)}</span>` : ""}
+              ${task.history.length ? badgeHtml(`журнал: ${task.history.length}`) : ""}
             </div>
           </div>
           ${moveControls}
@@ -1628,48 +1615,7 @@ export class TasksView extends HTMLElement {
             : ""
         }
         ${task.tagIds.length ? `<div class="meta-row">${renderTagPills(workspace.tags, task.tagIds)}</div>` : ""}
-        ${
-          variant === "list"
-            ? `
-              ${fieldHtml({
-                label: "Статус",
-                control: `<select data-status data-task-id="${escapeHtml(task.id)}">
-                  ${STATUS_ORDER.map(
-                    (status) =>
-                      `<option value="${status}" ${task.status === status ? "selected" : ""}>${TASK_STATUS_LABELS[status]}</option>`,
-                  ).join("")}
-                </select>`,
-              })}
-              <form class="task-history form-grid" data-history-form data-task-id="${escapeHtml(task.id)}">
-                <div class="inline-grid">
-                  ${fieldHtml({
-                    label: "Тип записи",
-                    control: `<select name="kind">
-                      <option value="progress">Прогресс</option>
-                      <option value="note">Заметка</option>
-                      <option value="decision">Решение</option>
-                    </select>`,
-                  })}
-                  ${fieldHtml({
-                    label: "Журнал",
-                    control: `<textarea name="history" placeholder="Что сделал, понял или решил"></textarea>`,
-                  })}
-                </div>
-                <button ${buttonAttrs({ type: "submit", tone: "ghost", size: "small" })}>Добавить запись</button>
-              </form>
-              ${recentHistory
-                .map(
-                  (entry) => `
-                    <div class="history-entry">
-                      <div class="meta-row"><strong>${escapeHtml(entry.kind)}</strong><span>${formatDate(entry.at)}</span></div>
-                      <div class="markdown-preview">${renderMarkdown(entry.markdown)}</div>
-                    </div>
-                  `,
-                )
-                .join("")}
-            `
-            : ""
-        }
+        ${variant === "list" ? badgeHtml(TASK_STATUS_LABELS[task.status]) : ""}
       </article>
     `;
   }
