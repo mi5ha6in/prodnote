@@ -71,4 +71,28 @@ describe("today-view (DOM)", () => {
     shadow(element).querySelector<HTMLButtonElement>('[data-action="close-wizard"]')?.click();
     expect(shadow(element).querySelector("[data-modal]")).toBeFalsy();
   });
+
+  it("walks the shutdown wizard and writes the reflection into the day note", async () => {
+    const today = dayKey(new Date());
+    await appStore.addChecklistItem({ title: "Незакрытый пункт", day: today });
+
+    const element = mount();
+    shadow(element).querySelector<HTMLButtonElement>('[data-action="start-shutdown"]')?.click();
+    expect(shadow(element).textContent).toContain("Итог дня");
+
+    shadow(element).querySelector<HTMLButtonElement>('[data-action="wizard-next"]')?.click();
+    expect(shadow(element).textContent).toContain("Незакрытый пункт");
+
+    shadow(element).querySelector<HTMLButtonElement>('[data-action="wizard-next"]')?.click();
+    const textarea = shadow(element).querySelector<HTMLTextAreaElement>("[data-shutdown-reflection]");
+    expect(textarea).toBeTruthy();
+    textarea!.value = "День прошёл собранно.";
+    shadow(element).querySelector<HTMLButtonElement>('[data-action="shutdown-finish"]')?.click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const dayNote = appStore.getWorkspace().notes.find((note) => note.dayKey === today);
+    expect(dayNote?.markdown).toContain("День прошёл собранно.");
+    expect(shadow(element).querySelector("[data-modal]")).toBeFalsy();
+  });
 });

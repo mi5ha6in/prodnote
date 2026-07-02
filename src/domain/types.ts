@@ -1,6 +1,6 @@
 import type { RecurrenceRule } from "./recurrence";
 
-export const SCHEMA_VERSION = 13;
+export const SCHEMA_VERSION = 14;
 
 export type EntityId = string;
 
@@ -109,6 +109,8 @@ export interface Note {
   linkedTaskIds: EntityId[];
   tagIds: EntityId[];
   editHistory: NoteEditEntry[];
+  /** When set (YYYY-MM-DD), this is the day's journal note (shutdown reflections land here). */
+  dayKey: string | null;
   createdAt: string;
   updatedAt: string;
 }

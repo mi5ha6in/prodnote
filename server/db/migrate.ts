@@ -295,5 +295,8 @@ export async function runMigrations(): Promise<void> {
 
     alter table if exists settings
       add column if not exists daily_capacity_minutes integer not null default 480;
+
+    alter table if exists notes
+      add column if not exists day_key text;
   `);
 }
