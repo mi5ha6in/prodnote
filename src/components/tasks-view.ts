@@ -25,6 +25,7 @@ import { appStore } from "../state";
 import { confirmDestructive } from "../ui/actions";
 import { badgeHtml, buttonAttrs, emptyStateHtml, fieldHtml, modalHtml, viewHeaderHtml } from "../ui/html";
 import { setBodyScrollLock, wireModal } from "./modal";
+import { quickCreateHtml, wireQuickCreate, type QuickCreateKind } from "./quick-create";
 import { renderShadow } from "./shadow";
 import {
   formatDate,
@@ -50,6 +51,20 @@ export class TasksView extends HTMLElement {
   private captureFocus = false;
   private selectMode = false;
   private selectedIds = new Set<string>();
+  /**
+   * Черновик открытой модалки (create/edit): quick-create проекта/тега пишет в
+   * store, store эмитит, view перерисовывается — без черновика набранные поля
+   * формы стёрлись бы.
+   */
+  private taskDraft: {
+    title: string;
+    description: string;
+    projectId: string;
+    priority: string;
+    dueDate: string;
+    recurrence: string;
+    tagIds: string[];
+  } | null = null;
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
@@ -66,6 +81,23 @@ export class TasksView extends HTMLElement {
     this.unsubscribe?.();
     document.removeEventListener("keydown", this.onHotkey);
     setBodyScrollLock(false);
+  }
+
+  /** Снять значения открытой формы задачи (create или edit) в черновик. */
+  private snapshotTaskForm(root: ShadowRoot): void {
+    const form = root.querySelector<HTMLFormElement>('[data-form="task"], [data-form="edit-task"]');
+    if (!form) {
+      return;
+    }
+    this.taskDraft = {
+      title: requireInput(form, "title").value,
+      description: requireTextArea(form, "description").value,
+      projectId: requireSelect(form, "projectId").value,
+      priority: requireSelect(form, "priority").value,
+      dueDate: requireInput(form, "dueDate").value,
+      recurrence: requireSelect(form, "recurrence").value,
+      tagIds: [...form.querySelectorAll<HTMLInputElement>('input[name="tagIds"]:checked')].map((input) => input.value),
+    };
   }
 
   /** n — новая задача, / — поиск. Не срабатывает, когда фокус в поле ввода или открыта модалка. */
@@ -507,16 +539,19 @@ export class TasksView extends HTMLElement {
       });
       form.reset();
       this.creating = false;
+      this.taskDraft = null;
       this.render();
     });
 
     root.querySelector<HTMLButtonElement>('[data-action="open-create"]')?.addEventListener("click", () => {
       this.creating = true;
+      this.taskDraft = null;
       this.render();
     });
 
     root.querySelector<HTMLButtonElement>('[data-action="close-create"]')?.addEventListener("click", () => {
       this.creating = false;
+      this.taskDraft = null;
       this.render();
     });
 
@@ -524,6 +559,25 @@ export class TasksView extends HTMLElement {
       wireModal(root, {
         onClose: () => {
           this.creating = false;
+          this.taskDraft = null;
+          this.render();
+        },
+      });
+    }
+
+    // Quick-create проекта/тега внутри открытой формы задачи.
+    if (this.creating || (this.openedTaskId !== null && this.detailsMode === "edit")) {
+      wireQuickCreate(root, {
+        beforeCreate: () => this.snapshotTaskForm(root),
+        onCreated: (kind: QuickCreateKind, id: string) => {
+          if (!this.taskDraft) {
+            return;
+          }
+          if (kind === "project") {
+            this.taskDraft.projectId = id;
+          } else if (!this.taskDraft.tagIds.includes(id)) {
+            this.taskDraft.tagIds = [...this.taskDraft.tagIds, id];
+          }
           this.render();
         },
       });
@@ -661,6 +715,7 @@ export class TasksView extends HTMLElement {
     root.querySelector<HTMLButtonElement>('[data-action="close-task-details"]')?.addEventListener("click", () => {
       this.openedTaskId = null;
       this.detailsMode = "view";
+      this.taskDraft = null;
       this.render();
     });
 
@@ -677,6 +732,7 @@ export class TasksView extends HTMLElement {
 
         this.openedTaskId = null;
         this.detailsMode = "view";
+        this.taskDraft = null;
         this.render();
       });
 
@@ -687,6 +743,7 @@ export class TasksView extends HTMLElement {
         } else {
           this.openedTaskId = null;
         }
+        this.taskDraft = null;
         this.render();
       });
     }
@@ -697,11 +754,13 @@ export class TasksView extends HTMLElement {
       }
 
       this.detailsMode = "edit";
+      this.taskDraft = null;
       this.render();
     });
 
     root.querySelector<HTMLButtonElement>('[data-action="cancel-task-edit"]')?.addEventListener("click", () => {
       this.detailsMode = "view";
+      this.taskDraft = null;
       this.render();
     });
 
@@ -756,6 +815,7 @@ export class TasksView extends HTMLElement {
         .then(() => {
           this.openedTaskId = taskId;
           this.detailsMode = "view";
+          this.taskDraft = null;
           this.render();
         });
     });
@@ -958,67 +1018,75 @@ export class TasksView extends HTMLElement {
   }
 
   private renderCreateModal(workspace: ReturnType<typeof appStore.getWorkspace>): string {
+    const draft = this.taskDraft;
+
     return modalHtml({
       label: "Новая задача",
       body: `
         <form class="form-grid" data-form="task">
           <div class="card-header" style="margin-bottom: 0;">
             <div>
-              <p class="eyebrow">Новая задача</p>
-              <h2>Зафиксировать работу</h2>
+              <p class="eyebrow">Задачи</p>
+              <h2>Новая задача</h2>
             </div>
             <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-create" } })}>Закрыть</button>
           </div>
           ${fieldHtml({
             label: "Название",
-            control: `<input name="title" required placeholder="Например: написать конспект по архитектуре" />`,
+            control: `<input name="title" required value="${escapeHtml(draft?.title ?? "")}" placeholder="Например: написать конспект по архитектуре" />`,
           })}
           ${fieldHtml({
             label: "Описание",
-            control: `<textarea name="description" placeholder="Контекст, критерии готовности, ссылки"></textarea>`,
+            control: `<textarea name="description" placeholder="Контекст, критерии готовности, ссылки">${escapeHtml(draft?.description ?? "")}</textarea>`,
           })}
           <div class="inline-grid">
-            ${fieldHtml({
-              label: "Проект",
-              control: `<select name="projectId">${renderProjectOptions(workspace.projects)}</select>`,
-            })}
+            <div class="form-grid" style="gap: var(--space-2);">
+              ${fieldHtml({
+                label: "Проект",
+                control: `<select name="projectId">${renderProjectOptions(workspace.projects, draft?.projectId || null)}</select>`,
+              })}
+              ${quickCreateHtml("project")}
+            </div>
             ${fieldHtml({
               label: "Приоритет",
               control: `<select name="priority">
-                <option value="medium">Средний</option>
-                <option value="high">Высокий</option>
-                <option value="low">Низкий</option>
+                ${(["medium", "high", "low"] as const)
+                  .map(
+                    (priority) =>
+                      `<option value="${priority}" ${(draft?.priority ?? "medium") === priority ? "selected" : ""}>${TASK_PRIORITY_LABELS[priority]}</option>`,
+                  )
+                  .join("")}
               </select>`,
             })}
           </div>
           ${fieldHtml({
             label: "Дедлайн",
-            control: `<input name="dueDate" type="date" />`,
+            control: `<input name="dueDate" type="date" value="${escapeHtml(draft?.dueDate ?? "")}" />`,
           })}
           ${fieldHtml({
             label: "Повтор (от дедлайна)",
             control: `<select name="recurrence">
               ${(Object.keys(RECURRENCE_PRESET_LABELS) as RecurrencePreset[])
-                .map((preset) => `<option value="${preset}">${RECURRENCE_PRESET_LABELS[preset]}</option>`)
+                .map(
+                  (preset) =>
+                    `<option value="${preset}" ${draft?.recurrence === preset ? "selected" : ""}>${RECURRENCE_PRESET_LABELS[preset]}</option>`,
+                )
                 .join("")}
             </select>`,
           })}
           <fieldset class="tag-fieldset">
             <legend>Теги</legend>
-            ${
-              workspace.tags.length
-                ? workspace.tags
-                    .map(
-                      (tag) => `
-                        <label class="check-row">
-                          <input type="checkbox" name="tagIds" value="${escapeHtml(tag.id)}" />
-                          <span style="--tag-color: ${escapeHtml(tag.color)}">${escapeHtml(tag.name)}</span>
-                        </label>
-                      `,
-                    )
-                    .join("")
-                : `<p class="muted">Теги можно добавить в настройках.</p>`
-            }
+            ${workspace.tags
+              .map(
+                (tag) => `
+                  <label class="check-row">
+                    <input type="checkbox" name="tagIds" value="${escapeHtml(tag.id)}" ${draft?.tagIds.includes(tag.id) ? "checked" : ""} />
+                    <span style="--tag-color: ${escapeHtml(tag.color)}">${escapeHtml(tag.name)}</span>
+                  </label>
+                `,
+              )
+              .join("")}
+            ${quickCreateHtml("tag")}
           </fieldset>
           <button ${buttonAttrs({ type: "submit" })}>Создать задачу</button>
         </form>
@@ -1314,6 +1382,16 @@ export class TasksView extends HTMLElement {
       { value: "high", label: "Высокий" },
       { value: "low", label: "Низкий" },
     ];
+    // Черновик переживает re-render после quick-create проекта/тега.
+    const draft = this.taskDraft ?? {
+      title: task.title,
+      description: task.description,
+      projectId: task.projectId ?? "",
+      priority: task.priority,
+      dueDate: task.dueDate ?? "",
+      recurrence: ruleToPreset(task.recurrence),
+      tagIds: task.tagIds,
+    };
 
     return `
       <form class="card task-details form-grid" data-form="edit-task" role="dialog" aria-modal="true" aria-label="Редактирование задачи">
@@ -1330,24 +1408,27 @@ export class TasksView extends HTMLElement {
 
         ${fieldHtml({
           label: "Название",
-          control: `<input name="title" required value="${escapeHtml(task.title)}" />`,
+          control: `<input name="title" required value="${escapeHtml(draft.title)}" />`,
         })}
         ${fieldHtml({
           label: "Описание",
-          control: `<textarea name="description" placeholder="Контекст, критерии готовности, ссылки">${escapeHtml(task.description)}</textarea>`,
+          control: `<textarea name="description" placeholder="Контекст, критерии готовности, ссылки">${escapeHtml(draft.description)}</textarea>`,
         })}
         <div class="inline-grid">
-          ${fieldHtml({
-            label: "Проект",
-            control: `<select name="projectId">${renderProjectOptions(workspace.projects, task.projectId)}</select>`,
-          })}
+          <div class="form-grid" style="gap: var(--space-2);">
+            ${fieldHtml({
+              label: "Проект",
+              control: `<select name="projectId">${renderProjectOptions(workspace.projects, draft.projectId || null)}</select>`,
+            })}
+            ${quickCreateHtml("project")}
+          </div>
           ${fieldHtml({
             label: "Приоритет",
             control: `<select name="priority">
               ${priorities
                 .map(
                   (priority) =>
-                    `<option value="${priority.value}" ${task.priority === priority.value ? "selected" : ""}>${priority.label}</option>`,
+                    `<option value="${priority.value}" ${draft.priority === priority.value ? "selected" : ""}>${priority.label}</option>`,
                 )
                 .join("")}
             </select>`,
@@ -1355,7 +1436,7 @@ export class TasksView extends HTMLElement {
         </div>
         ${fieldHtml({
           label: "Дедлайн",
-          control: `<input name="dueDate" type="date" value="${escapeHtml(task.dueDate ?? "")}" />`,
+          control: `<input name="dueDate" type="date" value="${escapeHtml(draft.dueDate)}" />`,
         })}
         ${fieldHtml({
           label: "Повтор (от дедлайна)",
@@ -1363,32 +1444,29 @@ export class TasksView extends HTMLElement {
             ${(Object.keys(RECURRENCE_PRESET_LABELS) as RecurrencePreset[])
               .map(
                 (preset) =>
-                  `<option value="${preset}" ${ruleToPreset(task.recurrence) === preset ? "selected" : ""}>${RECURRENCE_PRESET_LABELS[preset]}</option>`,
+                  `<option value="${preset}" ${draft.recurrence === preset ? "selected" : ""}>${RECURRENCE_PRESET_LABELS[preset]}</option>`,
               )
               .join("")}
           </select>`,
         })}
         <fieldset class="tag-fieldset">
           <legend>Теги</legend>
-          ${
-            workspace.tags.length
-              ? workspace.tags
-                  .map(
-                    (tag) => `
-                      <label class="check-row">
-                        <input
-                          type="checkbox"
-                          name="tagIds"
-                          value="${escapeHtml(tag.id)}"
-                          ${task.tagIds.includes(tag.id) ? "checked" : ""}
-                        />
-                        <span style="--tag-color: ${escapeHtml(tag.color)}">${escapeHtml(tag.name)}</span>
-                      </label>
-                    `,
-                  )
-                  .join("")
-              : `<p class="muted">Теги можно добавить в настройках.</p>`
-          }
+          ${workspace.tags
+            .map(
+              (tag) => `
+                <label class="check-row">
+                  <input
+                    type="checkbox"
+                    name="tagIds"
+                    value="${escapeHtml(tag.id)}"
+                    ${draft.tagIds.includes(tag.id) ? "checked" : ""}
+                  />
+                  <span style="--tag-color: ${escapeHtml(tag.color)}">${escapeHtml(tag.name)}</span>
+                </label>
+              `,
+            )
+            .join("")}
+          ${quickCreateHtml("tag")}
         </fieldset>
       </form>
     `;

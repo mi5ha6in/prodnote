@@ -7,6 +7,7 @@ import { appStore } from "../state";
 import { confirmDestructive } from "../ui/actions";
 import { badgeHtml, buttonAttrs, emptyStateHtml, fieldHtml, metricBarHtml, modalHtml, viewHeaderHtml } from "../ui/html";
 import { setBodyScrollLock, wireModal } from "./modal";
+import { quickCreateHtml, wireQuickCreate, type QuickCreateKind } from "./quick-create";
 import { renderShadow } from "./shadow";
 import {
   formatDate,
@@ -29,6 +30,9 @@ export class NotesView extends HTMLElement {
   private openedNoteId: string | null = null;
   private openedNoteMode: "preview" | "edit" = "preview";
   private searchQuery = "";
+  /** Черновик открытого редактора: без него quick-create проекта/тега стёр бы набранный текст (store emit → re-render). */
+  private noteDraft: { title: string; markdown: string; projectId: string; taskId: string; tagIds: string[] } | null =
+    null;
 
   connectedCallback(): void {
     // Deep link `#/notes/notes/<id>` (command palette): pre-open that note.
@@ -81,6 +85,7 @@ export class NotesView extends HTMLElement {
     this.creating = false;
     this.openedNoteId = null;
     this.openedNoteMode = "preview";
+    this.noteDraft = null;
     // Drop a stale deep-link hash so the same note can be reopened from the palette.
     if (window.location.hash.startsWith("#/notes/notes/")) {
       history.replaceState(null, "", "#/notes/notes");
@@ -370,6 +375,14 @@ export class NotesView extends HTMLElement {
   private renderEditorModal(workspace: Workspace, note: Note | null): string {
     const isEdit = note !== null;
     const cancelAction = isEdit ? "cancel-note-edit" : "close-create";
+    // Черновик переживает re-render после quick-create проекта/тега.
+    const draft = this.noteDraft ?? {
+      title: note?.title ?? "",
+      markdown: note?.markdown ?? "",
+      projectId: note?.projectId ?? "",
+      taskId: note?.linkedTaskIds[0] ?? "",
+      tagIds: note?.tagIds ?? [],
+    };
 
     return modalHtml({
       wide: true,
@@ -399,39 +412,39 @@ export class NotesView extends HTMLElement {
 
           ${fieldHtml({
             label: "Название",
-            control: `<input name="title" required value="${isEdit ? escapeHtml(note.title) : ""}" placeholder="Например: итоги исследования" />`,
+            control: `<input name="title" required value="${escapeHtml(draft.title)}" placeholder="Например: итоги исследования" />`,
           })}
           <div class="inline-grid">
-            ${fieldHtml({
-              label: "Проект",
-              control: `<select name="projectId">${renderProjectOptions(workspace.projects, note?.projectId ?? null)}</select>`,
-            })}
+            <div class="form-grid" style="gap: var(--space-2);">
+              ${fieldHtml({
+                label: "Проект",
+                control: `<select name="projectId">${renderProjectOptions(workspace.projects, draft.projectId || null)}</select>`,
+              })}
+              ${quickCreateHtml("project")}
+            </div>
             ${fieldHtml({
               label: "Связанная задача",
               control: `<select name="taskId">
                 <option value="">Без задачи</option>
-                ${renderTaskOptions(workspace.tasks, note?.linkedTaskIds[0] ?? null)}
+                ${renderTaskOptions(workspace.tasks, draft.taskId || null)}
               </select>`,
             })}
           </div>
           <fieldset>
             <legend>Теги</legend>
-            ${
-              workspace.tags.length
-                ? workspace.tags
-                    .map(
-                      (tag) => `
-                        <label class="check-row">
-                          <input type="checkbox" name="tagIds" value="${escapeHtml(tag.id)}" ${
-                            note?.tagIds.includes(tag.id) ? "checked" : ""
-                          } />
-                          <span>${escapeHtml(tag.name)}</span>
-                        </label>
-                      `,
-                    )
-                    .join("")
-                : `<p class="muted">Теги можно добавить в настройках.</p>`
-            }
+            ${workspace.tags
+              .map(
+                (tag) => `
+                  <label class="check-row">
+                    <input type="checkbox" name="tagIds" value="${escapeHtml(tag.id)}" ${
+                      draft.tagIds.includes(tag.id) ? "checked" : ""
+                    } />
+                    <span>${escapeHtml(tag.name)}</span>
+                  </label>
+                `,
+              )
+              .join("")}
+            ${quickCreateHtml("tag")}
           </fieldset>
           <div class="markdown-tools" aria-label="Сниппеты Markdown">
             ${this.renderSnippetButtons()}
@@ -440,12 +453,10 @@ export class NotesView extends HTMLElement {
             ${fieldHtml({
               label: "Текст",
               className: "markdown-field",
-              control: `<textarea name="markdown" required data-note-markdown placeholder="# Заголовок&#10;- тезис&#10;- следующий шаг">${
-                isEdit ? escapeHtml(note.markdown) : ""
-              }</textarea>`,
+              control: `<textarea name="markdown" required data-note-markdown placeholder="# Заголовок&#10;- тезис&#10;- следующий шаг">${escapeHtml(draft.markdown)}</textarea>`,
             })}
             <article class="preview-panel" aria-live="polite">
-              <div class="markdown-preview" data-note-preview>${isEdit ? renderMarkdown(note.markdown) : EMPTY_PREVIEW_HTML}</div>
+              <div class="markdown-preview" data-note-preview>${draft.markdown ? renderMarkdown(draft.markdown) : EMPTY_PREVIEW_HTML}</div>
             </article>
           </div>
 
@@ -607,12 +618,46 @@ export class NotesView extends HTMLElement {
     ).join("");
   }
 
+  /** Снять значения открытого редактора заметки в черновик. */
+  private snapshotNoteForm(root: ShadowRoot): void {
+    const form = root.querySelector<HTMLFormElement>("[data-markdown-editor]");
+    if (!form) {
+      return;
+    }
+    this.noteDraft = {
+      title: requireInput(form, "title").value,
+      markdown: requireTextArea(form, "markdown").value,
+      projectId: requireSelect(form, "projectId").value,
+      taskId: requireSelect(form, "taskId").value,
+      tagIds: [...form.querySelectorAll<HTMLInputElement>('input[name="tagIds"]:checked')].map((input) => input.value),
+    };
+  }
+
   private bindModalActions(root: ShadowRoot): void {
     root.querySelector<HTMLButtonElement>('[data-action="open-create"]')?.addEventListener("click", () => {
       this.creating = true;
       this.openedNoteId = null;
+      this.noteDraft = null;
       this.render();
     });
+
+    // Quick-create проекта/тега внутри открытого редактора заметки.
+    if (this.creating || (this.openedNoteId !== null && this.openedNoteMode === "edit")) {
+      wireQuickCreate(root, {
+        beforeCreate: () => this.snapshotNoteForm(root),
+        onCreated: (kind: QuickCreateKind, id: string) => {
+          if (!this.noteDraft) {
+            return;
+          }
+          if (kind === "project") {
+            this.noteDraft.projectId = id;
+          } else if (!this.noteDraft.tagIds.includes(id)) {
+            this.noteDraft.tagIds = [...this.noteDraft.tagIds, id];
+          }
+          this.render();
+        },
+      });
+    }
 
     root.querySelectorAll<HTMLButtonElement>("[data-open-note]").forEach((button) => {
       button.addEventListener("click", () => {
@@ -648,11 +693,13 @@ export class NotesView extends HTMLElement {
       }
 
       this.openedNoteMode = "edit";
+      this.noteDraft = null;
       this.render();
     });
 
     root.querySelector<HTMLButtonElement>('[data-action="cancel-note-edit"]')?.addEventListener("click", () => {
       this.openedNoteMode = "preview";
+      this.noteDraft = null;
       this.render();
     });
 
@@ -683,6 +730,7 @@ export class NotesView extends HTMLElement {
 
     root.querySelector<HTMLButtonElement>('[data-action="close-create"]')?.addEventListener("click", () => {
       this.creating = false;
+      this.noteDraft = null;
       this.render();
     });
 
@@ -691,6 +739,7 @@ export class NotesView extends HTMLElement {
         onClose: () => {
           if (this.openedNoteId && this.openedNoteMode === "edit") {
             this.openedNoteMode = "preview";
+            this.noteDraft = null;
             this.render();
             return;
           }
@@ -722,6 +771,7 @@ export class NotesView extends HTMLElement {
         tagIds,
       });
       this.creating = false;
+      this.noteDraft = null;
       this.render();
     });
 
@@ -749,6 +799,7 @@ export class NotesView extends HTMLElement {
         .then(() => {
           this.openedNoteId = noteId;
           this.openedNoteMode = "preview";
+          this.noteDraft = null;
           this.render();
         });
     });

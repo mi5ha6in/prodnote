@@ -1,17 +1,10 @@
 import { dayKey, isMultiDay, itemsForDay, taskDeadlineItems, toCalendarItems, type CalendarItem } from "../domain/calendar";
 import { shiftDayKey } from "../domain/checklist";
-import { buildDayPlan, type DayPlan } from "../domain/day-plan";
-import { CHECKLIST_CADENCE_LABELS, EVENT_KIND_LABELS, TASK_STATUS_LABELS } from "../domain/defaults";
+import { buildDayPlan, primaryDayAction, type DayPlan } from "../domain/day-plan";
+import { EVENT_KIND_LABELS, TASK_STATUS_LABELS } from "../domain/defaults";
 import { escapeHtml } from "../domain/markdown";
 import { formatDuration, groupChecklistByDay } from "../domain/stats";
-import type {
-  CalendarEventKind,
-  ChecklistCadence,
-  ChecklistItem,
-  ChecklistTemplate,
-  Task,
-  Workspace,
-} from "../domain/types";
+import type { CalendarEventKind, ChecklistItem, Task, Workspace } from "../domain/types";
 import { requestTimerNotificationPermission } from "../platform/notifications";
 import { appStore } from "../state";
 import { badgeHtml, buttonAttrs, emptyStateHtml, metricBarHtml, viewHeaderHtml, wizardStepHtml } from "../ui/html";
@@ -20,8 +13,6 @@ import { renderShadow } from "./shadow";
 import { formatDate, getProjectName, getTaskName } from "./view-utils";
 
 const HISTORY_DAYS = 14;
-
-const CADENCE_LABELS = CHECKLIST_CADENCE_LABELS;
 
 function formatDayHeading(day: string): string {
   const [year, month, date] = day.split("-").map(Number);
@@ -50,7 +41,7 @@ export class TodayView extends HTMLElement {
   private unsubscribe: (() => void) | null = null;
   private selectedDay = dayKey(new Date());
   private focusAddInput = false;
-  private editing: { kind: "item" | "template"; id: string } | null = null;
+  private editingItemId: string | null = null;
   private draggingId: string | null = null;
   /** 0 — мастер планирования закрыт; 1..3 — текущий шаг. */
   private planStep = 0;
@@ -119,6 +110,8 @@ export class TodayView extends HTMLElement {
             },
           ]
         : [];
+    // Вечером главная кнопка — «Закрыть день», днём — «Спланировать день».
+    const primaryAction = primaryDayAction(new Date(), dayTasks.length > 0);
 
     const root = renderShadow(
       this,
@@ -137,8 +130,8 @@ export class TodayView extends HTMLElement {
                 <button ${buttonAttrs({ tone: "ghost", size: "small", data: { dayShift: 1 } })} aria-label="Следующий день">›</button>
                 ${day !== today ? `<button ${buttonAttrs({ size: "small", data: { action: "go-today" } })}>Сегодня</button>` : ""}
               </div>
-              ${day >= today ? `<button ${buttonAttrs({ data: { action: "start-plan" } })}>Спланировать день</button>` : ""}
-              ${day <= today ? `<button ${buttonAttrs({ tone: "ghost", data: { action: "start-shutdown" } })}>Закрыть день</button>` : ""}
+              ${day >= today ? `<button ${buttonAttrs({ tone: primaryAction === "plan" ? "primary" : "ghost", data: { action: "start-plan" } })}>Спланировать день</button>` : ""}
+              ${day <= today ? `<button ${buttonAttrs({ tone: primaryAction === "shutdown" ? "primary" : "ghost", data: { action: "start-shutdown" } })}>Закрыть день</button>` : ""}
             `,
           })}
 
@@ -162,7 +155,10 @@ export class TodayView extends HTMLElement {
                 <p class="eyebrow">${escapeHtml(formatDayHeading(day))}</p>
                 <h2>Список на день</h2>
               </div>
-              <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "rollover" } })}>Перенести со вчера</button>
+              <div class="row-actions">
+                <a class="button ghost small" href="#/planner/habits">Настроить рутину →</a>
+                <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "rollover" } })}>Перенести со вчера</button>
+              </div>
             </div>
 
             <form class="check-add" data-add-form>
@@ -222,8 +218,6 @@ export class TodayView extends HTMLElement {
                 : ""
             }
           </article>
-
-          ${this.renderTemplates(workspace.checklistTemplates)}
 
           <article class="card">
             <div class="card-header">
@@ -291,6 +285,13 @@ export class TodayView extends HTMLElement {
           text-decoration: none;
         }
 
+        button.onboarding-step {
+          cursor: pointer;
+          font: inherit;
+          text-align: left;
+          width: 100%;
+        }
+
         .onboarding-step:hover {
           border-color: var(--line-strong);
         }
@@ -313,41 +314,6 @@ export class TodayView extends HTMLElement {
           display: flex;
           gap: var(--space-2);
           margin-bottom: var(--space-3);
-        }
-
-        .template-form {
-          align-items: center;
-          display: flex;
-          flex-wrap: wrap;
-          gap: var(--space-2);
-          margin: var(--space-2) 0 var(--space-3);
-        }
-
-        .template-form input[name="title"] {
-          flex: 1;
-          min-width: 12rem;
-        }
-
-        .template-form select,
-        .check-item select {
-          width: auto;
-        }
-
-        .template-habit {
-          align-items: center;
-          color: var(--muted);
-          display: flex;
-          flex-direction: row;
-          gap: var(--space-1);
-          white-space: nowrap;
-        }
-
-        .template-habit input {
-          width: auto;
-        }
-
-        .target-input {
-          width: 3.6rem;
         }
 
         .count-control {
@@ -504,7 +470,7 @@ export class TodayView extends HTMLElement {
   }
 
   private renderItem(item: ChecklistItem, workspace: Workspace): string {
-    if (this.editing?.kind === "item" && this.editing.id === item.id) {
+    if (this.editingItemId === item.id) {
       return `
         <div class="check-item">
           <form class="check-edit" data-edit-form>
@@ -973,24 +939,29 @@ export class TodayView extends HTMLElement {
         <div class="card-header">
           <div>
             <p class="eyebrow">Первые шаги</p>
-            <h2>С чего начать</h2>
+            <h2>Цикл одного дня</h2>
           </div>
         </div>
         <div class="check-list">
-          <a class="check-item onboarding-step" href="#/work/tasks">
+          <button type="button" class="check-item onboarding-step" data-action="start-plan">
             <span class="onboarding-num">1</span>
-            <span class="check-title">Создайте первую задачу</span>
-            <span class="check-time">Работа → Задачи</span>
-          </a>
+            <span class="check-title">Спланируйте день</span>
+            <span class="check-time">хвосты, задачи, бюджет</span>
+          </button>
           <a class="check-item onboarding-step" href="#/work/focus">
             <span class="onboarding-num">2</span>
-            <span class="check-title">Запустите фокус-таймер по задаче</span>
+            <span class="check-title">Поработайте в фокусе</span>
             <span class="check-time">Работа → Фокус</span>
           </a>
-          <a class="check-item onboarding-step" href="#/notes/notes">
+          <button type="button" class="check-item onboarding-step" data-action="start-shutdown">
             <span class="onboarding-num">3</span>
-            <span class="check-title">Запишите первую заметку</span>
-            <span class="check-time">Заметки</span>
+            <span class="check-title">Закройте день</span>
+            <span class="check-time">итог, переносы, рефлексия</span>
+          </button>
+          <a class="check-item onboarding-step" href="#/analytics/review">
+            <span class="onboarding-num">4</span>
+            <span class="check-title">Подведите итоги недели</span>
+            <span class="check-time">Аналитика → Ревью</span>
           </a>
         </div>
       </article>
@@ -1014,14 +985,19 @@ export class TodayView extends HTMLElement {
       this.selectDay(dayKey(new Date()));
     });
 
-    root.querySelector<HTMLButtonElement>('[data-action="start-plan"]')?.addEventListener("click", () => {
-      this.planStep = 1;
-      this.render();
+    // Кнопки есть и в шапке, и в онбординг-карточке.
+    root.querySelectorAll<HTMLButtonElement>('[data-action="start-plan"]').forEach((button) => {
+      button.addEventListener("click", () => {
+        this.planStep = 1;
+        this.render();
+      });
     });
 
-    root.querySelector<HTMLButtonElement>('[data-action="start-shutdown"]')?.addEventListener("click", () => {
-      this.shutdownStep = 1;
-      this.render();
+    root.querySelectorAll<HTMLButtonElement>('[data-action="start-shutdown"]').forEach((button) => {
+      button.addEventListener("click", () => {
+        this.shutdownStep = 1;
+        this.render();
+      });
     });
 
     root.querySelector<HTMLInputElement>(".day-input")?.addEventListener("change", (event) => {
@@ -1116,69 +1092,11 @@ export class TodayView extends HTMLElement {
       });
     });
 
-    const templateForm = root.querySelector<HTMLFormElement>("[data-template-form]");
-    templateForm?.addEventListener("submit", (event) => {
-      event.preventDefault();
-      const title = templateForm.elements.namedItem("title");
-      const cadence = templateForm.elements.namedItem("cadence");
-      const habit = templateForm.elements.namedItem("isHabit");
-      const targetCount = templateForm.elements.namedItem("targetCount");
-      const targetPerWeek = templateForm.elements.namedItem("targetPerWeek");
-      if (!(title instanceof HTMLInputElement) || !title.value.trim()) {
-        return;
-      }
-      void appStore.addChecklistTemplate({
-        title: title.value,
-        cadence: cadence instanceof HTMLSelectElement ? (cadence.value as ChecklistCadence) : "daily",
-        isHabit: habit instanceof HTMLInputElement ? habit.checked : false,
-        targetCount: targetCount instanceof HTMLInputElement ? Number(targetCount.value) || 1 : 1,
-        targetPerWeek:
-          targetPerWeek instanceof HTMLInputElement && targetPerWeek.value ? Number(targetPerWeek.value) : null,
-      });
-    });
-
-    root.querySelectorAll<HTMLButtonElement>("[data-template-remove]").forEach((button) => {
-      button.addEventListener("click", () => {
-        const id = button.dataset.templateRemove;
-        if (id) {
-          void appStore.removeChecklistTemplate(id);
-        }
-      });
-    });
-
-    root.querySelectorAll<HTMLInputElement>("[data-template-habit]").forEach((checkbox) => {
-      checkbox.addEventListener("change", () => {
-        const id = checkbox.dataset.templateHabit;
-        if (id) {
-          void appStore.updateChecklistTemplate({ templateId: id, isHabit: checkbox.checked });
-        }
-      });
-    });
-
-    root.querySelectorAll<HTMLSelectElement>("[data-template-cadence]").forEach((select) => {
-      select.addEventListener("change", () => {
-        const id = select.dataset.templateCadence;
-        if (id) {
-          void appStore.updateChecklistTemplate({ templateId: id, cadence: select.value as ChecklistCadence });
-        }
-      });
-    });
-
     root.querySelectorAll<HTMLButtonElement>("[data-edit-item]").forEach((button) => {
       button.addEventListener("click", () => {
         const id = button.dataset.editItem;
         if (id) {
-          this.editing = { kind: "item", id };
-          this.render();
-        }
-      });
-    });
-
-    root.querySelectorAll<HTMLButtonElement>("[data-edit-template]").forEach((button) => {
-      button.addEventListener("click", () => {
-        const id = button.dataset.editTemplate;
-        if (id) {
-          this.editing = { kind: "template", id };
+          this.editingItemId = id;
           this.render();
         }
       });
@@ -1190,8 +1108,8 @@ export class TodayView extends HTMLElement {
 
   private wireEditForm(root: ShadowRoot): void {
     const form = root.querySelector<HTMLFormElement>("[data-edit-form]");
-    const editing = this.editing;
-    if (!form || !editing) {
+    const itemId = this.editingItemId;
+    if (!form || !itemId) {
       return;
     }
     const input = form.elements.namedItem("title");
@@ -1206,12 +1124,8 @@ export class TodayView extends HTMLElement {
       }
       done = true;
       const value = input.value;
-      this.editing = null;
-      if (editing.kind === "item") {
-        void appStore.renameChecklistItem(editing.id, value);
-      } else {
-        void appStore.updateChecklistTemplate({ templateId: editing.id, title: value });
-      }
+      this.editingItemId = null;
+      void appStore.renameChecklistItem(itemId, value);
       this.render();
     };
 
@@ -1224,7 +1138,7 @@ export class TodayView extends HTMLElement {
       if (event.key === "Escape") {
         event.preventDefault();
         done = true;
-        this.editing = null;
+        this.editingItemId = null;
         this.render();
       }
     });
@@ -1269,62 +1183,6 @@ export class TodayView extends HTMLElement {
         void appStore.reorderChecklist(this.selectedDay, ids);
       });
     });
-  }
-
-  private renderTemplates(templates: ChecklistTemplate[]): string {
-    const cadenceOptions = (selected: ChecklistCadence): string =>
-      (Object.keys(CADENCE_LABELS) as ChecklistCadence[])
-        .map((value) => `<option value="${value}" ${value === selected ? "selected" : ""}>${CADENCE_LABELS[value]}</option>`)
-        .join("");
-
-    return `
-      <article class="card">
-        <div class="card-header">
-          <div>
-            <p class="eyebrow">Рутина</p>
-            <h2>Повторяющиеся пункты</h2>
-          </div>
-        </div>
-        <p class="muted">Шаблоны автоматически добавляются в список в подходящие дни.</p>
-
-        <form class="template-form" data-template-form>
-          <input name="title" placeholder="Например: зарядка" aria-label="Название шаблона" autocomplete="off" />
-          <select name="cadence" aria-label="Периодичность">${cadenceOptions("daily")}</select>
-          <label class="template-habit"><input type="number" name="targetCount" min="1" max="99" value="1" aria-label="Повторов в день" class="target-input" /> в день</label>
-          <label class="template-habit"><input type="number" name="targetPerWeek" min="1" max="7" placeholder="—" aria-label="Раз в неделю" class="target-input" /> в неделю</label>
-          <label class="template-habit"><input type="checkbox" name="isHabit" /> привычка</label>
-          <button ${buttonAttrs({ type: "submit", size: "small" })}>Добавить</button>
-        </form>
-
-        <div class="check-list">
-          ${
-            templates.length
-              ? templates
-                  .map(
-                    (template) => `
-                      <div class="check-item">
-                        ${
-                          this.editing?.kind === "template" && this.editing.id === template.id
-                            ? `<form class="check-edit" data-edit-form><input name="title" value="${escapeHtml(template.title)}" aria-label="Название шаблона" autocomplete="off" /></form>`
-                            : `<button type="button" class="check-title check-edit-start" data-edit-template="${escapeHtml(template.id)}" title="Переименовать">${escapeHtml(template.title)}</button>`
-                        }
-                        ${template.isHabit ? badgeHtml("привычка") : ""}
-                        ${template.targetCount > 1 ? badgeHtml(`×${template.targetCount}/день`) : ""}
-                        ${template.targetPerWeek ? badgeHtml(`${template.targetPerWeek}/нед`) : ""}
-                        <select data-template-cadence="${escapeHtml(template.id)}" aria-label="Периодичность">${cadenceOptions(template.cadence)}</select>
-                        <label class="template-habit">
-                          <input type="checkbox" data-template-habit="${escapeHtml(template.id)}" ${template.isHabit ? "checked" : ""} /> привычка
-                        </label>
-                        <button ${buttonAttrs({ tone: "ghost", size: "small", data: { templateRemove: template.id } })} aria-label="Удалить шаблон">✕</button>
-                      </div>
-                    `,
-                  )
-                  .join("")
-              : emptyStateHtml("Добавьте шаблон — он будет появляться каждый день автоматически.")
-          }
-        </div>
-      </article>
-    `;
   }
 
   private async startFocus(itemId: string): Promise<void> {

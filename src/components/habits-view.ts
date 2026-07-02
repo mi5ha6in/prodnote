@@ -10,15 +10,17 @@ import {
 import { CHECKLIST_CADENCE_LABELS } from "../domain/defaults";
 import { escapeHtml } from "../domain/markdown";
 import { weekStartKey } from "../domain/review";
-import type { ChecklistItem, ChecklistTemplate } from "../domain/types";
+import type { ChecklistCadence, ChecklistItem, ChecklistTemplate } from "../domain/types";
 import { appStore } from "../state";
-import { badgeHtml, emptyStateHtml, metricBarHtml, viewHeaderHtml } from "../ui/html";
+import { confirmDestructive } from "../ui/actions";
+import { badgeHtml, buttonAttrs, emptyStateHtml, metricBarHtml, viewHeaderHtml } from "../ui/html";
 import { renderShadow } from "./shadow";
 
 const WINDOW_DAYS = 28;
 
 export class HabitsView extends HTMLElement {
   private unsubscribe: (() => void) | null = null;
+  private editingTemplateId: string | null = null;
 
   connectedCallback(): void {
     this.unsubscribe = appStore.subscribe(() => this.render());
@@ -42,7 +44,7 @@ export class HabitsView extends HTMLElement {
       this,
       `
         <section class="view-grid">
-          ${viewHeaderHtml({ eyebrow: "Привычки", title: "Трекер привычек" })}
+          ${viewHeaderHtml({ eyebrow: "Планер", title: "Привычки и рутины" })}
 
           ${metricBarHtml([
             { label: "Привычек", value: habits.length, hint: "Активные шаблоны-привычки" },
@@ -67,8 +69,10 @@ export class HabitsView extends HTMLElement {
                     ),
                   )
                   .join("")}</div>`
-              : `<article class="card">${emptyStateHtml("Отметьте пункт как «привычку» в разделе «Сегодня» — он появится здесь со статистикой и серией.")}</article>`
+              : `<article class="card">${emptyStateHtml("Отметьте шаблон ниже как «привычку» — он появится здесь с 28-дневной сеткой и серией.")}</article>`
           }
+
+          ${this.renderRoutineCard(workspace.checklistTemplates)}
         </section>
       `,
       `
@@ -128,7 +132,94 @@ export class HabitsView extends HTMLElement {
         button.habit-cell {
           cursor: pointer;
           font: inherit;
+          min-height: 0;
           padding: 0;
+        }
+
+        button.habit-cell:hover {
+          border-color: var(--accent);
+        }
+
+        .template-form {
+          align-items: center;
+          display: flex;
+          flex-wrap: wrap;
+          gap: var(--space-2);
+          margin: var(--space-2) 0 var(--space-3);
+        }
+
+        .template-form input[name="title"] {
+          flex: 1;
+          min-width: 12rem;
+        }
+
+        .template-form select,
+        .template-item select {
+          width: auto;
+        }
+
+        .template-habit {
+          align-items: center;
+          color: var(--muted);
+          display: flex;
+          flex-direction: row;
+          gap: var(--space-1);
+          white-space: nowrap;
+        }
+
+        .template-habit input {
+          width: auto;
+        }
+
+        .target-input {
+          width: 3.6rem;
+        }
+
+        .template-list {
+          display: grid;
+          gap: var(--space-2);
+        }
+
+        .template-item {
+          align-items: center;
+          background: var(--surface);
+          border: 1px solid var(--line);
+          border-radius: var(--radius-md);
+          display: flex;
+          flex-wrap: wrap;
+          gap: var(--space-2) var(--space-3);
+          padding: var(--space-2) var(--space-3);
+        }
+
+        .template-item.is-archived {
+          opacity: 0.65;
+        }
+
+        .template-item label {
+          margin: 0;
+        }
+
+        .template-title {
+          background: transparent;
+          border: none;
+          color: inherit;
+          cursor: text;
+          flex: 1;
+          font: inherit;
+          font-weight: 600;
+          min-height: 0;
+          min-width: 8rem;
+          padding: 0;
+          text-align: left;
+        }
+
+        .template-edit {
+          flex: 1;
+          min-width: 8rem;
+        }
+
+        .template-edit input {
+          width: 100%;
         }
 
         @media (max-width: 720px) {
@@ -140,14 +231,201 @@ export class HabitsView extends HTMLElement {
       `,
     );
 
-    root.querySelectorAll<HTMLButtonElement>("[data-habit-toggle]").forEach((button) => {
+    this.wire(root);
+  }
+
+  private renderRoutineCard(templates: ChecklistTemplate[]): string {
+    const cadenceOptions = (selected: ChecklistCadence): string =>
+      (Object.keys(CHECKLIST_CADENCE_LABELS) as ChecklistCadence[])
+        .map(
+          (value) =>
+            `<option value="${value}" ${value === selected ? "selected" : ""}>${CHECKLIST_CADENCE_LABELS[value]}</option>`,
+        )
+        .join("");
+
+    return `
+      <article class="card">
+        <div class="card-header">
+          <div>
+            <p class="eyebrow">Рутина</p>
+            <h2>Повторяющиеся пункты</h2>
+          </div>
+        </div>
+        <p class="muted">
+          Шаблоны автоматически добавляются в «Список на день» в подходящие дни.
+          Отмеченные как «привычка» дополнительно отслеживаются в сетках выше.
+        </p>
+
+        <form class="template-form" data-template-form>
+          <input name="title" placeholder="Например: зарядка" aria-label="Название шаблона" autocomplete="off" />
+          <select name="cadence" aria-label="Периодичность">${cadenceOptions("daily")}</select>
+          <label class="template-habit"><input type="number" name="targetCount" min="1" max="99" value="1" aria-label="Повторов в день" class="target-input" /> в день</label>
+          <label class="template-habit"><input type="number" name="targetPerWeek" min="1" max="7" placeholder="—" aria-label="Раз в неделю" class="target-input" /> в неделю</label>
+          <label class="template-habit"><input type="checkbox" name="isHabit" /> привычка</label>
+          <button ${buttonAttrs({ type: "submit", size: "small" })}>Добавить</button>
+        </form>
+
+        <div class="template-list">
+          ${
+            templates.length
+              ? templates.map((template) => this.renderTemplateRow(template, cadenceOptions)).join("")
+              : emptyStateHtml("Добавьте первый шаблон — он будет появляться в списке дня автоматически.")
+          }
+        </div>
+      </article>
+    `;
+  }
+
+  private renderTemplateRow(
+    template: ChecklistTemplate,
+    cadenceOptions: (selected: ChecklistCadence) => string,
+  ): string {
+    return `
+      <div class="template-item ${template.archived ? "is-archived" : ""}">
+        ${
+          this.editingTemplateId === template.id
+            ? `<form class="template-edit" data-edit-form><input name="title" value="${escapeHtml(template.title)}" aria-label="Название шаблона" autocomplete="off" /></form>`
+            : `<button type="button" class="template-title" data-edit-template="${escapeHtml(template.id)}" title="Переименовать">${escapeHtml(template.title)}</button>`
+        }
+        ${template.archived ? badgeHtml("в архиве") : ""}
+        ${template.isHabit ? badgeHtml("привычка") : ""}
+        ${template.targetCount > 1 ? badgeHtml(`×${template.targetCount}/день`) : ""}
+        ${template.targetPerWeek ? badgeHtml(`${template.targetPerWeek}/нед`) : ""}
+        <select data-template-cadence="${escapeHtml(template.id)}" aria-label="Периодичность">${cadenceOptions(template.cadence)}</select>
+        <label class="template-habit">
+          <input type="checkbox" data-template-habit="${escapeHtml(template.id)}" ${template.isHabit ? "checked" : ""} /> привычка
+        </label>
+        <button ${buttonAttrs({ tone: "ghost", size: "small", data: { templateArchive: template.id, archived: template.archived ? "" : "1" } })}>
+          ${template.archived ? "Вернуть" : "Архивировать"}
+        </button>
+        <button ${buttonAttrs({ tone: "ghost", size: "small", data: { templateRemove: template.id } })} aria-label="Удалить шаблон">✕</button>
+      </div>
+    `;
+  }
+
+  private wire(root: ShadowRoot): void {
+    root.querySelectorAll<HTMLButtonElement>("[data-habit-cell]").forEach((button) => {
       button.addEventListener("click", () => {
-        const id = button.dataset.habitToggle;
-        if (id) {
-          void appStore.toggleChecklistItem(id);
+        const templateId = button.dataset.habitCell;
+        const day = button.dataset.day;
+        if (templateId && day) {
+          void appStore.toggleTemplateItemForDay(templateId, day);
         }
       });
     });
+
+    const templateForm = root.querySelector<HTMLFormElement>("[data-template-form]");
+    templateForm?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const title = templateForm.elements.namedItem("title");
+      const cadence = templateForm.elements.namedItem("cadence");
+      const habit = templateForm.elements.namedItem("isHabit");
+      const targetCount = templateForm.elements.namedItem("targetCount");
+      const targetPerWeek = templateForm.elements.namedItem("targetPerWeek");
+      if (!(title instanceof HTMLInputElement) || !title.value.trim()) {
+        return;
+      }
+      void appStore.addChecklistTemplate({
+        title: title.value,
+        cadence: cadence instanceof HTMLSelectElement ? (cadence.value as ChecklistCadence) : "daily",
+        isHabit: habit instanceof HTMLInputElement ? habit.checked : false,
+        targetCount: targetCount instanceof HTMLInputElement ? Number(targetCount.value) || 1 : 1,
+        targetPerWeek:
+          targetPerWeek instanceof HTMLInputElement && targetPerWeek.value ? Number(targetPerWeek.value) : null,
+      });
+    });
+
+    root.querySelectorAll<HTMLButtonElement>("[data-edit-template]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.dataset.editTemplate;
+        if (id) {
+          this.editingTemplateId = id;
+          this.render();
+        }
+      });
+    });
+    this.wireEditForm(root);
+
+    root.querySelectorAll<HTMLSelectElement>("[data-template-cadence]").forEach((select) => {
+      select.addEventListener("change", () => {
+        const id = select.dataset.templateCadence;
+        if (id) {
+          void appStore.updateChecklistTemplate({ templateId: id, cadence: select.value as ChecklistCadence });
+        }
+      });
+    });
+
+    root.querySelectorAll<HTMLInputElement>("[data-template-habit]").forEach((checkbox) => {
+      checkbox.addEventListener("change", () => {
+        const id = checkbox.dataset.templateHabit;
+        if (id) {
+          void appStore.updateChecklistTemplate({ templateId: id, isHabit: checkbox.checked });
+        }
+      });
+    });
+
+    root.querySelectorAll<HTMLButtonElement>("[data-template-archive]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.dataset.templateArchive;
+        if (id) {
+          void appStore.updateChecklistTemplate({ templateId: id, archived: button.dataset.archived === "1" });
+        }
+      });
+    });
+
+    root.querySelectorAll<HTMLButtonElement>("[data-template-remove]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.dataset.templateRemove;
+        const template = appStore.getWorkspace().checklistTemplates.find((entry) => entry.id === id);
+        if (!id || !template) {
+          return;
+        }
+        if (!confirmDestructive(`Удалить шаблон «${template.title}»?\n\nОтметки прошлых дней останутся в истории.`)) {
+          return;
+        }
+        void appStore.removeChecklistTemplate(id);
+      });
+    });
+  }
+
+  private wireEditForm(root: ShadowRoot): void {
+    const form = root.querySelector<HTMLFormElement>("[data-edit-form]");
+    const templateId = this.editingTemplateId;
+    if (!form || !templateId) {
+      return;
+    }
+    const input = form.elements.namedItem("title");
+    if (!(input instanceof HTMLInputElement)) {
+      return;
+    }
+
+    let done = false;
+    const commit = (): void => {
+      if (done) {
+        return;
+      }
+      done = true;
+      const value = input.value;
+      this.editingTemplateId = null;
+      void appStore.updateChecklistTemplate({ templateId, title: value });
+      this.render();
+    };
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      commit();
+    });
+    input.addEventListener("blur", commit);
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        done = true;
+        this.editingTemplateId = null;
+        this.render();
+      }
+    });
+    input.focus();
+    input.select();
   }
 
   private renderHabit(
@@ -163,7 +441,6 @@ export class HabitsView extends HTMLElement {
       ? habitWeekStreak(habit, items, weekStart)
       : habitStreak(habit, items, today);
     const weekProgress = habit.targetPerWeek ? habitWeekProgress(habit, items, weekStart) : null;
-    const todayItem = items.find((item) => item.templateId === habit.id && item.day === today);
 
     const cells = days
       .map((day) => {
@@ -177,8 +454,9 @@ export class HabitsView extends HTMLElement {
           state = "is-missed";
         }
         const title = `${day}${scheduled ? (done.has(day) ? " · выполнено" : " · запланировано") : ""}`;
-        if (day === today && todayItem) {
-          return `<button type="button" class="habit-cell ${state}" data-habit-toggle="${escapeHtml(todayItem.id)}" title="${escapeHtml(`${title} · нажмите, чтобы отметить`)}" aria-label="${escapeHtml(`${habit.title}: отметить сегодня`)}"></button>`;
+        // Прошедшие и сегодняшний день можно отмечать задним числом прямо из сетки.
+        if (scheduled && day <= today) {
+          return `<button type="button" class="habit-cell ${state}" data-habit-cell="${escapeHtml(habit.id)}" data-day="${escapeHtml(day)}" title="${escapeHtml(`${title} · нажмите, чтобы отметить`)}" aria-label="${escapeHtml(`${habit.title}: отметить ${day}`)}"></button>`;
         }
         return `<span class="habit-cell ${state}" title="${escapeHtml(title)}"></span>`;
       })

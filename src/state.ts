@@ -481,6 +481,7 @@ export class ProdNoteStore {
     isHabit?: boolean;
     targetCount?: number;
     targetPerWeek?: number | null;
+    archived?: boolean;
   }): Promise<void> {
     await this.commit((workspace) => {
       const template = workspace.checklistTemplates.find((entry) => entry.id === input.templateId);
@@ -503,7 +504,46 @@ export class ProdNoteStore {
       if (input.isHabit !== undefined) {
         template.isHabit = input.isHabit;
       }
+      if (input.archived !== undefined) {
+        template.archived = input.archived;
+      }
       template.updatedAt = nowIso();
+    });
+  }
+
+  /**
+   * Toggle a template's materialized item for a day (retro-marking in the habit
+   * grid). A missing item is created already done in the same commit; future
+   * days are ignored. Past days are deliberately not materialized via
+   * `ensureChecklistForDay` — that would flood history with every template.
+   */
+  async toggleTemplateItemForDay(templateId: EntityId, day: string): Promise<void> {
+    if (day > dayKey(new Date())) {
+      return;
+    }
+
+    const existing = this.workspace.checklist.find((item) => item.templateId === templateId && item.day === day);
+    if (existing) {
+      await this.toggleChecklistItem(existing.id);
+      return;
+    }
+
+    const template = this.workspace.checklistTemplates.find((entry) => entry.id === templateId);
+    if (!template) {
+      return;
+    }
+
+    const nextOrder =
+      this.workspace.checklist
+        .filter((item) => item.day === day)
+        .reduce((max, item) => Math.max(max, item.order), -1) + 1;
+    const item = createChecklistItem({ title: template.title, day, order: nextOrder, templateId });
+    item.done = true;
+    item.count = Math.max(1, template.targetCount);
+    item.doneAt = nowIso();
+
+    await this.commit((workspace) => {
+      workspace.checklist.push(item);
     });
   }
 

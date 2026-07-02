@@ -331,50 +331,62 @@ export class SettingsView extends HTMLElement {
             <div class="card-header">
               <div>
                 <p class="eyebrow">Уведомления</p>
-                <h2>Системные уведомления таймера</h2>
+                <h2>Напоминания: три шага</h2>
               </div>
               ${badgeHtml(formatNotificationStatus(notificationStatus))}
             </div>
-            <p class="muted">${getNotificationStatusHint(notificationStatus)}</p>
-            <div class="row-actions">
-              <button ${buttonAttrs({
-                data: { action: "request-notifications" },
-                disabled: notificationStatus !== "default",
-              })}>Разрешить уведомления</button>
+
+            <div class="notify-step">
+              <p class="eyebrow">1. Разрешение браузера</p>
+              <p class="muted">${getNotificationStatusHint(notificationStatus)}</p>
+              <div class="row-actions">
+                <button ${buttonAttrs({
+                  data: { action: "request-notifications" },
+                  disabled: notificationStatus !== "default",
+                })}>Разрешить уведомления</button>
+              </div>
             </div>
-            ${fieldHtml({
-              label: "Напоминать о событиях календаря",
-              control: `<select data-reminder-minutes>
-                ${REMINDER_OPTIONS.map(
-                  (minutes) =>
-                    `<option value="${minutes}" ${minutes === reminderMinutes ? "selected" : ""}>${
-                      minutes === 0 ? "Выключено" : `За ${minutes} минут`
-                    }</option>`,
-                ).join("")}
-              </select>`,
-            })}
-            <p class="muted">Напоминание срабатывает один раз перед началом события; с включённым push — и при закрытом приложении.</p>
-            ${fieldHtml({
-              label: "Напоминание о делах на весь день и дедлайнах",
-              control: `<select data-allday-hour>
-                ${ALLDAY_REMINDER_OPTIONS.map(
-                  (hour) =>
-                    `<option value="${hour}" ${hour === allDayHour ? "selected" : ""}>${
-                      hour < 0 ? "Выключено" : `Утром в ${hour}:00`
-                    }</option>`,
-                ).join("")}
-              </select>`,
-            })}
-            <p class="muted">${this.pushHint()}</p>
-            <div class="row-actions">
-              ${
-                this.pushStatus === "on"
-                  ? `<button ${buttonAttrs({ tone: "ghost", data: { action: "disable-push" } })}>Отключить push на этом устройстве</button>`
-                  : `<button ${buttonAttrs({
-                      data: { action: "enable-push" },
-                      disabled: this.pushStatus !== "off",
-                    })}>Включить push на этом устройстве</button>`
-              }
+
+            <div class="notify-step">
+              <p class="eyebrow">2. О чём напоминать</p>
+              ${fieldHtml({
+                label: "Напоминать о событиях календаря",
+                control: `<select data-reminder-minutes>
+                  ${REMINDER_OPTIONS.map(
+                    (minutes) =>
+                      `<option value="${minutes}" ${minutes === reminderMinutes ? "selected" : ""}>${
+                        minutes === 0 ? "Выключено" : `За ${minutes} минут`
+                      }</option>`,
+                  ).join("")}
+                </select>`,
+              })}
+              ${fieldHtml({
+                label: "Напоминание о делах на весь день и дедлайнах",
+                control: `<select data-allday-hour>
+                  ${ALLDAY_REMINDER_OPTIONS.map(
+                    (hour) =>
+                      `<option value="${hour}" ${hour === allDayHour ? "selected" : ""}>${
+                        hour < 0 ? "Выключено" : `Утром в ${hour}:00`
+                      }</option>`,
+                  ).join("")}
+                </select>`,
+              })}
+              <p class="muted">Напоминание срабатывает один раз перед началом события.</p>
+            </div>
+
+            <div class="notify-step">
+              <p class="eyebrow">3. Доставка при закрытом приложении</p>
+              <p class="muted">${this.pushHint()}</p>
+              <div class="row-actions">
+                ${
+                  this.pushStatus === "on"
+                    ? `<button ${buttonAttrs({ tone: "ghost", data: { action: "disable-push" } })}>Отключить push на этом устройстве</button>`
+                    : `<button ${buttonAttrs({
+                        data: { action: "enable-push" },
+                        disabled: this.pushStatus !== "off",
+                      })}>Включить push на этом устройстве</button>`
+                }
+              </div>
             </div>
           </article>
 
@@ -525,6 +537,13 @@ export class SettingsView extends HTMLElement {
           flex-wrap: wrap;
           gap: var(--space-3);
           justify-content: space-between;
+        }
+
+        .notify-step {
+          border-top: 1px solid var(--line);
+          display: grid;
+          gap: var(--space-2);
+          padding-top: var(--space-3);
         }
 
         .file-label {
