@@ -197,6 +197,32 @@ describe("ProdNoteStore", () => {
     expect(store.getWorkspace().tasks.find((item) => item.id === task.id)?.projectId).toBeNull();
   });
 
+  it("steps quantity habits by count and flips done at the daily target", async () => {
+    const store = new ProdNoteStore();
+    await store.init();
+    const template = await store.addChecklistTemplate({ title: "Вода", isHabit: true, targetCount: 3 });
+    const today = dayKey(new Date());
+    await store.ensureChecklistForDay(today);
+    const item = store.getWorkspace().checklist.find((entry) => entry.templateId === template!.id && entry.day === today);
+    expect(item).toBeTruthy();
+
+    await store.incrementChecklistItem(item!.id, 1);
+    await store.incrementChecklistItem(item!.id, 1);
+    let current = store.getWorkspace().checklist.find((entry) => entry.id === item!.id);
+    expect(current?.count).toBe(2);
+    expect(current?.done).toBe(false);
+
+    await store.incrementChecklistItem(item!.id, 1);
+    current = store.getWorkspace().checklist.find((entry) => entry.id === item!.id);
+    expect(current?.done).toBe(true);
+    expect(current?.doneAt).toBeTruthy();
+
+    await store.incrementChecklistItem(item!.id, -1);
+    current = store.getWorkspace().checklist.find((entry) => entry.id === item!.id);
+    expect(current?.done).toBe(false);
+    expect(current?.count).toBe(2);
+  });
+
   it("reorders kanban tasks and moves them across columns keeping manual order", async () => {
     const store = new ProdNoteStore();
     await store.init();

@@ -38,7 +38,15 @@ type LegacyTask = Omit<Task, "subtasks" | "recurrence" | "recurrenceParentId" | 
   boardOrder?: number;
 };
 
-type LegacyChecklistItem = Omit<ChecklistItem, "templateId"> & { templateId?: string | null };
+type LegacyChecklistItem = Omit<ChecklistItem, "templateId" | "count"> & {
+  templateId?: string | null;
+  count?: number;
+};
+
+type LegacyChecklistTemplate = Omit<ChecklistTemplate, "targetCount" | "targetPerWeek"> & {
+  targetCount?: number;
+  targetPerWeek?: number | null;
+};
 
 type LegacyWorkspace = Omit<
   Workspace,
@@ -50,7 +58,7 @@ type LegacyWorkspace = Omit<
   pomodoroCycles?: LegacyPomodoroCycle[];
   events?: Workspace["events"];
   checklist?: LegacyChecklistItem[];
-  checklistTemplates?: ChecklistTemplate[];
+  checklistTemplates?: LegacyChecklistTemplate[];
 };
 
 export function migrateWorkspace(workspace: LegacyWorkspace): Workspace {
@@ -70,7 +78,9 @@ export function migrateWorkspace(workspace: LegacyWorkspace): Workspace {
     schemaVersion: SCHEMA_VERSION,
     exportedAt: workspace.exportedAt ?? null,
     checklist: Array.isArray(workspace.checklist) ? workspace.checklist.map(normalizeChecklistItem) : [],
-    checklistTemplates: Array.isArray(workspace.checklistTemplates) ? workspace.checklistTemplates : [],
+    checklistTemplates: Array.isArray(workspace.checklistTemplates)
+      ? workspace.checklistTemplates.map(normalizeChecklistTemplate)
+      : [],
     tasks: workspace.tasks.map(normalizeTask),
     notes: workspace.notes.map(normalizeNote),
     pomodoroCycles: Array.isArray(workspace.pomodoroCycles) ? workspace.pomodoroCycles.map(normalizePomodoroCycle) : [],
@@ -142,6 +152,15 @@ function normalizeChecklistItem(item: LegacyChecklistItem): ChecklistItem {
   return {
     ...item,
     templateId: item.templateId ?? null,
+    count: item.count ?? (item.done ? 1 : 0),
+  };
+}
+
+function normalizeChecklistTemplate(template: LegacyChecklistTemplate): ChecklistTemplate {
+  return {
+    ...template,
+    targetCount: Math.max(1, template.targetCount ?? 1),
+    targetPerWeek: template.targetPerWeek ?? null,
   };
 }
 

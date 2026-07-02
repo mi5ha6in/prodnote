@@ -196,6 +196,7 @@ export function createChecklistItem(input: {
     taskId: input.taskId ?? null,
     templateId: input.templateId ?? null,
     rolledFrom: input.rolledFrom ?? null,
+    count: 0,
     createdAt,
     updatedAt: createdAt,
   };
@@ -205,6 +206,8 @@ export function createChecklistTemplate(input: {
   title: string;
   cadence?: ChecklistCadence;
   isHabit?: boolean;
+  targetCount?: number;
+  targetPerWeek?: number | null;
 }): ChecklistTemplate {
   const createdAt = nowIso();
 
@@ -213,6 +216,8 @@ export function createChecklistTemplate(input: {
     title: input.title.trim(),
     cadence: input.cadence ?? "daily",
     isHabit: input.isHabit ?? false,
+    targetCount: Math.max(1, Math.round(input.targetCount ?? 1)),
+    targetPerWeek: input.targetPerWeek ?? null,
     archived: false,
     createdAt,
     updatedAt: createdAt,

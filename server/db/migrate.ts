@@ -308,6 +308,15 @@ export async function runMigrations(): Promise<void> {
     alter table if exists tasks
       add column if not exists board_order double precision;
 
+    alter table if exists checklist_items
+      add column if not exists count integer not null default 0;
+
+    alter table if exists checklist_templates
+      add column if not exists target_count integer not null default 1;
+
+    alter table if exists checklist_templates
+      add column if not exists target_per_week integer;
+
     create table if not exists push_subscriptions (
       id uuid primary key,
       user_id uuid not null references users(id) on delete cascade,
