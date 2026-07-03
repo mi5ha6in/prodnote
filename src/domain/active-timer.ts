@@ -24,6 +24,21 @@ export function getActiveTimerRemainingSeconds(active: ActiveTimer, nowMs = Date
   return Math.max(0, Math.floor((Date.parse(active.phaseEndsAt) - getActiveTimerReferenceMs(active, nowMs)) / 1000));
 }
 
+/**
+ * Clock text for the timer readouts: countdown for pomodoro phases,
+ * seconds-precision elapsed time for the plain timer (so the very first
+ * minute visibly ticks instead of sitting at "0 мин").
+ */
+export function getActiveTimerClockReadout(active: ActiveTimer, nowMs = Date.now()): string {
+  const remainingSeconds = getActiveTimerRemainingSeconds(active, nowMs);
+  const totalSeconds = remainingSeconds ?? Math.floor(getActiveTimerElapsedMs(active, nowMs) / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const clock = `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+  return hours > 0 ? `${hours}:${clock}` : clock;
+}
+
 export function getActiveTimerEndedAtIso(active: ActiveTimer, nowMs = Date.now()): string {
   return new Date(getActiveTimerReferenceMs(active, nowMs)).toISOString();
 }

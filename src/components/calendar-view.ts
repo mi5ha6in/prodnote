@@ -786,11 +786,14 @@ export class CalendarView extends HTMLElement {
 
     root.querySelector<HTMLButtonElement>('[data-action="start-focus"]')?.addEventListener("click", (event) => {
       const taskId = event.currentTarget instanceof HTMLElement ? event.currentTarget.dataset.taskId : undefined;
-      if (!taskId || appStore.getActiveTimer()) {
+      if (!taskId) {
         return;
       }
-      void requestTimerNotificationPermission();
-      void appStore.startTimer(taskId);
+      // Уже идёт сессия — не перезаписываем её, а показываем в фокусе.
+      if (!appStore.getActiveTimer()) {
+        void requestTimerNotificationPermission();
+        void appStore.startTimer(taskId);
+      }
       this.closeModal();
       window.location.hash = "#/focus";
     });
