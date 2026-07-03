@@ -1,6 +1,5 @@
-import { getActiveTimerElapsedMinutes, getActiveTimerRemainingSeconds, isActiveTimerPaused } from "../domain/active-timer";
+import { getActiveTimerClockReadout, isActiveTimerPaused } from "../domain/active-timer";
 import { escapeHtml, renderMarkdown } from "../domain/markdown";
-import { formatDuration } from "../domain/stats";
 import type { ActiveTimer, Workspace } from "../domain/types";
 import { requestTimerNotificationPermission } from "../platform/notifications";
 import { appStore } from "../state";
@@ -46,7 +45,7 @@ export class FocusView extends HTMLElement {
           <div class="focus-panel">
             <p class="eyebrow">${active ? getFocusEyebrow(active) : "Готов к работе"}</p>
             <h2>${contextTask ? escapeHtml(contextTask.title) : "Выберите задачу и запустите сессию"}</h2>
-            <div class="focus-readout" data-focus-readout>${active ? getFocusReadout(active) : "00:00"}</div>
+            <div class="focus-readout" data-focus-readout>${active ? getActiveTimerClockReadout(active) : "00:00"}</div>
             ${
               contextTask
                 ? `<p class="muted">${escapeHtml(getProjectName(workspace.projects, contextTask.projectId))}</p>`
@@ -337,21 +336,11 @@ export class FocusView extends HTMLElement {
     }
 
     const active = appStore.getActiveTimer();
-    readout.textContent = active ? getFocusReadout(active) : "00:00";
+    readout.textContent = active ? getActiveTimerClockReadout(active) : "00:00";
   }
 }
 
 customElements.define("pn-focus-view", FocusView);
-
-function getFocusReadout(active: ActiveTimer): string {
-  const remainingSeconds = getActiveTimerRemainingSeconds(active);
-
-  return remainingSeconds === null
-    ? formatDuration(getActiveTimerElapsedMinutes(active))
-    : `${Math.floor(remainingSeconds / 60).toString().padStart(2, "0")}:${(remainingSeconds % 60)
-        .toString()
-        .padStart(2, "0")}`;
-}
 
 function getFocusEyebrow(active: ActiveTimer): string {
   if (isActiveTimerPaused(active)) {

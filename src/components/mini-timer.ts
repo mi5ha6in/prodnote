@@ -1,6 +1,5 @@
-import { getActiveTimerElapsedMinutes, getActiveTimerRemainingSeconds, isActiveTimerPaused } from "../domain/active-timer";
+import { getActiveTimerClockReadout, isActiveTimerPaused } from "../domain/active-timer";
 import { SESSION_MODE_LABELS } from "../domain/defaults";
-import { formatDuration } from "../domain/stats";
 import { appStore } from "../state";
 import { escapeHtml } from "../domain/markdown";
 import { renderShadow } from "./shadow";
@@ -101,20 +100,7 @@ export class MiniTimer extends HTMLElement {
 customElements.define("pn-mini-timer", MiniTimer);
 
 function getMiniTimerReadout(active: ReturnType<typeof appStore.getActiveTimer>): string {
-  if (!active) {
-    return "00:00";
-  }
-
-  const elapsedMinutes = getActiveTimerElapsedMinutes(active);
-  const remainingSeconds = getActiveTimerRemainingSeconds(active);
-
-  if (remainingSeconds === null) {
-    return formatDuration(elapsedMinutes);
-  }
-
-  return `${Math.floor(remainingSeconds / 60)
-    .toString()
-    .padStart(2, "0")}:${(remainingSeconds % 60).toString().padStart(2, "0")}`;
+  return active ? getActiveTimerClockReadout(active) : "00:00";
 }
 
 function getMiniTimerPhaseLabel(active: NonNullable<ReturnType<typeof appStore.getActiveTimer>>): string {

@@ -810,23 +810,26 @@ export class TasksView extends HTMLElement {
 
     root.querySelector<HTMLButtonElement>('[data-action="start-task-timer"]')?.addEventListener("click", () => {
       const taskId = this.openedTaskId;
-      if (!taskId || appStore.getActiveTimer()) {
+      if (!taskId) {
         return;
       }
-
-      void requestTimerNotificationPermission();
-      void appStore.startTimer(taskId);
+      // Уже идёт сессия — не перезаписываем её, а показываем в фокусе.
+      if (!appStore.getActiveTimer()) {
+        void requestTimerNotificationPermission();
+        void appStore.startTimer(taskId);
+      }
       window.location.hash = "#/work/focus";
     });
 
     root.querySelector<HTMLButtonElement>('[data-action="start-task-pomodoro"]')?.addEventListener("click", () => {
       const taskId = this.openedTaskId;
-      if (!taskId || appStore.getActiveTimer()) {
+      if (!taskId) {
         return;
       }
-
-      void requestTimerNotificationPermission();
-      void appStore.startPomodoro(taskId);
+      if (!appStore.getActiveTimer()) {
+        void requestTimerNotificationPermission();
+        void appStore.startPomodoro(taskId);
+      }
       window.location.hash = "#/work/focus";
     });
 

@@ -407,20 +407,19 @@ export class TaskDetailView extends HTMLElement {
     });
 
     root.querySelector<HTMLButtonElement>('[data-action="start-task-timer"]')?.addEventListener("click", () => {
-      if (appStore.getActiveTimer()) {
-        return;
+      // Уже идёт сессия — не перезаписываем её, а показываем в фокусе.
+      if (!appStore.getActiveTimer()) {
+        void requestTimerNotificationPermission();
+        void appStore.startTimer(task.id);
       }
-      void requestTimerNotificationPermission();
-      void appStore.startTimer(task.id);
       window.location.hash = "#/work/focus";
     });
 
     root.querySelector<HTMLButtonElement>('[data-action="start-task-pomodoro"]')?.addEventListener("click", () => {
-      if (appStore.getActiveTimer()) {
-        return;
+      if (!appStore.getActiveTimer()) {
+        void requestTimerNotificationPermission();
+        void appStore.startPomodoro(task.id);
       }
-      void requestTimerNotificationPermission();
-      void appStore.startPomodoro(task.id);
       window.location.hash = "#/work/focus";
     });
 
