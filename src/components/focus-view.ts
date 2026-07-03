@@ -1,4 +1,4 @@
-import { getActiveTimerClockReadout, isActiveTimerPaused } from "../domain/active-timer";
+import { getActiveTimerClockReadout, getActiveTimerPhaseLabel } from "../domain/active-timer";
 import { escapeHtml, renderMarkdown } from "../domain/markdown";
 import type { ActiveTimer, Workspace } from "../domain/types";
 import { requestTimerNotificationPermission } from "../platform/notifications";
@@ -43,7 +43,7 @@ export class FocusView extends HTMLElement {
         <div class="view-grid">
         <section class="focus-stage">
           <div class="focus-panel">
-            <p class="eyebrow">${active ? getFocusEyebrow(active) : "Готов к работе"}</p>
+            <p class="eyebrow">${active ? getActiveTimerPhaseLabel(active) : "Готов к работе"}</p>
             <h2>${contextTask ? escapeHtml(contextTask.title) : "Выберите задачу и запустите сессию"}</h2>
             <div class="focus-readout" data-focus-readout>${active ? getActiveTimerClockReadout(active) : "00:00"}</div>
             ${
@@ -341,11 +341,3 @@ export class FocusView extends HTMLElement {
 }
 
 customElements.define("pn-focus-view", FocusView);
-
-function getFocusEyebrow(active: ActiveTimer): string {
-  if (isActiveTimerPaused(active)) {
-    return "На паузе";
-  }
-
-  return active.phase === "focus" ? "Фокус" : "Перерыв";
-}

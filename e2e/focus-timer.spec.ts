@@ -33,4 +33,18 @@ test("focus timer and pomodoro tick after start", async ({ page }) => {
   const pomodoroStart = (await readout.textContent()) ?? "";
   expect(pomodoroStart).toMatch(/^\d{2}:\d{2}$/);
   await expect.poll(async () => readout.textContent(), { timeout: 5000 }).not.toBe(pomodoroStart);
+
+  // На других вкладках активная сессия видна в топбаре и ведёт обратно в фокус.
+  await page.goto("/#/work/tasks");
+  const indicator = page.locator("[data-focus-link]");
+  await expect(indicator).toHaveClass(/is-active/);
+  await expect(indicator).toHaveText(/Фокус · \d{2}:\d{2}/);
+  await indicator.click();
+  await expect(page.locator("[data-focus-readout]")).toBeVisible();
+
+  // Без сессии индикатор возвращается к «Начать фокус».
+  await main.locator('button[data-action="cancel"]').click();
+  await page.goto("/#/work/tasks");
+  await expect(page.locator("[data-focus-link]")).not.toHaveClass(/is-active/);
+  await expect(page.locator("[data-focus-link]")).toHaveText(/Начать фокус/);
 });

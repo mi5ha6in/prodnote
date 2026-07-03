@@ -1,3 +1,4 @@
+import { getActiveTimerClockReadout, getActiveTimerPhaseLabel, isActiveTimerPaused } from "../domain/active-timer";
 import { escapeHtml } from "../domain/markdown";
 import { appStore } from "../state";
 import { HUBS, hubDefaultHash, type IconName, resolveRoute } from "./app-router";
@@ -17,7 +18,8 @@ const ICONS = {
 
 export class AppRoot extends HTMLElement {
   private onHashChange = () => this.render();
-  private unsubscribeBadge: (() => void) | null = null;
+  private unsubscribe: (() => void) | null = null;
+  private intervalId: number | null = null;
 
   connectedCallback(): void {
     window.addEventListener("hashchange", this.onHashChange);
@@ -27,13 +29,42 @@ export class AppRoot extends HTMLElement {
         `<main class="app-error"><h1>Не удалось открыть ProdNote</h1><p>${String(error)}</p></main>`,
       );
     });
-    this.unsubscribeBadge = appStore.subscribe(() => this.updateAppBadge());
+    this.unsubscribe = appStore.subscribe(() => {
+      this.updateAppBadge();
+      this.syncFocusIndicator();
+    });
+    this.intervalId = window.setInterval(() => this.syncFocusIndicator(), 1000);
     this.render();
   }
 
   disconnectedCallback(): void {
     window.removeEventListener("hashchange", this.onHashChange);
-    this.unsubscribeBadge?.();
+    this.unsubscribe?.();
+    if (this.intervalId !== null) {
+      window.clearInterval(this.intervalId);
+    }
+  }
+
+  /**
+   * Live session state on the topbar focus link, patched in place: a full
+   * re-render here would remount the current view and drop its local state.
+   */
+  private syncFocusIndicator(): void {
+    const link = this.shadowRoot?.querySelector<HTMLElement>("[data-focus-link]");
+    if (!link) {
+      return;
+    }
+
+    const active = appStore.getActiveTimer();
+    link.classList.toggle("is-active", Boolean(active));
+    link.classList.toggle("is-paused", isActiveTimerPaused(active));
+
+    const label = link.querySelector<HTMLElement>("[data-focus-link-label]");
+    if (label) {
+      label.textContent = active
+        ? `${getActiveTimerPhaseLabel(active)} · ${getActiveTimerClockReadout(active)}`
+        : "Начать фокус";
+    }
   }
 
   /** Число просроченных задач на иконке приложения (Badging API, если есть). */
@@ -109,7 +140,13 @@ export class AppRoot extends HTMLElement {
               <button type="button" class="palette-button" data-open-palette title="Поиск и команды (${paletteKey})">
                 ${searchIcon}<span class="palette-button-label">Поиск и команды</span><kbd class="palette-key">${paletteKey}</kbd>
               </button>
-              ${tab.tag === "pn-focus-view" ? "" : `<a class="focus-link" href="#/work/focus">${ICONS.focus}<span>Начать фокус</span></a>`}
+              ${
+                tab.tag === "pn-focus-view"
+                  ? ""
+                  : `<a class="focus-link" href="#/work/focus" data-focus-link>
+                      ${ICONS.focus}<span class="session-dot" aria-hidden="true"></span><span data-focus-link-label>Начать фокус</span>
+                    </a>`
+              }
             </div>
           </header>
           ${
@@ -342,6 +379,42 @@ export class AppRoot extends HTMLElement {
           background: var(--accent-strong);
         }
 
+        .focus-link [data-focus-link-label] {
+          font-variant-numeric: tabular-nums;
+        }
+
+        .focus-link .session-dot {
+          display: none;
+        }
+
+        .focus-link.is-active svg {
+          display: none;
+        }
+
+        .focus-link.is-active .session-dot {
+          animation: session-pulse 1.2s ease-in-out infinite;
+          background: currentColor;
+          border-radius: var(--radius-pill);
+          display: block;
+          height: 0.55rem;
+          width: 0.55rem;
+        }
+
+        .focus-link.is-paused .session-dot {
+          animation: none;
+          opacity: 0.6;
+        }
+
+        @keyframes session-pulse {
+          0%,
+          100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.35;
+          }
+        }
+
         .subnav {
           border-bottom: 1px solid var(--line);
           display: flex;
@@ -465,6 +538,9 @@ export class AppRoot extends HTMLElement {
     root.querySelector<HTMLButtonElement>("[data-open-palette]")?.addEventListener("click", () => {
       document.dispatchEvent(new CustomEvent("pn:open-palette"));
     });
+
+    // Восстановленная из localStorage сессия должна быть видна сразу, не через секунду.
+    this.syncFocusIndicator();
   }
 }
 

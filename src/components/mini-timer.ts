@@ -1,4 +1,4 @@
-import { getActiveTimerClockReadout, isActiveTimerPaused } from "../domain/active-timer";
+import { getActiveTimerClockReadout, getActiveTimerPhaseLabel } from "../domain/active-timer";
 import { SESSION_MODE_LABELS } from "../domain/defaults";
 import { appStore } from "../state";
 import { escapeHtml } from "../domain/markdown";
@@ -48,7 +48,7 @@ export class MiniTimer extends HTMLElement {
         <p class="eyebrow">${SESSION_MODE_LABELS[active.mode]}</p>
         <strong>${escapeHtml(task?.title ?? "Задача удалена")}</strong>
         <span class="timer-readout" data-mini-readout>${getMiniTimerReadout(active)}</span>
-        <span class="phase-chip" data-mini-phase>${getMiniTimerPhaseLabel(active)}</span>
+        <span class="phase-chip" data-mini-phase>${getActiveTimerPhaseLabel(active)}</span>
         <div class="row-actions">
           <button type="button" class="ghost small" data-action="toggle-pause">${active.pausedAt ? "Продолжить" : "Пауза"}</button>
           ${
@@ -92,7 +92,7 @@ export class MiniTimer extends HTMLElement {
 
     const phase = this.shadowRoot?.querySelector<HTMLElement>("[data-mini-phase]");
     if (phase) {
-      phase.textContent = getMiniTimerPhaseLabel(active);
+      phase.textContent = getActiveTimerPhaseLabel(active);
     }
   }
 }
@@ -101,14 +101,6 @@ customElements.define("pn-mini-timer", MiniTimer);
 
 function getMiniTimerReadout(active: ReturnType<typeof appStore.getActiveTimer>): string {
   return active ? getActiveTimerClockReadout(active) : "00:00";
-}
-
-function getMiniTimerPhaseLabel(active: NonNullable<ReturnType<typeof appStore.getActiveTimer>>): string {
-  if (isActiveTimerPaused(active)) {
-    return "На паузе";
-  }
-
-  return active.phase === "focus" ? "Фокус" : "Перерыв";
 }
 
 const timerStyles = `
