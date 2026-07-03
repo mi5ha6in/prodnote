@@ -84,20 +84,30 @@ function matchesSmartList(task: Task, list: TaskSmartList, projects: Project[], 
     return (project?.name.trim().toLowerCase() ?? "") === INBOX_PROJECT_NAME;
   }
 
-  if (task.status === "done" || !task.dueDate) {
+  if (task.status === "done") {
     return false;
   }
 
-  const due = task.dueDate.slice(0, 10);
+  // Дедлайн — крайний срок; plannedAt — «беру в этот день» из планера. Списки
+  // «Сегодня»/«Неделя» учитывают оба, чтобы совпадать с планером дня.
+  const due = task.dueDate ? task.dueDate.slice(0, 10) : null;
+  const planned = task.plannedAt ? task.plannedAt.slice(0, 10) : null;
+  if (due === null && planned === null) {
+    return false;
+  }
+
   const today = toLocalDateString(now);
   switch (list) {
     case "today":
-      // Includes overdue: what demands attention today.
-      return due <= today;
-    case "week":
-      return due <= toLocalDateString(addDays(now, 6));
+      // Includes overdue deadlines: what demands attention today, plus today's plan.
+      return (due !== null && due <= today) || planned === today;
+    case "week": {
+      const weekEnd = toLocalDateString(addDays(now, 6));
+      return (due !== null && due <= weekEnd) || (planned !== null && planned >= today && planned <= weekEnd);
+    }
     case "overdue":
-      return due < today;
+      // Только дедлайн: просроченный план — не то же самое, что горящий срок.
+      return due !== null && due < today;
   }
 }
 

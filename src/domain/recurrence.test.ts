@@ -61,6 +61,20 @@ describe("nextRecurrenceDate", () => {
       nextRecurrenceDate("2026-07-01", rule({ freq: "DAILY", untilMs: Date.parse("2026-07-01T00:00:00.000Z") })),
     ).toBeNull();
   });
+
+  it("clamps monthly rules to the last day of shorter months instead of skipping them", () => {
+    // Раньше 31-е января прыгало сразу на 31 марта, теряя февраль.
+    expect(nextRecurrenceDate("2026-01-31", presetToRule("monthly")!)).toBe("2026-02-28");
+    expect(nextRecurrenceDate("2026-01-30", presetToRule("monthly")!)).toBe("2026-02-28");
+    expect(nextRecurrenceDate("2026-02-28", presetToRule("monthly")!)).toBe("2026-03-28");
+    // Апрель без 31-го — клемп до 30-го.
+    expect(nextRecurrenceDate("2026-03-31", presetToRule("monthly")!)).toBe("2026-04-30");
+  });
+
+  it("advances a yearly Feb 29 rule to Feb 28 in non-leap years instead of dying", () => {
+    // Раньше цикл не доходил до следующего 29 февраля и возвращал null.
+    expect(nextRecurrenceDate("2024-02-29", presetToRule("yearly")!)).toBe("2025-02-28");
+  });
 });
 
 describe("recurrence presets", () => {
