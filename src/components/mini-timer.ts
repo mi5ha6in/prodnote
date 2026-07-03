@@ -32,7 +32,7 @@ export class MiniTimer extends HTMLElement {
         <section class="mini-timer idle">
           <p class="eyebrow">Таймер</p>
           <strong>Нет активной сессии</strong>
-          <a href="#/focus">Запустить работу</a>
+          <a href="#/work/focus">Запустить работу</a>
         </section>
       `,
         timerStyles,

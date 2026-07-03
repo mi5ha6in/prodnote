@@ -52,6 +52,6 @@ export function handleLaunchParams(): void {
       projectId: parsed.projectId,
       tagIds: parsed.tagIds,
     });
-    window.location.hash = "#/planner/today";
+    window.location.hash = "#/work/today";
   });
 }

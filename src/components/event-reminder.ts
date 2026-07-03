@@ -44,7 +44,7 @@ export class EventReminderToast extends HTMLElement {
     const dueTimed = getDueEventReminders(workspace.events, now, workspace.settings.eventReminderMinutes);
     for (const reminder of dueTimed) {
       if (shouldNotifyEventReminder(reminder.key)) {
-        this.fire(`Скоро: ${reminder.event.title}`, reminderBody(reminder), "#/calendar");
+        this.fire(`Скоро: ${reminder.event.title}`, reminderBody(reminder), "#/planner/calendar");
         return;
       }
     }
@@ -64,7 +64,7 @@ export class EventReminderToast extends HTMLElement {
     for (const reminder of dueAllDay) {
       if (shouldNotifyEventReminder(reminder.key)) {
         const kindLabel = EVENT_KIND_LABELS[reminder.kind as CalendarEventKind] ?? reminder.kind;
-        this.fire(reminder.title, `Сегодня · ${kindLabel}`, "#/calendar");
+        this.fire(reminder.title, `Сегодня · ${kindLabel}`, "#/planner/calendar");
         return;
       }
     }
@@ -79,7 +79,7 @@ export class EventReminderToast extends HTMLElement {
       );
       for (const reminder of dueChecklist) {
         if (shouldNotifyEventReminder(reminder.key)) {
-          this.fire("Чек-лист на сегодня", `${pendingToday} ${pluralItems(pendingToday)} ждут выполнения`, "#/today");
+          this.fire("Чек-лист на сегодня", `${pendingToday} ${pluralItems(pendingToday)} ждут выполнения`, "#/work/today");
           return;
         }
       }

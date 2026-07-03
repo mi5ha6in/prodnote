@@ -198,7 +198,7 @@ export class CalendarView extends HTMLElement {
                 <div class="agenda-head">
                   <h3>${escapeHtml(section.label)}</h3>
                   <span class="status-pill">${section.items.length}</span>
-                  ${section.key === "today" ? `<a class="button ghost small" href="#/planner/today">Сегодня в планере</a>` : ""}
+                  ${section.key === "today" ? `<a class="button ghost small" href="#/work/today">Сегодня в планере</a>` : ""}
                 </div>
                 <div class="item-list">
                   ${section.items.map((item) => this.renderAgendaItem(item, workspace)).join("")}
@@ -255,7 +255,7 @@ export class CalendarView extends HTMLElement {
           <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "prev-month" } })}>‹</button>
           <h2>${MONTH_LABELS[month]} ${year}</h2>
           <div class="row-actions">
-            <a class="button ghost small" href="#/planner/today">Сегодня в планере</a>
+            <a class="button ghost small" href="#/work/today">Сегодня в планере</a>
             <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "today-month" } })}>Сегодня</button>
             <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "next-month" } })}>›</button>
           </div>
@@ -382,7 +382,7 @@ export class CalendarView extends HTMLElement {
           <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "prev-week" } })}>‹</button>
           <h2>${escapeHtml(rangeLabel)}</h2>
           <div class="row-actions">
-            <a class="button ghost small" href="#/planner/today">Сегодня в планере</a>
+            <a class="button ghost small" href="#/work/today">Сегодня в планере</a>
             <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "today-week" } })}>Сегодня</button>
             <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "next-week" } })}>›</button>
           </div>
@@ -795,7 +795,7 @@ export class CalendarView extends HTMLElement {
         void appStore.startTimer(taskId);
       }
       this.closeModal();
-      window.location.hash = "#/focus";
+      window.location.hash = "#/work/focus";
     });
 
     if (this.modal) {

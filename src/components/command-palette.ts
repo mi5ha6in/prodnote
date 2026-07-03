@@ -14,7 +14,7 @@ interface PaletteItem {
 }
 
 const NAV_ITEMS: PaletteItem[] = [
-  { label: "Перейти: Сегодня", sub: "Навигация", hash: "#/planner/today" },
+  { label: "Перейти: Сегодня", sub: "Навигация", hash: "#/work/today" },
   { label: "Перейти: Привычки", sub: "Навигация", hash: "#/planner/habits" },
   { label: "Перейти: Задачи", sub: "Навигация", hash: "#/work/tasks" },
   { label: "Перейти: Заметки", sub: "Навигация", hash: "#/notes/notes" },
@@ -128,7 +128,7 @@ export class CommandPalette extends HTMLElement {
         sub: "Создание",
         run: async () => {
           await appStore.addChecklistItem({ title: raw, day: dayKey(new Date()) });
-          this.go("#/planner/today");
+          this.go("#/work/today");
         },
       },
       {

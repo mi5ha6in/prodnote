@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { HUBS, hubDefaultHash, resolveRoute } from "./app-router";
 
 describe("resolveRoute", () => {
-  it("defaults an empty or bare hash to the planner today view", () => {
-    expect(resolveRoute("")).toEqual({ hubId: "planner", tabId: "today", detailId: "", canonical: "#/planner/today" });
-    expect(resolveRoute("#/")).toMatchObject({ canonical: "#/planner/today" });
+  it("defaults an empty or bare hash to the work today view", () => {
+    expect(resolveRoute("")).toEqual({ hubId: "work", tabId: "today", detailId: "", canonical: "#/work/today" });
+    expect(resolveRoute("#/")).toMatchObject({ canonical: "#/work/today" });
   });
 
   it("passes canonical hub/tab routes through unchanged", () => {
@@ -23,36 +23,38 @@ describe("resolveRoute", () => {
     expect(resolveRoute("#/notes/notes/note_1")).toMatchObject({ detailId: "note_1", canonical: "#/notes/notes/note_1" });
     expect(resolveRoute("#/planner/calendar/event_1")).toMatchObject({ detailId: "event_1" });
     // Day deep links: today opens the given day, calendar opens that week.
-    expect(resolveRoute("#/planner/today/2026-07-02")).toMatchObject({
+    expect(resolveRoute("#/work/today/2026-07-02")).toMatchObject({
       detailId: "2026-07-02",
-      canonical: "#/planner/today/2026-07-02",
+      canonical: "#/work/today/2026-07-02",
     });
     expect(resolveRoute("#/planner/calendar/2026-07-06")).toMatchObject({ detailId: "2026-07-06" });
     // Tabs without a detail view drop the extra segment.
     expect(resolveRoute("#/work/focus/whatever")).toMatchObject({ detailId: "", canonical: "#/work/focus" });
   });
 
-  it("normalizes legacy single-segment routes to their hub/tab pair", () => {
+  it("normalizes legacy routes (single-segment and moved tabs) to their hub/tab pair", () => {
     expect(resolveRoute("#/tasks")).toMatchObject({ hubId: "work", tabId: "tasks", canonical: "#/work/tasks" });
-    expect(resolveRoute("#/today")).toMatchObject({ canonical: "#/planner/today" });
+    expect(resolveRoute("#/today")).toMatchObject({ canonical: "#/work/today" });
     expect(resolveRoute("#/calendar")).toMatchObject({ canonical: "#/planner/calendar" });
     expect(resolveRoute("#/review")).toMatchObject({ canonical: "#/analytics/review" });
-    expect(resolveRoute("#/dashboard")).toMatchObject({ canonical: "#/planner/today" });
+    expect(resolveRoute("#/dashboard")).toMatchObject({ canonical: "#/work/today" });
+    // Today moved planner → work; the old two-segment path still resolves.
+    expect(resolveRoute("#/planner/today")).toMatchObject({ canonical: "#/work/today" });
     // The retired overview tab folds into today.
-    expect(resolveRoute("#/planner/overview")).toMatchObject({ canonical: "#/planner/today" });
+    expect(resolveRoute("#/planner/overview")).toMatchObject({ canonical: "#/work/today" });
   });
 
   it("falls back to a hub's default tab for hub-only or unknown tabs", () => {
     expect(resolveRoute("#/analytics")).toMatchObject({ hubId: "analytics", tabId: "stats" });
-    expect(resolveRoute("#/work/bogus")).toMatchObject({ hubId: "work", tabId: "tasks" });
+    expect(resolveRoute("#/work/bogus")).toMatchObject({ hubId: "work", tabId: "today" });
   });
 
   it("falls back to the default route for unknown hubs", () => {
-    expect(resolveRoute("#/nope")).toMatchObject({ canonical: "#/planner/today" });
+    expect(resolveRoute("#/nope")).toMatchObject({ canonical: "#/work/today" });
   });
 
   it("builds a hub's default hash from its first tab", () => {
     const work = HUBS.find((hub) => hub.id === "work");
-    expect(work && hubDefaultHash(work)).toBe("#/work/tasks");
+    expect(work && hubDefaultHash(work)).toBe("#/work/today");
   });
 });
