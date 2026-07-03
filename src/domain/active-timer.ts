@@ -24,6 +24,15 @@ export function getActiveTimerRemainingSeconds(active: ActiveTimer, nowMs = Date
   return Math.max(0, Math.floor((Date.parse(active.phaseEndsAt) - getActiveTimerReferenceMs(active, nowMs)) / 1000));
 }
 
+/** Human label for the current session state, shared by all timer indicators. */
+export function getActiveTimerPhaseLabel(active: ActiveTimer): string {
+  if (isActiveTimerPaused(active)) {
+    return "На паузе";
+  }
+
+  return active.phase === "focus" ? "Фокус" : "Перерыв";
+}
+
 /**
  * Clock text for the timer readouts: countdown for pomodoro phases,
  * seconds-precision elapsed time for the plain timer (so the very first
