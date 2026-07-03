@@ -524,11 +524,16 @@ export class AppRoot extends HTMLElement {
           }
 
           .nav-item {
-            min-width: 2.75rem;
+            gap: 0.1rem;
+            min-width: 3rem;
+            padding: var(--space-1);
           }
 
+          /* Пять хабов узнаются по подписям — на мобильном их не прячем,
+             только ужимаем, чтобы влезли в нижний бар. */
           .nav-label {
-            display: none;
+            font-size: 0.65rem;
+            white-space: nowrap;
           }
 
           .subnav-icon {
