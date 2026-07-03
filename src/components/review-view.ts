@@ -11,6 +11,23 @@ import { setBodyScrollLock, wireModal } from "./modal";
 import { renderShadow } from "./shadow";
 import { formatDate, renderProjectOptions } from "./view-utils";
 
+/** Compact duration for the tight 7-column weekday chart: "2ч", "1ч30", "45м", "—". */
+function formatDurationCompact(minutes: number): string {
+  const rounded = Math.max(0, Math.round(minutes));
+  if (rounded === 0) {
+    return "—";
+  }
+  const hours = Math.floor(rounded / 60);
+  const rest = rounded % 60;
+  if (hours === 0) {
+    return `${rest}м`;
+  }
+  if (rest === 0) {
+    return `${hours}ч`;
+  }
+  return `${hours}ч${rest}`;
+}
+
 function trendBadge(label: string, delta: number, format: (value: number) => string): string {
   if (delta === 0) {
     return badgeHtml(`${label}: без изменений`);
@@ -151,6 +168,7 @@ export class ReviewView extends HTMLElement {
                 .map(
                   (day, index) => `
                     <div class="week-col">
+                      <span class="week-value${day.minutes > 0 ? "" : " is-empty"}">${escapeHtml(formatDurationCompact(day.minutes))}</span>
                       ${barHtml((day.minutes / maxMinutes) * 100, { vertical: true, title: formatDuration(day.minutes) })}
                       <span class="week-label">${escapeHtml(labels[index] ?? "")}</span>
                     </div>
@@ -448,7 +466,20 @@ const styles = `
     display: grid;
     gap: var(--space-1);
     height: 100%;
-    grid-template-rows: 1fr auto;
+    grid-template-rows: auto 1fr auto;
+  }
+
+  .week-value {
+    color: var(--text);
+    font-size: var(--text-xs);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    text-align: center;
+  }
+
+  .week-value.is-empty {
+    color: var(--muted);
+    font-weight: 400;
   }
 
   .week-label {
