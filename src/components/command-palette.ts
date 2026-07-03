@@ -23,6 +23,7 @@ const NAV_ITEMS: PaletteItem[] = [
   { label: "Перейти: Статистика", sub: "Навигация", hash: "#/analytics/stats" },
   { label: "Перейти: Ревью", sub: "Навигация", hash: "#/analytics/review" },
   { label: "Перейти: Настройки", sub: "Навигация", hash: "#/settings/settings" },
+  { label: "Перейти: Справка", sub: "Навигация", hash: "#/settings/guide" },
   { label: "Создать: Событие", sub: "Действие", hash: "#/planner/calendar" },
   { label: "Начать фокус", sub: "Действие", hash: "#/work/focus" },
 ];

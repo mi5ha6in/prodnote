@@ -15,6 +15,7 @@ const ICONS = {
   stats: `<svg viewBox="0 0 24 24"><path d="M5 20V10h4v10H5Zm5 0V4h4v16h-4Zm5 0v-7h4v7h-4Z"/></svg>`,
   review: `<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9h-9V3Z"/><path d="M14 3.5a8 8 0 0 1 6.5 6.5H14V3.5Z"/></svg>`,
   settings: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>`,
+  guide: `<svg viewBox="0 0 24 24"><path d="M4 4.5h7a2 2 0 0 1 2 2V20a2 2 0 0 0-2-2H4V4.5Zm16 0h-7a2 2 0 0 0-2 2V20a2 2 0 0 1 2-2h7V4.5Z"/></svg>`,
 } satisfies Record<IconName, string>;
 
 export class AppRoot extends HTMLElement {

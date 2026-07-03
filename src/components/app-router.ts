@@ -20,7 +20,8 @@ export type IconName =
   | "focus"
   | "stats"
   | "review"
-  | "settings";
+  | "settings"
+  | "guide";
 
 export interface TabDef {
   id: string;
@@ -111,6 +112,7 @@ export const HUBS: HubDef[] = [
     icon: "settings",
     tabs: [
       { id: "settings", label: "Настройки", description: "Данные, синхронизация и проекты", tag: "pn-settings-view", icon: "settings" },
+      { id: "guide", label: "Справка", description: "Руководство пользователя", tag: "pn-guide-view", icon: "guide" },
     ],
   },
 ];
@@ -127,6 +129,7 @@ export const LEGACY_ROUTES: Record<string, string> = {
   stats: "analytics/stats",
   review: "analytics/review",
   settings: "settings/settings",
+  guide: "settings/guide",
 };
 
 export interface ResolvedRoute {
