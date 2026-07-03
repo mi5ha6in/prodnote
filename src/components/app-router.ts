@@ -103,8 +103,8 @@ export const HUBS: HubDef[] = [
     label: "Аналитика",
     icon: "stats",
     tabs: [
-      { id: "stats", label: "Статистика", description: "Ритм и распределение времени", tag: "pn-stats-view", icon: "stats" },
-      { id: "review", label: "Ревью", description: "Итоги недели и продуктивность", tag: "pn-review-view", icon: "review" },
+      { id: "stats", label: "Статистика", description: "Сколько и куда ушло время", tag: "pn-stats-view", icon: "stats" },
+      { id: "review", label: "Ревью", description: "Как прошла неделя и что дальше", tag: "pn-review-view", icon: "review" },
     ],
   },
   {
