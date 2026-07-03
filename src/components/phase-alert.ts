@@ -58,7 +58,7 @@ export class PhaseAlert extends HTMLElement {
             <p class="muted">${escapeHtml(alert.message)}</p>
           </div>
           <div class="row-actions">
-            <a class="button ghost small" href="#/focus">Открыть фокус</a>
+            <a class="button ghost small" href="#/work/focus">Открыть фокус</a>
             <button ${buttonAttrs({ size: "small", data: { action: "continue-phase" } })}>${escapeHtml(alert.actionLabel)}</button>
             <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "dismiss-alert" } })}>Скрыть</button>
           </div>

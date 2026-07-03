@@ -13,7 +13,7 @@ test("day-cycle smoke: plan wizard flush, budget, palette, quick-create, habits,
   await expect(page.locator(".task-card", { hasText: "Смок-задача" }).first()).toBeVisible();
 
   // Мастер планирования: оценка без blur → Esc → оценка сохранена.
-  await page.goto("/#/planner/today");
+  await page.goto("/#/work/today");
   await page.locator('button[data-action="start-plan"]').first().click();
   await page.locator('button[data-action="wizard-next"]').click();
   const estimate = page.locator("[data-plan-estimate]").first();

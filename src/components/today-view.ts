@@ -1202,7 +1202,7 @@ export class TodayView extends HTMLElement {
   private async startFocus(itemId: string): Promise<void> {
     // Уже идёт сессия — не перезаписываем её, а показываем в фокусе.
     if (appStore.getActiveTimer()) {
-      window.location.hash = "#/focus";
+      window.location.hash = "#/work/focus";
       return;
     }
     const task = await appStore.promoteChecklistItemToTask(itemId);
