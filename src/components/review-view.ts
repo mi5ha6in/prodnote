@@ -53,6 +53,12 @@ export class ReviewView extends HTMLElement {
     const trends = buildReviewTrends(workspace, weekStart);
     const labels = weekdayLabels(workspace.settings.weekStartsOn);
     const maxMinutes = Math.max(1, ...review.perDay.map((day) => day.minutes));
+    // Замыкаем петлю день↔неделя: рефлексия из «Закрытия дня» живёт в заметке
+    // дня (Note.dayKey) — собираем ссылки на те дни недели, где она есть.
+    const dayNotes = review.perDay.flatMap((entry, index) => {
+      const note = workspace.notes.find((item) => item.dayKey === entry.date);
+      return note ? [{ id: note.id, date: entry.date, label: labels[index] ?? "" }] : [];
+    });
 
     const root = renderShadow(
       this,
@@ -152,6 +158,27 @@ export class ReviewView extends HTMLElement {
                 )
                 .join("")}
             </div>
+          </article>
+
+          <article class="card">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">Оглянуться</p>
+                <h2>Заметки дней</h2>
+              </div>
+            </div>
+            ${
+              dayNotes.length
+                ? `<div class="meta-row day-notes">
+                    ${dayNotes
+                      .map(
+                        (note) =>
+                          `<a class="button ghost small" href="#/notes/notes/${escapeHtml(note.id)}">${escapeHtml(note.label)}, ${escapeHtml(formatDate(note.date))}</a>`,
+                      )
+                      .join("")}
+                  </div>`
+                : emptyStateHtml("Заметок дней за эту неделю нет — рефлексия из «Закрытия дня» появится здесь.")
+            }
           </article>
         </section>
       `,

@@ -23,7 +23,16 @@ import type { Task, TaskPriority, TaskStatus } from "../domain/types";
 import { requestTimerNotificationPermission } from "../platform/notifications";
 import { appStore } from "../state";
 import { confirmDestructive } from "../ui/actions";
-import { badgeHtml, buttonAttrs, emptyStateHtml, fieldHtml, modalHtml, viewHeaderHtml } from "../ui/html";
+import {
+  badgeHtml,
+  buttonAttrs,
+  emptyStateHtml,
+  fieldHtml,
+  modalHtml,
+  quickAddSyntaxCss,
+  quickAddSyntaxHtml,
+  viewHeaderHtml,
+} from "../ui/html";
 import { setBodyScrollLock, wireModal } from "./modal";
 import { quickCreateHtml, wireQuickCreate, type QuickCreateKind } from "./quick-create";
 import { renderShadow } from "./shadow";
@@ -420,28 +429,7 @@ export class TasksView extends HTMLElement {
           flex: 1;
         }
 
-        .quick-syntax {
-          margin-top: var(--space-2);
-        }
-
-        .quick-syntax summary {
-          color: var(--muted);
-          cursor: pointer;
-          font-size: var(--text-xs);
-          font-weight: 600;
-          width: fit-content;
-        }
-
-        .quick-syntax p {
-          font-size: var(--text-xs);
-          margin-top: var(--space-1);
-        }
-
-        .quick-syntax code {
-          background: var(--surface);
-          border-radius: var(--radius-sm);
-          padding: 0 0.25rem;
-        }
+        ${quickAddSyntaxCss}
 
         .task-filter {
           display: grid;
@@ -1102,14 +1090,7 @@ export class TasksView extends HTMLElement {
             />
             <button ${buttonAttrs({ type: "submit", size: "small" })}>Добавить</button>
           </form>
-          <details class="quick-syntax">
-            <summary>Синтаксис быстрого ввода</summary>
-            <p class="muted">
-              <code>!высокий</code> / <code>!средний</code> / <code>!низкий</code> — приоритет ·
-              <code>#проект</code> · <code>@тег</code> ·
-              даты: <code>сегодня</code>, <code>завтра</code>, <code>пт</code>, <code>через 3 дня</code>, <code>15.07</code>
-            </p>
-          </details>
+          ${quickAddSyntaxHtml()}
         </div>
         <div class="task-filter" role="group" aria-label="Фильтры задач">
           <div class="filter-row">

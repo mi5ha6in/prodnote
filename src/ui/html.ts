@@ -158,6 +158,51 @@ export function wizardStepHtml(options: {
   });
 }
 
+/**
+ * Shared quick-add syntax cheatsheet, shown wherever natural-language capture
+ * happens (task toolbar, command palette) so the grammar reads identically
+ * everywhere. Mirrors the parser in domain/quick-add.ts — keep both in sync.
+ * Hosts must ship the matching `.quick-syntax` styles (see quickAddSyntaxCss).
+ */
+export function quickAddSyntaxHtml(): string {
+  return `
+    <details class="quick-syntax">
+      <summary>Синтаксис быстрого ввода</summary>
+      <p class="muted">
+        <code>!высокий</code> / <code>!средний</code> / <code>!низкий</code> — приоритет ·
+        <code>#проект</code> · <code>@тег</code> ·
+        даты: <code>сегодня</code>, <code>завтра</code>, <code>пт</code>, <code>через 3 дня</code>, <code>15.07</code>
+      </p>
+    </details>
+  `;
+}
+
+/** Styles for `quickAddSyntaxHtml`, inlined into each host's shadow root. */
+export const quickAddSyntaxCss = `
+  .quick-syntax {
+    margin-top: var(--space-2);
+  }
+
+  .quick-syntax summary {
+    color: var(--muted);
+    cursor: pointer;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    width: fit-content;
+  }
+
+  .quick-syntax p {
+    font-size: var(--text-xs);
+    margin-top: var(--space-1);
+  }
+
+  .quick-syntax code {
+    background: var(--surface);
+    border-radius: var(--radius-sm);
+    padding: 0 0.25rem;
+  }
+`;
+
 export function modalHtml(options: { body: string; wide?: boolean; label?: string }): string {
   const labelAttr = options.label ? ` aria-label="${escapeHtml(options.label)}"` : "";
   return `

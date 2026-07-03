@@ -6,7 +6,7 @@ import { HUBS, hubDefaultHash, type IconName, resolveRoute } from "./app-router"
 import { renderShadow } from "./shadow";
 
 const ICONS = {
-  today: `<svg viewBox="0 0 24 24"><path d="M5 5h14v15H5V5Zm0 5h14M8 3v4M16 3v4m-7 9 2 2 4-4"/></svg>`,
+  today: `<svg viewBox="0 0 24 24"><path d="M4 5h16v15H4V5Zm0 4h16"/><path d="m8.5 14.5 2.2 2.2 4.3-4.6"/></svg>`,
   habits: `<svg viewBox="0 0 24 24"><path d="M4 5h4v4H4V5Zm6 0h4v4h-4V5Zm6 0h4v4h-4V5ZM4 11h4v4H4v-4Zm6 0h4v4h-4v-4Zm6 0h4v4h-4v-4ZM4 17h4v4H4v-4Zm6 0h4v4h-4v-4Z"/></svg>`,
   tasks: `<svg viewBox="0 0 24 24"><path d="m5 12 2.2 2.2L11 10.4M5 6l2.2 2.2L11 4.4M5 18l2.2 2.2 3.8-3.8M14 6h5M14 12h5M14 18h5"/></svg>`,
   notes: `<svg viewBox="0 0 24 24"><path d="M6 3.5h9l3 3V20.5H6v-17Zm8.5 0v4h4M9 11h6M9 15h6"/></svg>`,
@@ -111,7 +111,7 @@ export class AppRoot extends HTMLElement {
       `
       <div class="app-shell">
         <aside class="sidebar">
-          <a class="brand" href="#/planner/today" aria-label="ProdNote home">
+          <a class="brand" href="#/work/today" aria-label="ProdNote home">
             <img class="brand-mark" src="${import.meta.env.BASE_URL}icons/icon.svg" alt="" />
             <span>
               <strong>ProdNote</strong>
@@ -524,11 +524,16 @@ export class AppRoot extends HTMLElement {
           }
 
           .nav-item {
-            min-width: 2.75rem;
+            gap: 0.1rem;
+            min-width: 3rem;
+            padding: var(--space-1);
           }
 
+          /* Пять хабов узнаются по подписям — на мобильном их не прячем,
+             только ужимаем, чтобы влезли в нижний бар. */
           .nav-label {
-            display: none;
+            font-size: 0.65rem;
+            white-space: nowrap;
           }
 
           .subnav-icon {
