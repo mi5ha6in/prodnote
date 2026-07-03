@@ -207,6 +207,14 @@ export const sharedStyles = `
     box-shadow: 0 0 0 3px var(--accent-soft);
   }
 
+  input[type="color"] {
+    /* Без этого color-инпут наследует width: 100% и padding текстовых
+       полей и рисуется сплющенной полоской на всю ширину формы. */
+    height: 2.5rem;
+    padding: 0.2rem;
+    width: 3.25rem;
+  }
+
   input[type="checkbox"],
   input[type="radio"] {
     accent-color: var(--accent);
@@ -224,6 +232,9 @@ export const sharedStyles = `
   }
 
   label {
+    /* align-content: без него лейбл, растянутый соседней колонкой,
+       раздувает свой контрол (высоченные select в двухколоночных формах). */
+    align-content: start;
     color: var(--ink-soft);
     display: grid;
     font-size: var(--text-sm);
@@ -232,7 +243,9 @@ export const sharedStyles = `
   }
 
   .view-grid {
-    animation: view-in 200ms ease-out both;
+    /* Без fill-mode: "both" навсегда оставлял transform, а это stacking
+       context — контент вью перекрывал фиксированные оверлеи (палитру). */
+    animation: view-in 200ms ease-out;
     display: grid;
     gap: var(--space-5);
   }
@@ -573,6 +586,12 @@ export const sharedStyles = `
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-2);
+  }
+
+  /* display: flex выше перебивает UA-правило для [hidden] — возвращаем его,
+     иначе поля quick-create видны всегда, а не после «+ Новый …». */
+  .quick-create-fields[hidden] {
+    display: none;
   }
 
   .quick-create-fields input[type="color"] {
