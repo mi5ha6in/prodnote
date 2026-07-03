@@ -363,9 +363,19 @@ export class TodayView extends HTMLElement {
           color: inherit;
           cursor: text;
           font: inherit;
+          /* Кнопки по умолчанию центрируют контент — заголовок пункта
+             должен прижиматься к чекбоксу, как обычный текст. */
+          justify-content: flex-start;
           min-height: 0;
           padding: 0;
           text-align: left;
+        }
+
+        .check-edit-start:hover {
+          /* Общий button:hover красит фон в акцент — для текстового
+             псевдо-инпута достаточно подчёркивания. */
+          background: transparent;
+          text-decoration: underline;
         }
 
         .check-item[draggable="true"] {

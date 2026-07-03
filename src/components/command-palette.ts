@@ -54,6 +54,9 @@ export class CommandPalette extends HTMLElement {
       return;
     }
     if (event.key === "Escape" && this.open) {
+      // preventDefault: иначе браузерный close request после удаления палитры
+      // достанется следующему открытому <dialog> и закроет ещё и его.
+      event.preventDefault();
       this.close();
     }
   }
@@ -158,8 +161,8 @@ export class CommandPalette extends HTMLElement {
     const root = renderShadow(
       this,
       `
-        <div class="palette-overlay" data-overlay>
-          <div class="palette" role="dialog" aria-modal="true" aria-label="Командная палитра">
+        <dialog class="palette-overlay" data-overlay aria-label="Командная палитра">
+          <div class="palette">
             <input
               class="palette-input"
               data-palette-input
@@ -185,10 +188,25 @@ export class CommandPalette extends HTMLElement {
               }
             </div>
           </div>
-        </div>
+        </dialog>
       `,
       styles,
     );
+
+    // Палитра живёт в top layer, как и остальные модалки (<dialog>): иначе
+    // открытый визард/форма рисуется поверх неё независимо от z-index.
+    const dialog = root.querySelector<HTMLDialogElement>("[data-overlay]");
+    if (dialog && !dialog.open && typeof dialog.showModal === "function") {
+      try {
+        dialog.showModal();
+      } catch {
+        // jsdom и старые движки могут не уметь showModal — палитра всё равно видна.
+      }
+    }
+    dialog?.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      this.close();
+    });
 
     const input = root.querySelector<HTMLInputElement>("[data-palette-input]");
     input?.focus();
@@ -250,15 +268,29 @@ export class CommandPalette extends HTMLElement {
 customElements.define("pn-command-palette", CommandPalette);
 
 const styles = `
+  /* Нативный <dialog>: сбрасываем UA-стили и растягиваем на весь экран,
+     затемнение рисуем самим диалогом (клик по нему закрывает палитру). */
   .palette-overlay {
-    align-items: flex-start;
     background: var(--backdrop);
-    display: flex;
+    border: none;
+    height: 100dvh;
     inset: 0;
-    justify-content: center;
-    padding-top: 10vh;
+    margin: 0;
+    max-height: none;
+    max-width: none;
+    padding: 10vh var(--space-4) var(--space-4);
     position: fixed;
-    z-index: 120;
+    width: 100vw;
+  }
+
+  .palette-overlay[open] {
+    align-items: flex-start;
+    display: flex;
+    justify-content: center;
+  }
+
+  .palette-overlay::backdrop {
+    background: transparent;
   }
 
   .palette {
@@ -269,9 +301,8 @@ const styles = `
     box-shadow: var(--shadow-md);
     display: grid;
     max-height: 70vh;
-    max-width: 40rem;
     overflow: hidden;
-    width: calc(100vw - 2rem);
+    width: min(40rem, 100%);
   }
 
   .palette-input {

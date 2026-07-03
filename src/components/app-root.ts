@@ -154,7 +154,10 @@ export class AppRoot extends HTMLElement {
 
         .app-shell > pn-event-reminder,
         .app-shell > pn-command-palette {
+          /* fixed сам по себе создаёт stacking context: без z-index здесь
+             внутренние z-index оверлеев не участвуют в общем порядке слоёв. */
           position: fixed;
+          z-index: 110;
         }
 
         .sidebar {

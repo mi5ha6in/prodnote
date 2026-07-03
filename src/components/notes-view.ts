@@ -285,6 +285,7 @@ export class NotesView extends HTMLElement {
         }
 
         fieldset {
+          align-items: center;
           border: 1px solid var(--line);
           border-radius: var(--radius-md);
           display: flex;
@@ -525,9 +526,13 @@ export class NotesView extends HTMLElement {
             { label: "Редактирований", value: note.editHistory.length },
           ])}
 
-          <article class="preview-panel">
-            <div class="markdown-preview">${renderMarkdown(note.markdown)}</div>
-          </article>
+          ${
+            note.markdown.trim()
+              ? `<article class="preview-panel">
+                  <div class="markdown-preview">${renderMarkdown(note.markdown)}</div>
+                </article>`
+              : emptyStateHtml("Заметка пока пустая — нажмите «Редактировать».")
+          }
 
           <div class="meta-row">
             ${linkedTasks ? `<span>задачи: ${escapeHtml(linkedTasks)}</span>` : ""}
