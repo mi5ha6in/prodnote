@@ -3,6 +3,7 @@ import { escapeHtml, renderMarkdown } from "../domain/markdown";
 import type { ActiveTimer, Workspace } from "../domain/types";
 import { requestTimerNotificationPermission } from "../platform/notifications";
 import { appStore } from "../state";
+import { takePendingFocusTaskId } from "./focus-intent";
 import { renderShadow } from "./shadow";
 import { getProjectName, renderTaskOptions, requireSelect, requireTextArea } from "./view-utils";
 
@@ -16,6 +17,10 @@ export class FocusView extends HTMLElement {
   private focusHistoryAfterRender = false;
 
   connectedCallback(): void {
+    const pendingTaskId = takePendingFocusTaskId();
+    if (pendingTaskId) {
+      this.selectedTaskId = pendingTaskId;
+    }
     this.unsubscribe = appStore.subscribe(() => this.render());
     this.intervalId = window.setInterval(() => this.syncReadout(), 1000);
     this.render();

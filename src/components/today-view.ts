@@ -5,9 +5,9 @@ import { EVENT_KIND_LABELS, TASK_STATUS_LABELS } from "../domain/defaults";
 import { escapeHtml } from "../domain/markdown";
 import { formatDuration, groupChecklistByDay } from "../domain/stats";
 import type { CalendarEventKind, ChecklistItem, Task, Workspace } from "../domain/types";
-import { requestTimerNotificationPermission } from "../platform/notifications";
 import { appStore } from "../state";
 import { badgeHtml, buttonAttrs, emptyStateHtml, metricBarHtml, viewHeaderHtml, wizardStepHtml } from "../ui/html";
+import { setPendingFocusTaskId } from "./focus-intent";
 import { setBodyScrollLock, wireModal } from "./modal";
 import { renderShadow } from "./shadow";
 import { formatDate, getProjectName, getTaskName } from "./view-utils";
@@ -1209,8 +1209,9 @@ export class TodayView extends HTMLElement {
     if (!task) {
       return;
     }
-    void requestTimerNotificationPermission();
-    await appStore.startTimer(task.id);
+    // Переходим в фокус с уже выбранной задачей, но таймер не запускаем —
+    // пользователь сам решает, когда начать сессию.
+    setPendingFocusTaskId(task.id);
     window.location.hash = "#/focus";
   }
 }
