@@ -1,4 +1,5 @@
 import { getActiveTimerClockReadout, getActiveTimerPhaseLabel, isActiveTimerPaused } from "../domain/active-timer";
+import { dayKey } from "../domain/calendar";
 import { escapeHtml } from "../domain/markdown";
 import { appStore } from "../state";
 import { HUBS, hubDefaultHash, type IconName, resolveRoute } from "./app-router";
@@ -77,7 +78,8 @@ export class AppRoot extends HTMLElement {
       return;
     }
 
-    const today = new Date().toISOString().slice(0, 10);
+    // Локальный день, как и остальные списки просрочки (task-filter, day-plan).
+    const today = dayKey(new Date());
     const overdue = appStore
       .getWorkspace()
       .tasks.filter((task) => task.status !== "done" && task.dueDate !== null && task.dueDate < today).length;

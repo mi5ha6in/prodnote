@@ -137,9 +137,11 @@ export async function pullRemoteWorkspace(localWorkspace: Workspace): Promise<Sy
     const remote = await api<{ serverRevision: number; workspace: Workspace; deletedEntities?: SyncTombstone[] }>(
       `/api/workspace?since=${meta.serverRevision}`,
     );
+    // Локальные тумбстоуны применяем тоже: иначе только что удалённая, но ещё не
+    // отправленная сущность «воскресла» бы из remote при слиянии до ближайшего push.
     const merged = applyRemoteDeletions(
       mergeWorkspaces(localWorkspace, remote.workspace, remote.serverRevision, meta.serverRevision),
-      remote.deletedEntities ?? [],
+      [...(remote.deletedEntities ?? []), ...readTombstones()],
     );
     writeMeta({
       lastSyncedAt: new Date().toISOString(),

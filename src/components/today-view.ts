@@ -28,8 +28,12 @@ function formatTime(value: string): string {
 /** Consecutive days ending today that have at least one completed item. */
 function currentStreak(items: ChecklistItem[], today: string): number {
   const doneDays = new Set(items.filter((item) => item.done).map((item) => item.day));
-  let streak = 0;
   let cursor = today;
+  // Сегодня ещё без отметок не рвёт серию — считаем со вчера (ср. habitStreak).
+  if (!doneDays.has(cursor)) {
+    cursor = shiftDayKey(cursor, -1);
+  }
+  let streak = 0;
   while (doneDays.has(cursor)) {
     streak += 1;
     cursor = shiftDayKey(cursor, -1);

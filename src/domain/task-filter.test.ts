@@ -104,6 +104,28 @@ describe("filterAndSortTasks", () => {
       expect(matched.sort()).toEqual([dueToday.id, overdue.id].sort());
     });
 
+    it("today and week include tasks planned for the day even without a deadline", () => {
+      const plannedToday = makeTask({ title: "План на сегодня", plannedAt: "2026-07-02T00:00:00" });
+      const plannedThisWeek = makeTask({ title: "План на неделе", plannedAt: "2026-07-05T00:00:00" });
+      const plannedPast = makeTask({ title: "План во вчера", plannedAt: "2026-07-01T00:00:00" });
+      const pool = [plannedToday, plannedThisWeek, plannedPast];
+
+      const today = filterAndSortTasks(pool, criteria({ smartList: "today" }), [], now).map((t) => t.id);
+      expect(today).toEqual([plannedToday.id]);
+
+      const week = filterAndSortTasks(pool, criteria({ smartList: "week" }), [], now).map((t) => t.id);
+      expect(week.sort()).toEqual([plannedToday.id, plannedThisWeek.id].sort());
+    });
+
+    it("overdue stays deadline-only: a past plan slot is not overdue", () => {
+      const plannedPast = makeTask({ title: "План во вчера", plannedAt: "2026-07-01T00:00:00" });
+      const duePast = makeTask({ title: "Дедлайн вчера", dueDate: "2026-07-01" });
+      const pool = [plannedPast, duePast];
+
+      const overdueOnly = filterAndSortTasks(pool, criteria({ smartList: "overdue" }), [], now).map((t) => t.id);
+      expect(overdueOnly).toEqual([duePast.id]);
+    });
+
     it("week spans the next 7 days inclusive, overdue is strictly before today", () => {
       const overdue = makeTask({ title: "Вчера", dueDate: "2026-07-01" });
       const today = makeTask({ title: "Сегодня", dueDate: "2026-07-02" });

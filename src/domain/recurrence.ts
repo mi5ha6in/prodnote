@@ -97,16 +97,28 @@ function matchesFrequency(
       return byDay.length ? byDay.includes(date.getDay()) : date.getDay() === base.weekday;
     }
     case "MONTHLY":
-      return date.getDate() === base.day && monthDiff(base.midnight, date) % interval === 0;
+      // Clamp the target day to the month length so the 29th–31st still fire in
+      // shorter months (e.g. a monthly-31 rule lands on Feb 28) instead of skipping them.
+      return date.getDate() === clampDayToMonth(base.day, date) && monthDiff(base.midnight, date) % interval === 0;
     case "YEARLY":
+      // Same clamp for Feb 29 in non-leap years — it falls back to Feb 28 rather than vanishing.
       return (
-        date.getDate() === base.day &&
         date.getMonth() === base.month &&
+        date.getDate() === clampDayToMonth(base.day, date) &&
         monthDiff(base.midnight, date) % (interval * 12) === 0
       );
     default:
       return false;
   }
+}
+
+function daysInMonth(year: number, month: number): number {
+  return new Date(year, month + 1, 0).getDate();
+}
+
+/** The target day clamped to the last day of the month `date` falls in. */
+function clampDayToMonth(day: number, date: Date): number {
+  return Math.min(day, daysInMonth(date.getFullYear(), date.getMonth()));
 }
 
 function monthDiff(baseMidnight: number, date: Date): number {
@@ -135,7 +147,10 @@ export function nextRecurrenceDate(fromDate: string, rule: RecurrenceRule): stri
   const interval = Math.max(1, rule.interval);
   const cursor = new Date(year, month - 1, day);
 
-  for (let safety = 0; safety < 800; safety += 1) {
+  // Scan day by day until the next match. The bound scales with the interval so
+  // yearly rules (incl. Feb 29) and multi-year/-month intervals still resolve.
+  const scanLimit = Math.max(800, 366 * interval + 40);
+  for (let safety = 0; safety < scanLimit; safety += 1) {
     cursor.setDate(cursor.getDate() + 1);
     if (matchesFrequency(rule.freq, interval, rule.byDay, cursor, base)) {
       if (rule.untilMs !== null && cursor.getTime() > rule.untilMs) {
