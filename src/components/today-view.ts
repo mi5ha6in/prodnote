@@ -182,23 +182,6 @@ export class TodayView extends HTMLElement {
           <article class="card">
             <div class="card-header">
               <div>
-                <p class="eyebrow">Расписание</p>
-                <h2>События дня</h2>
-              </div>
-              <a class="button ghost small" href="#/planner/calendar">Календарь</a>
-            </div>
-            <div class="item-list">
-              ${
-                dayEvents.length
-                  ? dayEvents.map((item) => this.renderEventRow(item, workspace)).join("")
-                  : emptyStateHtml("Событий нет. Добавьте их в Планер → Календарь.")
-              }
-            </div>
-          </article>
-
-          <article class="card">
-            <div class="card-header">
-              <div>
                 <p class="eyebrow">Задачи</p>
                 <h2>Запланировано на день</h2>
               </div>
@@ -226,10 +209,25 @@ export class TodayView extends HTMLElement {
           <article class="card">
             <div class="card-header">
               <div>
-                <p class="eyebrow">История</p>
-                <h2>Сделано по дням</h2>
+                <p class="eyebrow">Расписание</p>
+                <h2>События дня</h2>
               </div>
+              <a class="button ghost small" href="#/planner/calendar">Календарь</a>
             </div>
+            <div class="item-list">
+              ${
+                dayEvents.length
+                  ? dayEvents.map((item) => this.renderEventRow(item, workspace)).join("")
+                  : emptyStateHtml("Событий нет. Добавьте их в Планер → Календарь.")
+              }
+            </div>
+          </article>
+
+          <details class="card history-details">
+            <summary>
+              <span class="eyebrow">История</span>
+              <strong>Сделано по дням</strong>
+            </summary>
             <div class="history-grid">
               ${
                 history.length
@@ -248,7 +246,7 @@ export class TodayView extends HTMLElement {
                   : emptyStateHtml("Отмечайте пункты — здесь появится история дней.")
               }
             </div>
-          </article>
+          </details>
         </section>
       `,
       `
@@ -410,6 +408,22 @@ export class TodayView extends HTMLElement {
           gap: var(--space-1);
         }
 
+        .history-details > summary {
+          align-items: baseline;
+          cursor: pointer;
+          display: flex;
+          gap: var(--space-2);
+        }
+
+        .history-details > summary strong {
+          font-size: var(--text-lg);
+          font-weight: 650;
+        }
+
+        .history-details[open] > summary {
+          margin-bottom: var(--space-3);
+        }
+
         .history-grid {
           display: grid;
           gap: var(--space-2);
@@ -510,6 +524,7 @@ export class TodayView extends HTMLElement {
             : `<input type="checkbox" data-toggle="${escapeHtml(item.id)}" ${item.done ? "checked" : ""} aria-label="Отметить выполненным" />`
         }
         <button type="button" class="check-title check-edit-start" data-edit-item="${escapeHtml(item.id)}" title="Переименовать">${escapeHtml(item.title)}</button>
+        ${item.templateId ? badgeHtml("из привычки") : ""}
         ${item.rolledFrom ? badgeHtml("перенесено") : ""}
         ${item.done && item.doneAt ? `<span class="check-time">${escapeHtml(formatTime(item.doneAt))}</span>` : ""}
         <span class="check-actions">
@@ -1212,7 +1227,7 @@ export class TodayView extends HTMLElement {
     // Переходим в фокус с уже выбранной задачей, но таймер не запускаем —
     // пользователь сам решает, когда начать сессию.
     setPendingFocusTaskId(task.id);
-    window.location.hash = "#/focus";
+    window.location.hash = "#/work/focus";
   }
 }
 
