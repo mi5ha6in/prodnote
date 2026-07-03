@@ -3,6 +3,7 @@ import { escapeHtml } from "../domain/markdown";
 import { parseQuickAdd } from "../domain/quick-add";
 import { searchAll } from "../domain/search";
 import { appStore } from "../state";
+import { quickAddSyntaxCss, quickAddSyntaxHtml } from "../ui/html";
 import { setBodyScrollLock } from "./modal";
 import { renderShadow } from "./shadow";
 
@@ -172,6 +173,7 @@ export class CommandPalette extends HTMLElement {
               value="${escapeHtml(this.query)}"
               aria-label="Поиск и команды"
             />
+            <div class="palette-syntax">${quickAddSyntaxHtml()}</div>
             <div class="palette-list">
               ${
                 items.length
@@ -316,6 +318,17 @@ const styles = `
 
   .palette-input:focus {
     box-shadow: none;
+  }
+
+  .palette-syntax {
+    border-bottom: 1px solid var(--line);
+    padding: 0 var(--space-4) var(--space-2);
+  }
+
+  ${quickAddSyntaxCss}
+
+  .palette-syntax .quick-syntax {
+    margin-top: 0;
   }
 
   .palette-list {
