@@ -26,6 +26,7 @@ import { appStore } from "../state";
 import { addIcsSubscription, listIcsSubscriptions, removeIcsSubscription } from "../storage/ics-subscriptions";
 import { getSyncServerUrl } from "../sync/client";
 import { confirmDestructive } from "../ui/actions";
+import { ICONS } from "../ui/icons";
 import { buttonAttrs, emptyStateHtml, fieldHtml, metricBarHtml, modalHtml, viewHeaderHtml } from "../ui/html";
 import { setBodyScrollLock, wireModal } from "./modal";
 import { renderShadow } from "./shadow";
@@ -238,7 +239,7 @@ export class CalendarView extends HTMLElement {
               ${projectName ? `<span>${escapeHtml(projectName)}</span>` : ""}
             </div>
           </div>
-          ${editable ? `<button ${buttonAttrs({ tone: "ghost", size: "small", data: { deleteEvent: item.id } })}>Удалить</button>` : ""}
+          ${editable ? `<button ${buttonAttrs({ tone: "ghost", size: "small", icon: true, label: "Удалить событие", data: { deleteEvent: item.id } })}>${ICONS.trash}</button>` : ""}
         </div>
       </div>
     `;
@@ -506,7 +507,7 @@ export class CalendarView extends HTMLElement {
             <p class="eyebrow">Календарь</p>
             <h2>Подписки ICS</h2>
           </div>
-          <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-modal" } })}>Закрыть</button>
+          <button ${buttonAttrs({ tone: "ghost", size: "small", icon: true, label: "Закрыть", data: { action: "close-modal" } })}>${ICONS.close}</button>
         </div>
         <p class="muted">
           Внешние календари (Google, Outlook и др.) по «секретному адресу в формате iCal».
@@ -536,8 +537,8 @@ export class CalendarView extends HTMLElement {
                           </div>
                         </div>
                         <div class="row-actions">
-                          <button ${buttonAttrs({ tone: "ghost", size: "small", data: { subscriptionRefresh: subscription.id }, disabled: !hasServer })}>Обновить</button>
-                          <button ${buttonAttrs({ tone: "danger", size: "small", data: { subscriptionRemove: subscription.id } })}>Удалить</button>
+                          <button ${buttonAttrs({ tone: "ghost", size: "small", icon: true, label: "Обновить подписку", data: { subscriptionRefresh: subscription.id }, disabled: !hasServer })}>${ICONS.cycle}</button>
+                          <button ${buttonAttrs({ tone: "danger", size: "small", icon: true, label: "Удалить подписку", data: { subscriptionRemove: subscription.id } })}>${ICONS.trash}</button>
                         </div>
                       </div>
                     `,
@@ -574,7 +575,7 @@ export class CalendarView extends HTMLElement {
               <p class="eyebrow">${event ? "Редактирование" : "Календарь"}</p>
               <h2>${event ? escapeHtml(event.title) : "Новое событие"}</h2>
             </div>
-            <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-modal" } })}>Закрыть</button>
+            <button ${buttonAttrs({ tone: "ghost", size: "small", icon: true, label: "Закрыть", data: { action: "close-modal" } })}>${ICONS.close}</button>
           </div>
 
           ${fieldHtml({
@@ -673,7 +674,7 @@ export class CalendarView extends HTMLElement {
               <p class="eyebrow">История</p>
               <h2>Записать время</h2>
             </div>
-            <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-modal" } })}>Закрыть</button>
+            <button ${buttonAttrs({ tone: "ghost", size: "small", icon: true, label: "Закрыть", data: { action: "close-modal" } })}>${ICONS.close}</button>
           </div>
           ${fieldHtml({
             label: "Задача",

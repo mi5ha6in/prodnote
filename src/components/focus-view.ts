@@ -6,7 +6,8 @@ import { appStore } from "../state";
 import { confirmDestructive } from "../ui/actions";
 import { takePendingFocusTaskId } from "./focus-intent";
 import { renderShadow } from "./shadow";
-import { renderTimerControls, timerControlStyles, TIMER_ICONS } from "./timer-controls";
+import { ICONS } from "../ui/icons";
+import { renderTimerControls, timerControlStyles } from "./timer-controls";
 import { getProjectName, renderTaskOptions, requireSelect, requireTextArea } from "./view-utils";
 
 export class FocusView extends HTMLElement {
@@ -94,8 +95,8 @@ export class FocusView extends HTMLElement {
                   <input name="goal" placeholder="Что хочу сделать за эту сессию" autocomplete="off" ${canStart ? "" : "disabled"} />
                 </label>
                 <div class="row-actions">
-                  <button type="submit" name="mode" value="timer" ${canStart ? "" : "disabled"}>${TIMER_ICONS.play}Таймер</button>
-                  <button type="submit" class="secondary" name="mode" value="pomodoro" ${canStart ? "" : "disabled"}>${TIMER_ICONS.cycle}Помодоро</button>
+                  <button type="submit" name="mode" value="timer" ${canStart ? "" : "disabled"}>${ICONS.play}Таймер</button>
+                  <button type="submit" class="secondary" name="mode" value="pomodoro" ${canStart ? "" : "disabled"}>${ICONS.cycle}Помодоро</button>
                 </div>
                 ${canStart ? "" : `<p class="muted">Сначала создайте незавершённую задачу.</p>`}
               </form>

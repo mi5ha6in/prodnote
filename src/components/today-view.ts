@@ -7,6 +7,7 @@ import { formatDuration, groupChecklistByDay } from "../domain/stats";
 import type { CalendarEventKind, ChecklistItem, Task, Workspace } from "../domain/types";
 import { appStore } from "../state";
 import { badgeHtml, buttonAttrs, emptyStateHtml, metricBarHtml, viewHeaderHtml, wizardStepHtml } from "../ui/html";
+import { ICONS } from "../ui/icons";
 import { setPendingFocusTaskId } from "./focus-intent";
 import { setBodyScrollLock, wireModal } from "./modal";
 import { renderShadow } from "./shadow";
@@ -529,7 +530,7 @@ export class TodayView extends HTMLElement {
         ${item.done && item.doneAt ? `<span class="check-time">${escapeHtml(formatTime(item.doneAt))}</span>` : ""}
         <span class="check-actions">
           <button ${buttonAttrs({ tone: "ghost", size: "small", data: { focus: item.id } })} title="Начать фокус по пункту">В фокус</button>
-          <button ${buttonAttrs({ tone: "ghost", size: "small", data: { remove: item.id } })} aria-label="Удалить пункт">✕</button>
+          <button ${buttonAttrs({ tone: "ghost", size: "small", icon: true, label: "Удалить пункт", data: { remove: item.id } })}>${ICONS.trash}</button>
         </span>
       </div>
     `;

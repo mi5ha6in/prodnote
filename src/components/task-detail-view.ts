@@ -6,6 +6,7 @@ import type { Note, Task, TaskStatus, TimeSession, Workspace } from "../domain/t
 import { requestTimerNotificationPermission } from "../platform/notifications";
 import { appStore } from "../state";
 import { confirmDestructive } from "../ui/actions";
+import { ICONS } from "../ui/icons";
 import { badgeHtml, buttonAttrs, emptyStateHtml, fieldHtml } from "../ui/html";
 import { renderShadow } from "./shadow";
 import {
@@ -90,8 +91,8 @@ export class TaskDetailView extends HTMLElement {
               <h2>${escapeHtml(task.title)}</h2>
             </div>
             <div class="row-actions">
-              <button ${buttonAttrs({ size: "small", data: { action: "edit-task" } })}>Редактировать</button>
-              <button ${buttonAttrs({ tone: "danger", size: "small", data: { action: "delete-task" } })}>Удалить</button>
+              <button ${buttonAttrs({ size: "small", icon: true, label: "Редактировать", data: { action: "edit-task" } })}>${ICONS.edit}</button>
+              <button ${buttonAttrs({ tone: "danger", size: "small", icon: true, label: "Удалить", data: { action: "delete-task" } })}>${ICONS.trash}</button>
             </div>
           </div>
 
@@ -171,8 +172,8 @@ export class TaskDetailView extends HTMLElement {
                     ? "Уже есть активный таймер. Остановите или отмените его перед запуском новой сессии."
                     : "Запустите работу над этой задачей."
                 }</p>
-                <button ${buttonAttrs({ data: { action: "start-task-timer" }, disabled: meta.hasActiveTimer })}>Запустить таймер</button>
-                <button ${buttonAttrs({ tone: "secondary", data: { action: "start-task-pomodoro" }, disabled: meta.hasActiveTimer })}>Запустить помодоро</button>
+                <button ${buttonAttrs({ data: { action: "start-task-timer" }, disabled: meta.hasActiveTimer })}>${ICONS.play}Таймер</button>
+                <button ${buttonAttrs({ tone: "secondary", data: { action: "start-task-pomodoro" }, disabled: meta.hasActiveTimer })}>${ICONS.cycle}Помодоро</button>
               </article>
 
               <article class="card subtle form-grid">

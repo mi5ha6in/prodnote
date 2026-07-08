@@ -5,6 +5,7 @@ import { findBacklinks, searchNotes } from "../domain/search";
 import type { Note, Workspace } from "../domain/types";
 import { appStore } from "../state";
 import { confirmDestructive } from "../ui/actions";
+import { ICONS } from "../ui/icons";
 import { badgeHtml, buttonAttrs, emptyStateHtml, fieldHtml, metricBarHtml, modalHtml, viewHeaderHtml } from "../ui/html";
 import { setBodyScrollLock, wireModal } from "./modal";
 import { quickCreateHtml, wireQuickCreate, type QuickCreateKind } from "./quick-create";
@@ -509,14 +510,14 @@ export class NotesView extends HTMLElement {
               <h2>${escapeHtml(note.title)}</h2>
             </div>
             <div class="row-actions">
-              <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-open-note" } })}>Закрыть</button>
+              <button ${buttonAttrs({ tone: "ghost", size: "small", icon: true, label: "Закрыть", data: { action: "close-open-note" } })}>${ICONS.close}</button>
               ${
                 extractOpenCheckboxes(note.markdown).length
                   ? `<button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "extract-tasks" } })}>Чекбоксы → задачи</button>`
                   : ""
               }
-              <button ${buttonAttrs({ size: "small", data: { action: "edit-open-note" } })}>Редактировать</button>
-              <button ${buttonAttrs({ tone: "danger", size: "small", data: { action: "delete-open-note" } })}>Удалить</button>
+              <button ${buttonAttrs({ size: "small", icon: true, label: "Редактировать", data: { action: "edit-open-note" } })}>${ICONS.edit}</button>
+              <button ${buttonAttrs({ tone: "danger", size: "small", icon: true, label: "Удалить", data: { action: "delete-open-note" } })}>${ICONS.trash}</button>
             </div>
           </div>
 

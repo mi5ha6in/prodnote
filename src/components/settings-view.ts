@@ -17,6 +17,7 @@ import {
   subscribeSync,
 } from "../sync/client";
 import { confirmDestructive } from "../ui/actions";
+import { ICONS } from "../ui/icons";
 import { badgeHtml, buttonAttrs, emptyStateHtml, fieldHtml, modalHtml } from "../ui/html";
 import { setBodyScrollLock, wireModal } from "./modal";
 import { renderShadow } from "./shadow";
@@ -89,7 +90,7 @@ export class SettingsView extends HTMLElement {
                 <p class="eyebrow">Проекты</p>
                 <h2>Новый проект</h2>
               </div>
-              <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-create" } })}>Закрыть</button>
+              <button ${buttonAttrs({ tone: "ghost", size: "small", icon: true, label: "Закрыть", data: { action: "close-create" } })}>${ICONS.close}</button>
             </div>
             ${fieldHtml({
               label: "Название",
@@ -119,7 +120,7 @@ export class SettingsView extends HTMLElement {
                 <p class="eyebrow">Теги</p>
                 <h2>Новый тег</h2>
               </div>
-              <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-create" } })}>Закрыть</button>
+              <button ${buttonAttrs({ tone: "ghost", size: "small", icon: true, label: "Закрыть", data: { action: "close-create" } })}>${ICONS.close}</button>
             </div>
             ${fieldHtml({
               label: "Название",
@@ -159,7 +160,7 @@ export class SettingsView extends HTMLElement {
                 <p class="eyebrow">Проекты</p>
                 <h2>Редактирование проекта</h2>
               </div>
-              <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-edit" } })}>Закрыть</button>
+              <button ${buttonAttrs({ tone: "ghost", size: "small", icon: true, label: "Закрыть", data: { action: "close-edit" } })}>${ICONS.close}</button>
             </div>
             ${fieldHtml({
               label: "Название",
@@ -193,7 +194,7 @@ export class SettingsView extends HTMLElement {
               <p class="eyebrow">Теги</p>
               <h2>Редактирование тега</h2>
             </div>
-            <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-edit" } })}>Закрыть</button>
+            <button ${buttonAttrs({ tone: "ghost", size: "small", icon: true, label: "Закрыть", data: { action: "close-edit" } })}>${ICONS.close}</button>
           </div>
           ${fieldHtml({
             label: "Название",
@@ -455,8 +456,8 @@ export class SettingsView extends HTMLElement {
                             <p class="muted">${taskCount} задач, ${noteCount} заметок</p>
                           </div>
                           <div class="row-actions">
-                            <button ${buttonAttrs({ tone: "ghost", size: "small", data: { editProject: project.id } })}>Изменить</button>
-                            <button ${buttonAttrs({ tone: "danger", size: "small", data: { deleteProject: project.id } })}>Удалить</button>
+                            <button ${buttonAttrs({ tone: "ghost", size: "small", icon: true, label: "Изменить проект", data: { editProject: project.id } })}>${ICONS.edit}</button>
+                            <button ${buttonAttrs({ tone: "danger", size: "small", icon: true, label: "Удалить проект", data: { deleteProject: project.id } })}>${ICONS.trash}</button>
                           </div>
                         </div>
                         ${project.description ? `<p class="muted">${escapeHtml(project.description)}</p>` : ""}
@@ -499,8 +500,8 @@ export class SettingsView extends HTMLElement {
                               <p class="muted">Используется: ${usage}</p>
                             </div>
                             <div class="row-actions">
-                              <button ${buttonAttrs({ tone: "ghost", size: "small", data: { editTag: tag.id } })}>Изменить</button>
-                              <button ${buttonAttrs({ tone: "danger", size: "small", data: { deleteTag: tag.id } })}>Удалить</button>
+                              <button ${buttonAttrs({ tone: "ghost", size: "small", icon: true, label: "Изменить тег", data: { editTag: tag.id } })}>${ICONS.edit}</button>
+                              <button ${buttonAttrs({ tone: "danger", size: "small", icon: true, label: "Удалить тег", data: { deleteTag: tag.id } })}>${ICONS.trash}</button>
                             </div>
                           </div>
                         </div>

@@ -1,14 +1,6 @@
 import { isActiveTimerPaused } from "../domain/active-timer";
 import type { ActiveTimer } from "../domain/types";
-
-export const TIMER_ICONS = {
-  play: `<svg viewBox="0 0 24 24"><path d="M8.5 5.5v13l9.5-6.5-9.5-6.5Z"/></svg>`,
-  pause: `<svg viewBox="0 0 24 24"><path d="M8.5 5.5v13M15.5 5.5v13"/></svg>`,
-  stop: `<svg viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5"/></svg>`,
-  skip: `<svg viewBox="0 0 24 24"><path d="M6 5.5v13l8.5-6.5L6 5.5ZM17.5 5.5v13"/></svg>`,
-  cancel: `<svg viewBox="0 0 24 24"><path d="m6.5 6.5 11 11M17.5 6.5l-11 11"/></svg>`,
-  cycle: `<svg viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 3.5V7H16"/></svg>`,
-};
+import { ICONS } from "../ui/icons";
 
 interface TimerControl {
   action: string;
@@ -25,7 +17,7 @@ function getTimerControls(active: ActiveTimer): TimerControl[] {
   const controls: TimerControl[] = [
     {
       action: "toggle-pause",
-      icon: paused ? TIMER_ICONS.play : TIMER_ICONS.pause,
+      icon: paused ? ICONS.play : ICONS.pause,
       caption: paused ? "Продолжить" : "Пауза",
       title: paused ? "Продолжить сессию" : "Поставить на паузу",
       primary: true,
@@ -36,7 +28,7 @@ function getTimerControls(active: ActiveTimer): TimerControl[] {
     const isFocus = active.phase === "focus";
     controls.push({
       action: "complete-phase",
-      icon: TIMER_ICONS.skip,
+      icon: ICONS.skip,
       caption: isFocus ? "Перерыв" : "Фокус",
       title: isFocus ? "Завершить фокус с записью и начать перерыв" : "Завершить перерыв и вернуться к фокусу",
       disabled: paused,
@@ -46,13 +38,13 @@ function getTimerControls(active: ActiveTimer): TimerControl[] {
   controls.push(
     {
       action: "stop",
-      icon: TIMER_ICONS.stop,
+      icon: ICONS.stop,
       caption: "Стоп",
       title: getStopTitle(active),
     },
     {
       action: "cancel",
-      icon: TIMER_ICONS.cancel,
+      icon: ICONS.close,
       caption: "Отмена",
       title: "Отменить без записи",
       danger: true,

@@ -14,6 +14,7 @@ import type { ChecklistCadence, ChecklistItem, ChecklistTemplate } from "../doma
 import { appStore } from "../state";
 import { confirmDestructive } from "../ui/actions";
 import { badgeHtml, buttonAttrs, emptyStateHtml, metricBarHtml, viewHeaderHtml } from "../ui/html";
+import { ICONS } from "../ui/icons";
 import { renderShadow } from "./shadow";
 
 const WINDOW_DAYS = 28;
@@ -366,7 +367,7 @@ export class HabitsView extends HTMLElement {
         <button ${buttonAttrs({ tone: "ghost", size: "small", data: { templateArchive: template.id, archived: template.archived ? "" : "1" } })}>
           ${template.archived ? "Вернуть" : "Архивировать"}
         </button>
-        <button ${buttonAttrs({ tone: "ghost", size: "small", data: { templateRemove: template.id } })} aria-label="Удалить шаблон">✕</button>
+        <button ${buttonAttrs({ tone: "ghost", size: "small", icon: true, label: "Удалить шаблон", data: { templateRemove: template.id } })}>${ICONS.trash}</button>
       </div>
     `;
   }

@@ -1,4 +1,5 @@
 import { escapeHtml } from "../domain/markdown";
+import { ICONS } from "./icons";
 
 type ButtonTone = "primary" | "secondary" | "ghost" | "danger";
 type ButtonSize = "normal" | "small";
@@ -10,10 +11,15 @@ export function buttonAttrs(options: {
   disabled?: boolean;
   data?: Record<string, string | number | boolean | null | undefined>;
   className?: string;
+  /** Icon-only button: round shape, no padding. Requires `label`. */
+  icon?: boolean;
+  /** Tooltip + aria-label; obligatory for icon-only buttons. */
+  label?: string;
 } = {}): string {
   const classes = [
     options.tone && options.tone !== "primary" ? options.tone : "",
     options.size === "small" ? "small" : "",
+    options.icon ? "icon" : "",
     options.className ?? "",
   ].filter(Boolean);
   const dataAttrs = Object.entries(options.data ?? {})
@@ -24,6 +30,7 @@ export function buttonAttrs(options: {
   return [
     `type="${options.type ?? "button"}"`,
     classes.length ? `class="${classes.join(" ")}"` : "",
+    options.label ? `title="${escapeHtml(options.label)}" aria-label="${escapeHtml(options.label)}"` : "",
     options.disabled ? "disabled" : "",
     dataAttrs,
   ]
@@ -147,7 +154,7 @@ export function wizardStepHtml(options: {
           <p class="eyebrow">${escapeHtml(options.eyebrow ?? `Шаг ${options.step} из ${options.totalSteps}`)}</p>
           <h2>${escapeHtml(options.title)}</h2>
         </div>
-        <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-wizard" } })}>Закрыть</button>
+        <button ${buttonAttrs({ tone: "ghost", size: "small", icon: true, label: "Закрыть", data: { action: "close-wizard" } })}>${ICONS.close}</button>
       </div>
       ${options.body}
       <div class="row-actions" style="justify-content: flex-end;">

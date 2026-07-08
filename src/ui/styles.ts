@@ -185,8 +185,8 @@ export const sharedStyles = `
 
   button.icon.small,
   .button.icon.small {
-    width: 2.25rem;
-    min-height: 2.25rem;
+    width: 2rem;
+    min-height: 2rem;
   }
 
   input,

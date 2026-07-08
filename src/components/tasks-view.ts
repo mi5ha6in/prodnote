@@ -23,6 +23,7 @@ import type { Task, TaskPriority, TaskStatus } from "../domain/types";
 import { requestTimerNotificationPermission } from "../platform/notifications";
 import { appStore } from "../state";
 import { confirmDestructive } from "../ui/actions";
+import { ICONS } from "../ui/icons";
 import {
   badgeHtml,
   buttonAttrs,
@@ -1008,7 +1009,7 @@ export class TasksView extends HTMLElement {
               <p class="eyebrow">Задачи</p>
               <h2>Новая задача</h2>
             </div>
-            <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-create" } })}>Закрыть</button>
+            <button ${buttonAttrs({ tone: "ghost", size: "small", icon: true, label: "Закрыть", data: { action: "close-create" } })}>${ICONS.close}</button>
           </div>
           ${fieldHtml({
             label: "Название",
@@ -1206,10 +1207,10 @@ export class TasksView extends HTMLElement {
             <h2>${escapeHtml(task.title)}</h2>
           </div>
           <div class="row-actions">
-            <button ${buttonAttrs({ tone: "ghost", size: "small", data: { action: "close-task-details" } })}>Закрыть</button>
             <a class="button ghost small" href="#/work/tasks/${escapeHtml(task.id)}">Открыть страницу</a>
-            <button ${buttonAttrs({ size: "small", data: { action: "edit-task" } })}>Редактировать</button>
-            <button ${buttonAttrs({ tone: "danger", size: "small", data: { action: "delete-task" } })}>Удалить</button>
+            <button ${buttonAttrs({ size: "small", icon: true, label: "Редактировать", data: { action: "edit-task" } })}>${ICONS.edit}</button>
+            <button ${buttonAttrs({ tone: "danger", size: "small", icon: true, label: "Удалить", data: { action: "delete-task" } })}>${ICONS.trash}</button>
+            <button ${buttonAttrs({ tone: "ghost", size: "small", icon: true, label: "Закрыть", data: { action: "close-task-details" } })}>${ICONS.close}</button>
           </div>
         </div>
 
@@ -1304,8 +1305,8 @@ export class TasksView extends HTMLElement {
                   ? "Уже есть активный таймер. Остановите или отмените его перед запуском новой сессии."
                   : "Запустите работу над этой задачей без перехода через выбор задачи."
               }</p>
-              <button ${buttonAttrs({ data: { action: "start-task-timer" }, disabled: hasActiveTimer })}>Запустить таймер</button>
-              <button ${buttonAttrs({ tone: "secondary", data: { action: "start-task-pomodoro" }, disabled: hasActiveTimer })}>Запустить помодоро</button>
+              <button ${buttonAttrs({ data: { action: "start-task-timer" }, disabled: hasActiveTimer })}>${ICONS.play}Таймер</button>
+              <button ${buttonAttrs({ tone: "secondary", data: { action: "start-task-pomodoro" }, disabled: hasActiveTimer })}>${ICONS.cycle}Помодоро</button>
             </article>
 
             <article class="card subtle form-grid">
@@ -1545,7 +1546,7 @@ export class TasksView extends HTMLElement {
                   <input type="checkbox" data-subtask-toggle data-task-id="${escapeHtml(task.id)}" data-subtask-id="${escapeHtml(sub.id)}" ${sub.done ? "checked" : ""} />
                   <span>${escapeHtml(sub.title)}</span>
                 </label>
-                <button ${buttonAttrs({ tone: "ghost", size: "small", data: { subtaskDelete: sub.id, taskId: task.id } })} aria-label="Удалить подзадачу">✕</button>
+                <button ${buttonAttrs({ tone: "ghost", size: "small", icon: true, label: "Удалить подзадачу", data: { subtaskDelete: sub.id, taskId: task.id } })}>${ICONS.trash}</button>
               </div>
             `,
           )
