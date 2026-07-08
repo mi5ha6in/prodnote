@@ -3,6 +3,8 @@ import { expect, test } from "@playwright/test";
 // Регрессия: «запускаю таймер/помодоро, а он не идёт».
 // Таймер должен тикать посекундно с первой минуты, помодоро — считать вниз.
 test("focus timer and pomodoro tick after start", async ({ page }) => {
+  // «Отменить без записи» защищена confirm-диалогом — принимаем его.
+  page.on("dialog", (dialog) => void dialog.accept());
   await page.goto("/");
   await expect(page.locator("h1").first()).toBeVisible();
 

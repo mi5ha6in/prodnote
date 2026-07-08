@@ -3,8 +3,10 @@ import { escapeHtml, renderMarkdown } from "../domain/markdown";
 import type { ActiveTimer, Workspace } from "../domain/types";
 import { requestTimerNotificationPermission } from "../platform/notifications";
 import { appStore } from "../state";
+import { confirmDestructive } from "../ui/actions";
 import { takePendingFocusTaskId } from "./focus-intent";
 import { renderShadow } from "./shadow";
+import { renderTimerControls, timerControlStyles, TIMER_ICONS } from "./timer-controls";
 import { getProjectName, renderTaskOptions, requireSelect, requireTextArea } from "./view-utils";
 
 export class FocusView extends HTMLElement {
@@ -56,6 +58,7 @@ export class FocusView extends HTMLElement {
                 ? `<p class="muted">${escapeHtml(getProjectName(workspace.projects, contextTask.projectId))}</p>`
                 : `<p class="muted">Сессии записываются в историю выбранной задачи.</p>`
             }
+            ${active ? renderTimerControls(active) : ""}
           </div>
         </section>
 
@@ -64,23 +67,14 @@ export class FocusView extends HTMLElement {
             ? `
               <article class="card form-grid">
                 <div>
-                  <p class="eyebrow">Активная сессия</p>
-                  <h2>${active.mode === "pomodoro" ? "Помодоро" : "Таймер"}</h2>
+                  <p class="eyebrow">Активная сессия · ${active.mode === "pomodoro" ? "Помодоро" : "Таймер"}</p>
+                  ${active.goal ? `<p class="session-goal">Цель: ${escapeHtml(active.goal)}</p>` : ""}
                 </div>
-                ${active.goal ? `<p class="session-goal">Цель: ${escapeHtml(active.goal)}</p>` : ""}
                 <label>
                   Заметка к сессии
                   <textarea name="sessionNote" data-session-note placeholder="Что сделано за эту сессию">${escapeHtml(this.sessionNote)}</textarea>
                 </label>
-                <div class="row-actions">
-                  <button type="button" class="ghost" data-action="toggle-pause">${active.pausedAt ? "Продолжить" : "Пауза"}</button>
-                  ${
-                    active.mode === "pomodoro"
-                      ? `<button type="button" class="secondary" data-action="complete-phase" ${active.pausedAt ? "disabled" : ""}>Завершить фазу</button>`
-                      : `<button type="button" class="secondary" data-action="stop">Остановить и сохранить</button>`
-                  }
-                  <button type="button" class="ghost" data-action="cancel">Отменить без записи</button>
-                </div>
+                <p class="muted">${getSessionNoteHint(active)}</p>
               </article>
             `
             : `
@@ -100,8 +94,8 @@ export class FocusView extends HTMLElement {
                   <input name="goal" placeholder="Что хочу сделать за эту сессию" autocomplete="off" ${canStart ? "" : "disabled"} />
                 </label>
                 <div class="row-actions">
-                  <button type="submit" name="mode" value="timer" ${canStart ? "" : "disabled"}>Запустить таймер</button>
-                  <button type="submit" class="secondary" name="mode" value="pomodoro" ${canStart ? "" : "disabled"}>Помодоро</button>
+                  <button type="submit" name="mode" value="timer" ${canStart ? "" : "disabled"}>${TIMER_ICONS.play}Таймер</button>
+                  <button type="submit" class="secondary" name="mode" value="pomodoro" ${canStart ? "" : "disabled"}>${TIMER_ICONS.cycle}Помодоро</button>
                 </div>
                 ${canStart ? "" : `<p class="muted">Сначала создайте незавершённую задачу.</p>`}
               </form>
@@ -207,6 +201,8 @@ export class FocusView extends HTMLElement {
         .history-list {
           margin-top: var(--space-4);
         }
+
+        ${timerControlStyles}
       `,
     );
 
@@ -264,6 +260,12 @@ export class FocusView extends HTMLElement {
     root.querySelector<HTMLButtonElement>('[data-action="complete-phase"]')?.addEventListener("click", () => {
       const current = appStore.getActiveTimer();
       this.selectedTaskId = current?.taskId ?? this.selectedTaskId;
+      if (current?.phase !== "focus") {
+        // Перерыв не создаёт сессию — заметка ждёт следующего фокуса.
+        void appStore.completePomodoroPhase();
+        return;
+      }
+
       this.historyOpen = true;
       this.focusHistoryAfterRender = true;
       void appStore.completePomodoroPhase(this.sessionNote);
@@ -271,6 +273,10 @@ export class FocusView extends HTMLElement {
     });
 
     root.querySelector<HTMLButtonElement>('[data-action="cancel"]')?.addEventListener("click", () => {
+      if (!confirmDestructive("Отменить сессию без записи?")) {
+        return;
+      }
+
       const current = appStore.getActiveTimer();
       this.selectedTaskId = current?.taskId ?? this.selectedTaskId;
       appStore.cancelActiveTimer();
@@ -343,6 +349,16 @@ export class FocusView extends HTMLElement {
     const active = appStore.getActiveTimer();
     readout.textContent = active ? getActiveTimerClockReadout(active) : "00:00";
   }
+}
+
+function getSessionNoteHint(active: ActiveTimer): string {
+  if (active.mode !== "pomodoro") {
+    return "Заметка сохранится при нажатии «Стоп».";
+  }
+
+  return active.phase === "focus"
+    ? "Заметка сохранится при «Стоп» или переходе к перерыву."
+    : "Перерыв не записывается — заметка дождётся следующего фокуса.";
 }
 
 customElements.define("pn-focus-view", FocusView);

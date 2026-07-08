@@ -163,6 +163,32 @@ export const sharedStyles = `
     padding: 0 var(--space-3);
   }
 
+  button svg,
+  .button svg {
+    fill: none;
+    flex-shrink: 0;
+    height: 1.05rem;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.7;
+    width: 1.05rem;
+  }
+
+  button.icon,
+  .button.icon {
+    border-radius: 50%;
+    padding: 0;
+    width: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  button.icon.small,
+  .button.icon.small {
+    width: 2.25rem;
+    min-height: 2.25rem;
+  }
+
   input,
   select,
   textarea {

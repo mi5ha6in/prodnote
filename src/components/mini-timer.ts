@@ -2,7 +2,9 @@ import { getActiveTimerClockReadout, getActiveTimerPhaseLabel } from "../domain/
 import { SESSION_MODE_LABELS } from "../domain/defaults";
 import { appStore } from "../state";
 import { escapeHtml } from "../domain/markdown";
+import { confirmDestructive } from "../ui/actions";
 import { renderShadow } from "./shadow";
+import { renderTimerControls, timerControlStyles } from "./timer-controls";
 
 export class MiniTimer extends HTMLElement {
   private unsubscribe: (() => void) | null = null;
@@ -49,15 +51,7 @@ export class MiniTimer extends HTMLElement {
         <strong>${escapeHtml(task?.title ?? "Задача удалена")}</strong>
         <span class="timer-readout" data-mini-readout>${getMiniTimerReadout(active)}</span>
         <span class="phase-chip" data-mini-phase>${getActiveTimerPhaseLabel(active)}</span>
-        <div class="row-actions">
-          <button type="button" class="ghost small" data-action="toggle-pause">${active.pausedAt ? "Продолжить" : "Пауза"}</button>
-          ${
-            active.mode === "pomodoro"
-              ? `<button type="button" class="ghost small" data-action="complete" ${active.pausedAt ? "disabled" : ""}>Следующая фаза</button>`
-              : ""
-          }
-          <button type="button" class="ghost small" data-action="stop">Стоп</button>
-        </div>
+        ${renderTimerControls(active, { compact: true })}
       </section>
     `,
       timerStyles,
@@ -66,8 +60,13 @@ export class MiniTimer extends HTMLElement {
     root.querySelector<HTMLButtonElement>('[data-action="stop"]')?.addEventListener("click", () => {
       void appStore.stopTimer();
     });
-    root.querySelector<HTMLButtonElement>('[data-action="complete"]')?.addEventListener("click", () => {
+    root.querySelector<HTMLButtonElement>('[data-action="complete-phase"]')?.addEventListener("click", () => {
       void appStore.completePomodoroPhase();
+    });
+    root.querySelector<HTMLButtonElement>('[data-action="cancel"]')?.addEventListener("click", () => {
+      if (confirmDestructive("Отменить сессию без записи?")) {
+        appStore.cancelActiveTimer();
+      }
     });
     root.querySelector<HTMLButtonElement>('[data-action="toggle-pause"]')?.addEventListener("click", () => {
       if (appStore.getActiveTimer()?.pausedAt) {
@@ -138,4 +137,6 @@ const timerStyles = `
     font-size: var(--text-xs);
     font-weight: 600;
   }
+
+  ${timerControlStyles}
 `;
